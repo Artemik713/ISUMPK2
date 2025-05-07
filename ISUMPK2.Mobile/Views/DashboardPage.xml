@@ -1,0 +1,226 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ISUPMK.Mobile.ViewModels"
+             xmlns:models="clr-namespace:ISUPMK.Mobile.Models"
+             x:Class="ISUPMK.Mobile.Views.DashboardPage"
+             x:DataType="viewmodels:DashboardViewModel"
+             Title="{Binding Title}">
+
+	<RefreshView Command="{Binding RefreshCommand}"
+                 IsRefreshing="{Binding IsBusy}">
+		<ScrollView>
+			<VerticalStackLayout Spacing="20"
+                                 Padding="20">
+
+
+				<Grid ColumnDefinitions="*,*,*"
+                      ColumnSpacing="10">
+
+
+					<Frame Grid.Column="0"
+                           Padding="10"
+                           HasShadow="True"
+                           CornerRadius="10">
+						<VerticalStackLayout>
+							<Label Text="Мои задачи"
+                                   FontSize="14"
+                                   TextColor="{StaticResource Gray500}" />
+							<Label Text="{Binding MyTasksCount}"
+                                   FontSize="24"
+                                   FontAttributes="Bold"
+                                   Margin="0,5,0,10" />
+							<Button Text="Просмотреть"
+                                    Command="{Binding ViewMyTasksCommand}"
+                                    FontSize="12"
+                                    HeightRequest="30" />
+						</VerticalStackLayout>
+					</Frame>
+
+
+					<Frame Grid.Column="1"
+                           Padding="10"
+                           HasShadow="True"
+                           CornerRadius="10">
+						<VerticalStackLayout>
+							<Label Text="На проверке"
+                                   FontSize="14"
+                                   TextColor="{StaticResource Gray500}" />
+							<Label Text="{Binding TasksOnReviewCount}"
+                                   FontSize="24"
+                                   FontAttributes="Bold"
+                                   Margin="0,5,0,10" />
+							<Button Text="Просмотреть"
+                                    Command="{Binding ViewAllTasksCommand}"
+                                    FontSize="12"
+                                    HeightRequest="30" />
+						</VerticalStackLayout>
+					</Frame>
+
+
+					<Frame Grid.Column="2"
+                           Padding="10"
+                           HasShadow="True"
+                           CornerRadius="10">
+						<VerticalStackLayout>
+							<Label Text="Просроченные"
+                                   FontSize="14"
+                                   TextColor="{StaticResource Gray500}" />
+							<Label Text="{Binding OverdueTasksCount}"
+                                   FontSize="24"
+                                   FontAttributes="Bold"
+                                   TextColor="{StaticResource Danger}"
+                                   Margin="0,5,0,10" />
+							<Button Text="Просмотреть"
+                                    Command="{Binding ViewOverdueTasksCommand}"
+                                    BackgroundColor="{StaticResource Danger}"
+                                    FontSize="12"
+                                    HeightRequest="30" />
+						</VerticalStackLayout>
+					</Frame>
+				</Grid>
+
+
+				<Frame Padding="15"
+                       HasShadow="True"
+                       CornerRadius="10">
+					<VerticalStackLayout Spacing="10">
+						<Label Text="Задачи, требующие внимания"
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               Margin="0,0,0,5" />
+
+						<CollectionView ItemsSource="{Binding Tasks}"
+                                        EmptyView="Нет задач, требующих внимания"
+                                        HeightRequest="250">
+							<CollectionView.ItemTemplate>
+								<DataTemplate x:DataType="models:TaskModel">
+									<Grid Padding="0,8"
+                                          RowDefinitions="Auto,Auto"
+                                          ColumnDefinitions="*,Auto">
+
+										<VerticalStackLayout Grid.Row="0"
+                                                             Grid.Column="0">
+											<Label Text="{Binding Title}"
+                                                   FontAttributes="Bold" />
+											<HorizontalStackLayout Spacing="10">
+												<Label Text="{Binding StatusName}"
+                                                       TextColor="{Binding StatusColor}"
+                                                       FontSize="12" />
+												<Label Text="{Binding PriorityName}"
+                                                       TextColor="{Binding PriorityColor}"
+                                                       FontSize="12" />
+											</HorizontalStackLayout>
+										</VerticalStackLayout>
+
+										<HorizontalStackLayout Grid.Row="0"
+                                                               Grid.Column="1"
+                                                               HorizontalOptions="End"
+                                                               VerticalOptions="Center">
+											<Label Text="{Binding DueDate, StringFormat='{0:dd.MM.yyyy}'}"
+                                                   FontSize="12"
+                                                   VerticalOptions="Center" />
+											<Image Source="warning.png"
+                                                   HeightRequest="16"
+                                                   WidthRequest="16"
+                                                   IsVisible="{Binding IsOverdue}"
+                                                   Margin="5,0,0,0" />
+										</HorizontalStackLayout>
+
+										<BoxView Grid.Row="1"
+                                                 Grid.ColumnSpan="2"
+                                                 HeightRequest="1"
+                                                 Color="{StaticResource Gray200}"
+                                                 Margin="0,8,0,0" />
+
+										<Grid.GestureRecognizers>
+											<TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:DashboardViewModel}}, Path=ViewTaskCommand}"
+                                                                  CommandParameter="{Binding Id}" />
+										</Grid.GestureRecognizers>
+									</Grid>
+								</DataTemplate>
+							</CollectionView.ItemTemplate>
+						</CollectionView>
+
+						<Button Text="Показать все задачи"
+                                Command="{Binding ViewAllTasksCommand}"
+                                HorizontalOptions="End"
+                                FontSize="14"
+                                HeightRequest="35"
+                                Padding="10,0"
+                                Margin="0,5,0,0" />
+					</VerticalStackLayout>
+				</Frame>
+
+
+				<Frame Padding="15"
+                       HasShadow="True"
+                       CornerRadius="10">
+					<VerticalStackLayout Spacing="10">
+						<Label Text="Последние уведомления"
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               Margin="0,0,0,5" />
+
+						<CollectionView ItemsSource="{Binding Notifications}"
+                                        EmptyView="У вас нет уведомлений"
+                                        HeightRequest="250">
+							<CollectionView.ItemTemplate>
+								<DataTemplate x:DataType="models:NotificationModel">
+									<Grid Padding="0,8"
+                                          RowDefinitions="Auto,Auto,Auto">
+
+										<HorizontalStackLayout Grid.Row="0"
+                                                               Spacing="10">
+											<Image Source="{Binding IsRead, Converter={StaticResource BoolToImageConverter}, ConverterParameter='notification_read.png,notification.png'}"
+                                                   HeightRequest="20"
+                                                   WidthRequest="20"
+                                                   VerticalOptions="Center" />
+											<Label Text="{Binding Title}"
+                                                   FontAttributes="{Binding IsRead, Converter={StaticResource BoolToFontAttributesConverter}}" />
+										</HorizontalStackLayout>
+
+										<Label Grid.Row="1"
+                                               Text="{Binding Message}"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2"
+                                               FontSize="14"
+                                               TextColor="{StaticResource Gray600}"
+                                               Margin="30,0,0,0" />
+
+										<Label Grid.Row="2"
+                                               Text="{Binding CreatedAt, StringFormat='{0:dd.MM.yyyy HH:mm}'}"
+                                               FontSize="12"
+                                               TextColor="{StaticResource Gray500}"
+                                               HorizontalOptions="End"
+                                               Margin="0,5,0,0" />
+
+										<BoxView Grid.Row="3"
+                                                 HeightRequest="1"
+                                                 Color="{StaticResource Gray200}"
+                                                 Margin="0,8,0,0" />
+
+										<Grid.GestureRecognizers>
+											<TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:DashboardViewModel}}, Path=ViewNotificationCommand}"
+                                                                  CommandParameter="{Binding Id}" />
+										</Grid.GestureRecognizers>
+									</Grid>
+								</DataTemplate>
+							</CollectionView.ItemTemplate>
+						</CollectionView>
+
+						<Button Text="Показать все уведомления"
+                                Command="{Binding ViewAllNotificationsCommand}"
+                                HorizontalOptions="End"
+                                FontSize="14"
+                                HeightRequest="35"
+                                Padding="10,0"
+                                Margin="0,5,0,0" />
+					</VerticalStackLayout>
+				</Frame>
+
+			</VerticalStackLayout>
+		</ScrollView>
+	</RefreshView>
+
+</ContentPage>

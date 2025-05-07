@@ -1,0 +1,261 @@
+﻿@page "/materials"
+@page "/materials/low-stock"
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Web.Extensions
+@using ISUMPK2.Web.Dialogs
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@attribute [Authorize]
+@inject IMaterialService MaterialService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+<PageTitle>Материалы - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h4">@PageTitle</MudText>
+        
+        <div class="d-flex">
+            <AuthorizeView Roles="Administrator,GeneralDirector,Storekeeper">
+                <Authorized>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" 
+                              OnClick="@CreateMaterial" Class="mr-2">Добавить материал</MudButton>
+                </Authorized>
+            </AuthorizeView>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" 
+                      OnClick="@LoadMaterialsAsync">Обновить</MudButton>
+        </div>
+    </div>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudTextField @bind-Value="searchString" Label="Поиск" Adornment="Adornment.Start" 
+                             AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" 
+                             Class="mt-0" Immediate="true" OnKeyDown="@OnSearchKeyDown" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudTable Items="@filteredMaterials" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@isLoading" 
+             LoadingProgressColor="Color.Primary" Elevation="0" T="MaterialModel"
+             ServerData="ServerReload"
+             @ref="table">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<MaterialModel, object?>(x => x.Code)">Код</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<MaterialModel, object?>(x => x.Name)">Наименование</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<MaterialModel, object?>(x => x.CurrentStock)">Текущий запас</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<MaterialModel, object?>(x => x.MinimumStock)">Мин. запас</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<MaterialModel, object?>(x => x.UnitOfMeasure)">Ед. изм.</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<MaterialModel, object?>(x => x.Price)">Цена</MudTableSortLabel></MudTh>
+            <MudTh>Действия</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Код">@context.Code</MudTd>
+            <MudTd DataLabel="Наименование">
+                <MudLink Href="@($"/materials/{context.Id}")">@context.Name</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Текущий запас">
+                <div class="d-flex align-center">
+                    <MudText>@context.CurrentStock @context.UnitOfMeasure</MudText>
+                    @if (context.CurrentStock < context.MinimumStock)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" Class="ml-1" />
+                    }
+                </div>
+            </MudTd>
+            <MudTd DataLabel="Мин. запас">@context.MinimumStock @context.UnitOfMeasure</MudTd>
+            <MudTd DataLabel="Ед. изм.">@context.UnitOfMeasure</MudTd>
+            <MudTd DataLabel="Цена">@context.Price.ToString("C2")</MudTd>
+            <MudTd>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert">
+                    <MudMenuItem OnClick="@(() => ViewMaterial(context.Id))">Просмотр</MudMenuItem>
+                    <AuthorizeView Roles="Administrator,GeneralDirector,Storekeeper" Context="authContext">
+                        <Authorized>
+                            <MudMenuItem OnClick="@(() => EditMaterial(context.Id))">Изменить</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => AddTransaction(context.Id))">Добавить операцию</MudMenuItem>
+                        </Authorized>
+                    </AuthorizeView>
+                </MudMenu>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>Материалы не найдены</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText>Загрузка...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private string PageTitle => NavigationManager.Uri.Contains("/materials/low-stock") ? "Материалы с низким запасом" : "Материалы";
+
+    private MudTable<MaterialModel>? table;
+    private bool isLoading = true;
+    private List<MaterialModel> materials = new List<MaterialModel>();
+    private List<MaterialModel> filteredMaterials = new List<MaterialModel>();
+    private string searchString = "";
+    private bool showLowStock = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Если мы на странице материалов с низким запасом, устанавливаем соответствующий фильтр
+        if (NavigationManager.Uri.Contains("/materials/low-stock"))
+        {
+            showLowStock = true;
+        }
+        
+        await LoadMaterialsAsync();
+    }
+
+    private async Task LoadMaterialsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            if (showLowStock || NavigationManager.Uri.Contains("/materials/low-stock"))
+            {
+                var dtos = await MaterialService.GetMaterialsWithLowStockAsync();
+                materials = dtos.Select(dto => dto.ToModel()).ToList();
+            }
+            else
+            {
+                var dtos = await MaterialService.GetAllMaterialsAsync();
+                materials = dtos.Select(dto => dto.ToModel()).ToList();
+            }
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить материалы: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredMaterials = materials;
+
+        if (!string.IsNullOrWhiteSpace(searchString))
+        {
+            filteredMaterials = filteredMaterials.Where(m => 
+                m.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase) || 
+                m.Code.Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
+                m.Description.Contains(searchString, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (showLowStock)
+        {
+            filteredMaterials = filteredMaterials.Where(m => m.CurrentStock < m.MinimumStock).ToList();
+        }
+
+        table?.ReloadServerData();
+    }
+
+    private Task<TableData<MaterialModel>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        var sortedMaterials = filteredMaterials;
+
+        // Сортировка
+        if (!string.IsNullOrEmpty(state.SortLabel))
+        {
+            Comparison<MaterialModel>? comparison = null;
+            switch (state.SortLabel)
+            {
+                case "Code":
+                    comparison = (a, b) => string.Compare(a.Code, b.Code, StringComparison.Ordinal);
+                    break;
+                case "Name":
+                    comparison = (a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal);
+                    break;
+                case "CurrentStock":
+                    comparison = (a, b) => a.CurrentStock.CompareTo(b.CurrentStock);
+                    break;
+                case "MinimumStock":
+                    comparison = (a, b) => a.MinimumStock.CompareTo(b.MinimumStock);
+                    break;
+                case "UnitOfMeasure":
+                    comparison = (a, b) => string.Compare(a.UnitOfMeasure, b.UnitOfMeasure, StringComparison.Ordinal);
+                    break;
+                case "Price":
+                    comparison = (a, b) => a.Price.CompareTo(b.Price);
+                    break;
+            }
+
+            if (comparison != null)
+            {
+                if (state.SortDirection == SortDirection.Descending)
+                {
+                    sortedMaterials = sortedMaterials.OrderByDescending(x => x, Comparer<MaterialModel>.Create(comparison)).ToList();
+                }
+                else
+                {
+                    sortedMaterials = sortedMaterials.OrderBy(x => x, Comparer<MaterialModel>.Create(comparison)).ToList();
+                }
+            }
+        }
+
+        // Пагинация
+        var pagedMaterials = sortedMaterials
+            .Skip(state.Page * state.PageSize)
+            .Take(state.PageSize)
+            .ToList();
+
+        return Task.FromResult(new TableData<MaterialModel> { TotalItems = sortedMaterials.Count, Items = pagedMaterials });
+    }
+
+    private void OnSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            ApplyFilters();
+        }
+    }
+
+    private void CreateMaterial()
+    {
+        NavigationManager.NavigateTo("/materials/create");
+    }
+
+    private void ViewMaterial(Guid id)
+    {
+        NavigationManager.NavigateTo($"/materials/{id}");
+    }
+
+    private void EditMaterial(Guid id)
+    {
+        NavigationManager.NavigateTo($"/materials/edit/{id}");
+    }
+
+    private async Task AddTransaction(Guid id)
+    {
+        var parameters = new DialogParameters
+        {
+            { "MaterialId", id }
+        };
+
+        // Замените на подходящий класс диалога, если он существует или создайте необходимый класс
+        var dialog = await DialogService.ShowAsync<MaterialTransactionDialog>("Добавление операции", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadMaterialsAsync();
+            Snackbar.Add("Операция успешно добавлена", Severity.Success);
+        }
+    }
+}

@@ -1,0 +1,423 @@
+﻿@page "/chat"
+@page "/chat/{RecipientId:guid}"
+@attribute [Authorize]
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Web.Extensions
+@using ISUMPK2.Application.DTOs
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@inject IJSRuntime JSRuntime
+@inject IChatService ChatService
+@inject IUserService UserService
+@inject IDepartmentService DepartmentService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject IChatHubService ChatHubService
+
+<PageTitle>Чат - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4" Style="height: calc(100vh - 150px);">
+    <MudGrid Style="height: 100%;">
+        <MudItem xs="12" md="4" Style="height: 100%;">
+            <MudPaper Class="pa-3" Style="height: 100%; display: flex; flex-direction: column;">
+                <MudText Typo="Typo.h5" Class="mb-4">Чаты</MudText>
+                
+                <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="mt-2" Style="flex-grow: 1; display: flex; flex-direction: column;">
+                    <MudTabPanel Text="Пользователи" Icon="@Icons.Material.Filled.Person" Style="flex-grow: 1; display: flex; flex-direction: column;">
+                        <MudTextField @bind-Value="userSearchText" Label="Поиск пользователей" Adornment="Adornment.Start" 
+                                     AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Class="mt-2 mb-4" /> 
+                        <MudList T="UserModel" Clickable="true" Style="flex-grow: 1; overflow-y: auto;">
+                            @if (isLoading)
+                            {
+                                <div class="d-flex justify-center my-4">
+                                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                                </div>
+                            }
+                            else if (!filteredUsers.Any())
+                            {
+                                <MudText Class="pa-4">Пользователи не найдены</MudText>
+                            }
+                            else
+                            {
+                                @foreach (var user in filteredUsers)
+                                {
+                                    <MudListItem T="UserModel" Selected="selectedRecipientId == user.Id" OnClick="@(() => SelectRecipient(user.Id, null))">
+                                        <div class="d-flex align-center">
+                                            <MudAvatar Color="Color.Primary" Class="mr-3">@user.FullName.Substring(0, 1)</MudAvatar>
+                                            <div>
+                                                <MudText Typo="Typo.body1">@user.FullName</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">@GetUserRole(user)</MudText>
+                                            </div>
+                                            @if (unreadMessageCounts.ContainsKey(user.Id) && unreadMessageCounts[user.Id] > 0)
+                                            {
+                                                <MudBadge Color="Color.Primary" Content="@unreadMessageCounts[user.Id]" Class="ml-auto" />
+                                            }
+                                        </div>
+                                    </MudListItem>
+                                }
+                            }
+                        </MudList>
+
+                        <MudList T="DepartmentModel" Clickable="true" Style="flex-grow: 1; overflow-y: auto;">
+                            @if (isLoading)
+                            {
+                                <div class="d-flex justify-center my-4">
+                                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                                </div>
+                            }
+                            else if (!departments.Any())
+                            {
+                                <MudText Class="pa-4">Отделы не найдены</MudText>
+                            }
+                            else
+                            {
+                                @foreach (var department in departments)
+                                {
+                                    <MudListItem T="DepartmentModel" Selected="selectedDepartmentId == department.Id" OnClick="@(() => SelectRecipient(null, department.Id))">
+                                        <div class="d-flex align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-3" />
+                                            <MudText Typo="Typo.body1">@department.Name</MudText>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            }
+                        </MudList>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" md="8" Style="height: 100%;">
+            <MudPaper Class="pa-3" Style="height: 100%; display: flex; flex-direction: column;">
+                @if (selectedRecipientId.HasValue || selectedDepartmentId.HasValue)
+                {
+                    <div class="d-flex align-center mb-4">
+                        @if (selectedRecipientId.HasValue)
+                        {
+                            var selectedUser = users.FirstOrDefault(u => u.Id == selectedRecipientId.Value);
+                            if (selectedUser != null)
+                            {
+                                <MudAvatar Color="Color.Primary" Class="mr-3">@selectedUser.FullName.Substring(0, 1)</MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.h6">@selectedUser.FullName</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@GetUserRole(selectedUser)</MudText>
+                                </div>
+                            }
+                        }
+                        else if (selectedDepartmentId.HasValue)
+                        {
+                            var selectedDepartment = departments.FirstOrDefault(d => d.Id == selectedDepartmentId.Value);
+                            if (selectedDepartment != null)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-3" />
+                                <MudText Typo="Typo.h6">@selectedDepartment.Name</MudText>
+                            }
+                        }
+                    </div>
+                    
+                    <div class="flex-grow-1 overflow-auto pa-3" style="background-color: var(--mud-palette-background-grey);" @ref="chatMessagesElement">
+                        @foreach (var message in currentChatMessages)
+                        {
+                            <div class="d-flex @(message.SenderId == currentUserId ? "justify-end" : "justify-start") mb-2">
+                                <MudPaper Class="pa-3" Style="@(message.SenderId == currentUserId ? "background-color: var(--mud-palette-primary-lighten)" : "")">
+                                    @if (message.SenderId != currentUserId)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Primary">@message.SenderName</MudText>
+                                    }
+                                    <MudText>@message.Message</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-flex justify-end">
+                                        @message.CreatedAt.ToString("HH:mm")
+                                    </MudText>
+                                </MudPaper>
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="mt-3">
+                        <MudTextField @bind-Value="newMessage" Label="Сообщение" Variant="Variant.Outlined" 
+                                     Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Send"
+                                     OnAdornmentClick="@SendMessageAsync" OnKeyDown="@OnMessageKeyDown" 
+                                     Immediate="true" DisableUnderLine="true" />
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex flex-column justify-center align-center" style="height: 100%;">
+                        <MudIcon Icon="@Icons.Material.Filled.Chat" Size="Size.Large" Class="mb-4" />
+                        <MudText Typo="Typo.h6">Выберите пользователя или отдел для начала чата</MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    [Parameter]
+    public Guid? RecipientId { get; set; }
+
+    private bool isLoading = true;
+    private List<UserModel> users = new List<UserModel>();
+    private List<UserModel> filteredUsers = new List<UserModel>();
+    private List<DepartmentModel> departments = new List<DepartmentModel>();
+    private List<ChatMessageModel> allMessages = new List<ChatMessageModel>();
+    private List<ChatMessageModel> currentChatMessages = new List<ChatMessageModel>();
+    private Dictionary<Guid, int> unreadMessageCounts = new Dictionary<Guid, int>();
+    private string userSearchText = "";
+    private string newMessage = "";
+    private Guid? selectedRecipientId;
+    private Guid? selectedDepartmentId;
+    private Guid currentUserId;
+    private ElementReference chatMessagesElement;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Получаем текущего пользователя
+        var currentUser = await UserService.GetCurrentUserAsync();
+        currentUserId = currentUser.Id;
+
+        // Если указан получатель в URL, устанавливаем его
+        if (RecipientId.HasValue)
+        {
+            selectedRecipientId = RecipientId.Value;
+        }
+
+        // Загружаем данные
+        await LoadDataAsync();
+
+        // Подключаемся к хабу чата
+        await ChatHubService.ConnectAsync();
+        ChatHubService.OnReceiveMessage += HandleReceiveMessage;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await ScrollToBottom();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            // Загружаем пользователей
+            var usersDto = await UserService.GetAllUsersAsync();
+            users = usersDto.Select(dto => dto.ToModel()).ToList();
+            ApplyUserFilter();
+
+            // Загружаем отделы
+            var departmentsDto = await DepartmentService.GetAllDepartmentsAsync();
+            departments = departmentsDto.Select(dto => dto.ToModel()).ToList();
+
+            // Загружаем все сообщения для текущего пользователя
+            var messagesDto = await ChatService.GetMessagesForUserAsync(currentUserId);
+            allMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+
+            // Считаем непрочитанные сообщения
+            CountUnreadMessages();
+
+            // Если выбран получатель, загружаем переписку с ним
+            if (selectedRecipientId.HasValue)
+            {
+                await LoadConversationAsync(selectedRecipientId.Value, null);
+            }
+            else if (selectedDepartmentId.HasValue)
+            {
+                await LoadConversationAsync(null, selectedDepartmentId.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить данные: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    private async Task LoadConversationAsync(Guid? userId, Guid? departmentId)
+    {
+        try
+        {
+            if (userId.HasValue)
+            {
+                var messagesDto = await ChatService.GetConversationAsync(currentUserId, userId.Value);
+                currentChatMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+
+                // Отмечаем сообщения как прочитанные
+                var unreadMessages = currentChatMessages.Where(m => m.SenderId == userId.Value && !m.IsRead).ToList();
+                foreach (var message in unreadMessages)
+                {
+                    await ChatService.MarkAsReadAsync(message.Id);
+                    message.IsRead = true;
+                }
+
+                // Обновляем счетчик непрочитанных
+                if (unreadMessages.Any() && unreadMessageCounts.ContainsKey(userId.Value))
+                {
+                    unreadMessageCounts[userId.Value] = 0;
+                }
+            }
+            else if (departmentId.HasValue)
+            {
+                var messagesDto = await ChatService.GetMessagesForDepartmentAsync(departmentId.Value);
+                currentChatMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+            }
+            else
+            {
+                currentChatMessages.Clear();
+            }
+
+            await ScrollToBottom();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить переписку: {ex.Message}");
+        }
+    }
+
+    private void ApplyUserFilter()
+    {
+        if (string.IsNullOrWhiteSpace(userSearchText))
+        {
+            filteredUsers = users.Where(u => u.Id != currentUserId).ToList();
+        }
+        else
+        {
+            filteredUsers = users.Where(u => u.Id != currentUserId && 
+                                        (u.FullName.Contains(userSearchText, StringComparison.OrdinalIgnoreCase) ||
+                                         u.UserName.Contains(userSearchText, StringComparison.OrdinalIgnoreCase))).ToList();
+        }
+    }
+
+    private void CountUnreadMessages()
+    {
+        unreadMessageCounts.Clear();
+        
+        foreach (var user in users.Where(u => u.Id != currentUserId))
+        {
+            var count = allMessages.Count(m => m.SenderId == user.Id && !m.IsRead);
+            unreadMessageCounts[user.Id] = count;
+        }
+    }
+
+    private async Task SelectRecipient(Guid? userId, Guid? departmentId)
+    {
+        selectedRecipientId = userId;
+        selectedDepartmentId = departmentId;
+        
+        if (userId.HasValue)
+        {
+            await LoadConversationAsync(userId.Value, null);
+            NavigationManager.NavigateTo($"/chat/{userId.Value}");
+        }
+        else if (departmentId.HasValue)
+        {
+            await LoadConversationAsync(null, departmentId.Value);
+            NavigationManager.NavigateTo($"/chat?department={departmentId.Value}");
+        }
+    }
+
+    private async Task SendMessageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage))
+            return;
+
+        try
+        {
+            var messageDto = new ChatMessageCreateDto
+                {
+                    ReceiverId = selectedRecipientId,
+                    DepartmentId = selectedDepartmentId,
+                    Message = newMessage
+                };
+
+            var sentMessageDto = await ChatService.SendMessageAsync(currentUserId, messageDto);
+
+            // Преобразуем полученный ChatMessageDto в ChatMessageModel
+            var sentMessage = sentMessageDto.ToModel();
+
+            currentChatMessages.Add(sentMessage);
+            newMessage = "";
+
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось отправить сообщение: {ex.Message}");
+        }
+    }
+
+
+
+
+    private async Task OnMessageKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !string.IsNullOrWhiteSpace(newMessage))
+        {
+            await SendMessageAsync();
+        }
+    }
+
+    private async void HandleReceiveMessage(ChatMessageModel message)
+    {
+        // Если сообщение от текущего собеседника или для текущего отдела, добавляем его в чат
+        if ((selectedRecipientId.HasValue && message.SenderId == selectedRecipientId.Value) ||
+            (selectedDepartmentId.HasValue && message.DepartmentId == selectedDepartmentId.Value))
+        {
+            currentChatMessages.Add(message);
+            message.IsRead = true;
+            await ChatService.MarkAsReadAsync(message.Id);
+            
+            await InvokeAsync(StateHasChanged);
+            await ScrollToBottom();
+        }
+        else
+        {
+            // Иначе увеличиваем счетчик непрочитанных сообщений
+            if (message.SenderId != currentUserId && unreadMessageCounts.ContainsKey(message.SenderId))
+            {
+                unreadMessageCounts[message.SenderId]++;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private string GetUserRole(UserModel user)
+    {
+        if (user.Roles.Contains("GeneralDirector"))
+            return "Генеральный директор";
+        if (user.Roles.Contains("MetalShopManager"))
+            return "Начальник цеха металлообработки";
+        if (user.Roles.Contains("PaintShopManager"))
+            return "Начальник цеха покраски";
+        if (user.Roles.Contains("Worker"))
+            return "Рабочий цеха";
+        if (user.Roles.Contains("Storekeeper"))
+            return "Кладовщик";
+        if (user.Roles.Contains("Administrator"))
+            return "Администратор";
+            
+        return string.Empty;
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToBottom", chatMessagesElement);
+        }
+        catch
+        {
+            // Игнорируем ошибки
+        }
+    }
+
+    public void Dispose()
+    {
+        ChatHubService.OnReceiveMessage -= HandleReceiveMessage;
+    }
+}

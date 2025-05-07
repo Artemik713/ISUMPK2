@@ -1,0 +1,143 @@
+﻿@page "/notifications"
+@attribute [Authorize]
+@using ISUMPK2.Web.Dialogs
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Web.Extensions
+@using Microsoft.AspNetCore.Authorization
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+
+@page "/notifications"
+@attribute [Authorize]
+
+<PageTitle>Уведомления - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h4">Уведомления</MudText>
+
+        <div class="d-flex">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.DoneAll"
+                       OnClick="@MarkAllAsReadAsync" Disabled="@(!notifications.Any(n => !n.IsRead))">Отметить все как прочитанные</MudButton>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (!notifications.Any())
+    {
+        <MudAlert Severity="Severity.Info" Class="my-4">У вас нет уведомлений</MudAlert>
+    }
+    else
+    {
+        <MudList T="NotificationModel" Clickable="true">
+            @foreach (var notification in notifications)
+            {
+                <MudListItem OnClick="@(() => HandleNotificationClick(notification))">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@(notification.IsRead ? Icons.Material.Outlined.Notifications : Icons.Material.Filled.Notifications)"
+                                 Color="@(notification.IsRead ? Color.Default : Color.Primary)" Class="mr-3" />
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-space-between">
+                                <MudText Typo="Typo.body1" Style="@(notification.IsRead ? "" : "font-weight: bold")">@notification.Title</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@notification.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                            </div>
+                            <MudText Typo="Typo.body2" Style="@(notification.IsRead ? "color: var(--mud-palette-text-secondary)" : "")">
+                                @(notification.Message.Length > 100 ? notification.Message.Substring(0, 100) + "..." : notification.Message)
+                            </MudText>
+                        </div>
+                    </div>
+                </MudListItem>
+                <MudDivider />
+            }
+        </MudList>
+    }
+</MudContainer>
+
+@code {
+    private bool isLoading = true;
+    private List<NotificationModel> notifications = new List<NotificationModel>();
+    private string userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+
+        await LoadNotificationsAsync();
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var notificationsDto = await NotificationService.GetAllNotificationsForUserAsync(Guid.Parse(userId));
+            notifications = notificationsDto.Select(dto => dto.ToModel()).ToList();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить уведомления: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleNotificationClick(NotificationModel notification)
+    {
+        if (!notification.IsRead)
+        {
+            await NotificationService.MarkAsReadAsync(notification.Id);
+            notification.IsRead = true;
+        }
+
+        if (notification.TaskId.HasValue)
+        {
+            NavigationManager.NavigateTo($"/tasks/{notification.TaskId}");
+        }
+        else
+        {
+            var parameters = new DialogParameters
+            {
+                { "Title", notification.Title },
+                { "Message", notification.Message },
+                { "Date", notification.CreatedAt }
+            };
+
+            await DialogService.ShowAsync<NotificationDialog>("Уведомление", parameters);
+        }
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        try
+        {
+            await NotificationService.MarkAllAsReadForUserAsync(Guid.Parse(userId));
+            foreach (var notification in notifications)
+            {
+                notification.IsRead = true;
+            }
+            Snackbar.Add("Все уведомления отмечены как прочитанные", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось отметить уведомления как прочитанные: {ex.Message}");
+        }
+    }
+}

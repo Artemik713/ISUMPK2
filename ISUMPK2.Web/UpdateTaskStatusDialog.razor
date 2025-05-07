@@ -1,0 +1,102 @@
+﻿@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Application.DTOs
+@using MudBlazor
+@inject ITaskService TaskService
+@inject IUserService UserService
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-width: 500px; padding: 16px">
+            <MudText>Изменение статуса задачи на "@GetStatusName(NewStatusId)"</MudText>
+
+            <MudTextField @bind-Value="comment" Label="Комментарий" Lines="3" Class="mt-4"
+                          HelperText="Добавьте комментарий о причине изменения статуса" />
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@isSubmitting">
+            @if (isSubmitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Сохранение...</MudText>
+            }
+            else
+            {
+                <MudText>Сохранить</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
+    [Parameter] public int NewStatusId { get; set; }
+    [Parameter] public List<StatusModel> Statuses { get; set; } = new List<StatusModel>();
+
+    private string comment = "";
+    private bool isSubmitting = false;
+
+    private string GetStatusName(int statusId)
+    {
+        if (Statuses != null && Statuses.Any())
+        {
+            var status = Statuses.FirstOrDefault(s => s.Id == statusId);
+            return status?.Name ?? statusId.ToString();
+        }
+
+        return statusId switch
+        {
+            1 => "Создана",
+            2 => "В работе",
+            3 => "Требует уточнения",
+            4 => "На проверке",
+            5 => "Выполнена",
+            6 => "Отклонена",
+            _ => statusId.ToString()
+        };
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Submit()
+    {
+        isSubmitting = true;
+
+        try
+        {
+            var currentUser = await UserService.GetCurrentUserAsync();
+            var statusUpdateModel = new TaskStatusUpdateModel
+                {
+                    StatusId = NewStatusId,
+                    Comment = comment
+                };
+
+            var statusUpdateDto = new TaskStatusUpdateDto
+                {
+                    StatusId = statusUpdateModel.StatusId,
+                    Comment = statusUpdateModel.Comment
+                };
+
+            await TaskService.UpdateTaskStatusAsync(TaskId, currentUser.Id, statusUpdateDto);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception)
+        {
+            isSubmitting = false;
+        }
+    }
+
+
+    public class StatusModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+}

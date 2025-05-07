@@ -1,0 +1,77 @@
+﻿@page "/dialogs/product-transaction"
+@namespace ISUMPK2.Web.Dialogs
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using MudBlazor
+@inject IProductService ProductService
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudSelect T="string" Label="Тип операции" @bind-Value="transactionType" Required="true">
+                <MudSelectItem Value="@("Production")">Производство</MudSelectItem>
+                <MudSelectItem Value="@("Shipment")">Отгрузка</MudSelectItem>
+            </MudSelect>
+
+            <MudNumericField T="decimal" Label="Количество" @bind-Value="quantity"
+                             Required="true" Min="0" />
+
+            <MudTextField T="string" Label="Примечание" @bind-Value="notes"
+                          Lines="3" MaxLength="500" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@isSubmitting">
+            @if (isSubmitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Сохранение...</MudText>
+            }
+            else
+            {
+                <MudText>Сохранить</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid ProductId { get; set; }
+
+    private MudForm form;
+    private bool isSubmitting;
+    private string transactionType = "Production";
+    private decimal quantity;
+    private string notes;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            isSubmitting = true;
+            try
+            {
+                var transaction = new ProductTransactionCreateDto
+                    {
+                        ProductId = ProductId,
+                        Quantity = quantity,
+                        TransactionType = transactionType,
+                        Notes = notes
+                    };
+
+                MudDialog.Close(DialogResult.Ok(transaction));
+            }
+            catch
+            {
+                isSubmitting = false;
+            }
+        }
+    }
+}

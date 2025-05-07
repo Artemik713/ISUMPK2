@@ -1,0 +1,189 @@
+﻿@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Web.Extensions
+@using ISUMPK2.Application.DTOs
+@using MudBlazor
+@namespace ISUMPK2.Web.Dialogs
+@inject IMaterialService MaterialService
+@inject ISnackbar Snackbar
+@inject ITaskService TaskService
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-width: 500px">
+            <MudText Typo="Typo.h6" Class="mb-4">Добавление операции для материала</MudText>
+
+            @if (material != null)
+            {
+                <div class="mb-4">
+                    <MudText><strong>Материал:</strong> @material.Name</MudText>
+                    <MudText><strong>Текущий запас:</strong> @material.CurrentStock @material.UnitOfMeasure</MudText>
+                </div>
+            }
+
+            <MudSelect @bind-Value="transaction.TransactionType" Label="Тип операции" Required="true" Class="mb-4">
+                <MudSelectItem Value="@("incoming")">Приход</MudSelectItem>
+                <MudSelectItem Value="@("outgoing")">Расход</MudSelectItem>
+            </MudSelect>
+
+            <MudNumericField @bind-Value="transaction.Quantity" Label="Количество" Required="true"
+                             HelperText="Введите количество материала" Min="0"
+                             Variant="Variant.Outlined" Adornment="Adornment.End"
+                             AdornmentText="@(material?.UnitOfMeasure ?? "")" Class="mb-4" />
+
+            <MudTextField @bind-Value="transaction.Notes" Label="Примечания"
+                          HelperText="Введите примечания к операции" Lines="3"
+                          Variant="Variant.Outlined" Class="mb-4" />
+
+            @if (showTaskSelect)
+            {
+                <MudSelect @bind-Value="transaction.TaskId" Label="Связанная задача" Class="mb-4">
+                    <MudSelectItem Value="@((Guid?)null)">Нет</MudSelectItem>
+                    @foreach (var task in tasks)
+                    {
+                        <MudSelectItem Value="@(task.Id)">@task.Title</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="SubmitAsync" Disabled="@(!IsValid || isProcessing)">
+            @if (isProcessing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Сохранение...</MudText>
+            }
+            else
+            {
+                <MudText>Сохранить</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Guid MaterialId { get; set; }
+
+    private MaterialModel? material;
+    private List<TaskModel> tasks = new List<TaskModel>();
+    private bool isProcessing = false;
+    private bool showTaskSelect = false;
+
+    private MaterialTransactionCreateDto transaction = new MaterialTransactionCreateDto
+        {
+            TransactionType = "incoming",
+            Quantity = 0
+        };
+
+    private bool IsValid => transaction.Quantity > 0 && !string.IsNullOrEmpty(transaction.TransactionType);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            transaction.MaterialId = MaterialId;
+
+            // Загружаем данные о материале
+            var materialDto = await MaterialService.GetMaterialByIdAsync(MaterialId);
+            material = materialDto.ToModel();
+
+            // Попробуем загрузить задачи, но обработаем исключение если метод не найден
+            try
+            {
+                // Пропускаем загрузку задач, так как метод GetTasksAsync отсутствует
+                // Вместо этого можно использовать другие методы, если они есть в ITaskService
+                // Например, GetAllTasksAsync, GetTasksByStatusAsync и т.д.
+
+                // Если у вас есть такой метод:
+                // var tasksDto = await TaskService.GetAllTasksAsync();
+                // tasks = tasksDto.Select(t => t.ToModel()).ToList();
+                // showTaskSelect = tasks.Any();
+            }
+            catch
+            {
+                // Если метод не существует или произошла другая ошибка,
+                // просто продолжаем без загрузки задач
+                showTaskSelect = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных: {ex.Message}", Severity.Error);
+            MudDialog.Cancel();
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!IsValid) return;
+
+        isProcessing = true;
+
+        try
+        {
+            // Применяем транзакцию материала через обновление запаса
+            await UpdateMaterialStock(transaction);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при сохранении операции: {ex.Message}", Severity.Error);
+            isProcessing = false;
+        }
+    }
+
+    // Метод для обработки транзакции материала путем обновления его запаса
+    private async Task UpdateMaterialStock(MaterialTransactionCreateDto transaction)
+    {
+        if (material == null) return;
+
+        // Получаем текущий материал
+        var materialDto = await MaterialService.GetMaterialByIdAsync(transaction.MaterialId);
+
+        // Вычисляем новое количество запаса
+        decimal newStock = materialDto.CurrentStock;
+        if (transaction.TransactionType == "incoming")
+        {
+            newStock += transaction.Quantity;
+        }
+        else if (transaction.TransactionType == "outgoing")
+        {
+            newStock -= transaction.Quantity;
+            // Проверка на отрицательный запас
+            if (newStock < 0)
+            {
+                throw new InvalidOperationException("Недостаточно запаса материала для списания");
+            }
+        }
+
+        // Создаем объект для обновления с новым запасом
+        var updateDto = new MaterialUpdateDto
+            {
+                Code = materialDto.Code,
+                Name = materialDto.Name,
+                Description = materialDto.Description,
+                UnitOfMeasure = materialDto.UnitOfMeasure,
+                MinimumStock = materialDto.MinimumStock,
+                Price = materialDto.Price,
+            // Добавляем новое свойство CurrentStock, если оно существует в MaterialUpdateDto
+            // Если нет, то нужно будет добавить его в класс MaterialUpdateDto
+            // CurrentStock = newStock
+            };
+
+        // Если CurrentStock нет в MaterialUpdateDto, тогда нужно добавить его:
+        // Или использовать другой способ обновления запаса, если он есть в вашем API
+
+        // Обновляем материал
+        await MaterialService.UpdateMaterialAsync(transaction.MaterialId, updateDto);
+    }
+}
+

@@ -1,0 +1,256 @@
+﻿@page "/products"
+@attribute [Authorize]
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Dialogs
+@using ISUMPK2.Web.Extensions
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@inject IProductService ProductService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Продукция - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h4">Продукция</MudText>
+        
+        <div class="d-flex">
+            <AuthorizeView Roles="Administrator,GeneralDirector,Storekeeper">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" 
+                          OnClick="@CreateProduct" Class="mr-2">Добавить продукцию</MudButton>
+            </AuthorizeView>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" 
+                      OnClick="@LoadProductsAsync">Обновить</MudButton>
+        </div>
+    </div>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudTextField @bind-Value="searchString" Label="Поиск" Adornment="Adornment.Start" 
+                             AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" 
+                             Class="mt-0" Immediate="true" OnKeyDown="@OnSearchKeyDown" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="Guid?" Label="Тип продукции" @bind-Value="selectedProductTypeId" Clearable="true">
+                    @foreach (var productType in productTypes)
+                    {
+                        <MudSelectItem Value="@productType.Id">@productType.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudTable Items="@filteredProducts" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@isLoading" 
+             LoadingProgressColor="Color.Primary" Elevation="0" T="ProductModel"
+             ServerData="ServerReload"
+             @ref="table">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.Code)">Код</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.Name)">Наименование</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.CurrentStock)">Текущий запас</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.UnitOfMeasure)">Ед. изм.</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.Price)">Цена</MudTableSortLabel></MudTh>
+            <MudTh>Действия</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Код">@context.Code</MudTd>
+            <MudTd DataLabel="Наименование">
+                <MudLink Href="@($"/products/{context.Id}")">@context.Name</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Тип">@context.ProductTypeName</MudTd>
+            <MudTd DataLabel="Запас">@context.CurrentStock @context.UnitOfMeasure</MudTd>
+            <MudTd DataLabel="Ед. изм.">@context.UnitOfMeasure</MudTd>
+            <MudTd DataLabel="Цена">@context.Price.ToString("C2")</MudTd>
+            <MudTd>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert">
+                    <AuthorizeView Roles="Administrator,GeneralDirector,Storekeeper">
+                        <ChildContent Context="auth">
+                            <MudMenuItem OnClick="@(() => EditProduct(context.Id))">Изменить</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => AddTransaction(context.Id))">Добавить операцию</MudMenuItem>
+                        </ChildContent>
+                    </AuthorizeView>
+                </MudMenu>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>Продукция не найдена</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText>Загрузка...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private MudTable<ProductModel>? table;
+    private bool isLoading = true;
+    private List<ProductModel> products = new List<ProductModel>();
+    private List<ProductModel> filteredProducts = new List<ProductModel>();
+    private List<ProductTypeModel> productTypes = new List<ProductTypeModel>();
+    private string searchString = "";
+    private Guid? selectedProductTypeId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductTypesAsync();
+        await LoadProductsAsync();
+    }
+
+    private async Task LoadProductTypesAsync()
+    {
+        try
+        {
+            var productTypesDto = await ProductService.GetAllProductTypesAsync();
+            productTypes = productTypesDto.Select(dto => dto.ToModel()).ToList();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить типы продукции: {ex.Message}");
+        }
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var productsDto = await ProductService.GetAllProductsAsync();
+            products = productsDto.Select(dto => dto.ToModel()).ToList();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить продукцию: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredProducts = products;
+
+        if (!string.IsNullOrWhiteSpace(searchString))
+        {
+            filteredProducts = filteredProducts.Where(p => 
+                p.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase) || 
+                p.Code.Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
+                p.Description.Contains(searchString, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (selectedProductTypeId.HasValue)
+        {
+            filteredProducts = filteredProducts.Where(p => p.ProductTypeId == selectedProductTypeId.Value).ToList();
+        }
+
+        table?.ReloadServerData();
+    }
+
+    private void FilterChanged(Guid? value)
+    {
+        selectedProductTypeId = value;
+        ApplyFilters();
+    }
+
+    private async Task<TableData<ProductModel>> ServerReload(TableState state,CancellationToken cancellationToken)
+    {
+        var sortedProducts = filteredProducts;
+        await Task.CompletedTask;
+        // Сортировка
+        if (!string.IsNullOrEmpty(state.SortLabel))
+        {
+            Comparison<ProductModel> comparison = default;
+            switch (state.SortLabel)
+            {
+                case "Code":
+                    comparison = (a, b) => string.Compare(a.Code, b.Code, StringComparison.Ordinal);
+                    break;
+                case "Name":
+                    comparison = (a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal);
+                    break;
+                case "ProductTypeName":
+                    comparison = (a, b) => string.Compare(a.ProductTypeName, b.ProductTypeName, StringComparison.Ordinal);
+                    break;
+                case "CurrentStock":
+                    comparison = (a, b) => a.CurrentStock.CompareTo(b.CurrentStock);
+                    break;
+                case "UnitOfMeasure":
+                    comparison = (a, b) => string.Compare(a.UnitOfMeasure, b.UnitOfMeasure, StringComparison.Ordinal);
+                    break;
+                case "Price":
+                    comparison = (a, b) => a.Price.CompareTo(b.Price);
+                    break;
+            }
+
+            if (comparison != null)
+            {
+                if (state.SortDirection == SortDirection.Descending)
+                {
+                    sortedProducts = sortedProducts.OrderByDescending(x => x, Comparer<ProductModel>.Create(comparison)).ToList();
+                }
+                else
+                {
+                    sortedProducts = sortedProducts.OrderBy(x => x, Comparer<ProductModel>.Create(comparison)).ToList();
+                }
+            }
+        }
+
+        // Пагинация
+        var pagedProducts = sortedProducts
+            .Skip(state.Page * state.PageSize)
+            .Take(state.PageSize)
+            .ToList();
+
+        return new TableData<ProductModel> { TotalItems = sortedProducts.Count, Items = pagedProducts };
+    }
+
+    private void OnSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            ApplyFilters();
+        }
+    }
+
+    private void CreateProduct()
+    {
+        NavigationManager.NavigateTo("/products/create");
+    }
+
+    private void ViewProduct(Guid id)
+    {
+        NavigationManager.NavigateTo($"/products/{id}");
+    }
+
+    private void EditProduct(Guid id)
+    {
+        NavigationManager.NavigateTo($"/products/edit/{id}");
+    }
+
+    private async Task AddTransaction(Guid id)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ProductId", id }
+        };
+
+        var dialog = await DialogService.ShowAsync<ProductTransationDialog>("Добавление операции", parameters);
+        var result = await dialog.Result;
+
+        if (result!=null && !result.Canceled)
+        {
+            await LoadProductsAsync();
+            Snackbar.Add("Операция успешно добавлена", Severity.Success);
+        }
+    }
+}

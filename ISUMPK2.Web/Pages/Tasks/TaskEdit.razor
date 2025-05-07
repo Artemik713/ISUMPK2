@@ -1,0 +1,401 @@
+﻿@page "/tasks"
+@page "/tasks/my"
+@page "/tasks/overdue"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Web.Extensions
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@inject ITaskService TaskService
+@inject IUserService UserService
+@inject IDepartmentService DepartmentService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<PageTitle>Задачи - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h4">@PageTitle</MudText>
+        
+        <div class="d-flex">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" 
+                      OnClick="@CreateTask" Class="mr-2">Создать задачу</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" 
+                      OnClick="@LoadTasksAsync">Обновить</MudButton>
+        </div>
+    </div>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="int?" Label="Статус" Value="selectedStatusId" ValueChanged="@((int? value) => FilterChanged("status", value))" Clearable="true">
+                    @foreach (var status in statuses)
+                    {
+                        <MudSelectItem Value="@status.Id">@status.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="int?" Label="Приоритет" Value="selectedPriorityId" ValueChanged="@((int? value) => FilterChanged("priority", value))" Clearable="true">
+                    @foreach (var priority in priorities)
+                    {
+                        <MudSelectItem Value="@priority.Id">@priority.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="Guid?" Label="Исполнитель" Value="selectedAssigneeId" ValueChanged="@((Guid? value) => FilterChanged("assignee", value))" Clearable="true">
+                    @foreach (var user in users)
+                    {
+                        <MudSelectItem Value="@user.Id">@user.FullName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="Guid?" Label="Отдел" Value="selectedDepartmentId" ValueChanged="@((Guid? value) => FilterChanged("department", value))" Clearable="true">
+                    @foreach (var department in departments)
+                    {
+                        <MudSelectItem Value="@department.Id">@department.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudTable Items="@filteredTasks" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@isLoading" 
+             LoadingProgressColor="Color.Primary" Elevation="0" T="TaskModel"
+             ServerData="ServerReload"
+             @ref="table">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.Title)">Название</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.StatusId)">Статус</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.PriorityId)">Приоритет</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.AssigneeName)">Исполнитель</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.DueDate)">Срок</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.CreatedAt)">Создана</MudTableSortLabel></MudTh>
+            <MudTh>Действия</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Название">
+                <MudLink Href="@($"/tasks/{context.Id}")">@context.Title</MudLink>
+                @if(context.Comments.Count > 0)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Comment" Size="Size.Small" Class="ml-1" />
+                }
+            </MudTd>
+            <MudTd DataLabel="Статус">
+                <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), context.StatusBadgeColor, true))" Size="Size.Small">@context.StatusName</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Приоритет">
+                <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), context.PriorityBadgeColor, true))" Size="Size.Small">@context.PriorityName</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Исполнитель">@context.AssigneeName</MudTd>
+            <MudTd DataLabel="Срок">
+                @(context.DueDate.HasValue ? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")
+                @if(context.IsOverdue)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" Class="ml-1" />
+                }
+            </MudTd>
+            <MudTd DataLabel="Создана">@context.CreatedAt.ToString("dd.MM.yyyy")</MudTd>
+            <MudTd>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert">
+                    <MudMenuItem OnClick="@(() => ViewTask(context.Id))">Просмотр</MudMenuItem>
+                    <MudMenuItem OnClick="@(() => EditTask(context.Id))">Изменить</MudMenuItem>
+                    @if (context.StatusId == 1 || context.StatusId == 2 || context.StatusId == 3)
+                    {
+                        <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 4))">Отправить на проверку</MudMenuItem>
+                    }
+                    @if (context.StatusId == 4)
+                    {
+                        <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 5))">Подтвердить выполнение</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 3))">Вернуть на доработку</MudMenuItem>
+                    }
+                </MudMenu>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>Задачи не найдены</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText>Загрузка...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "status")]
+    public int? StatusFilter { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "priority")]
+    public int? PriorityFilter { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "assignee")]
+    public Guid? AssigneeFilter { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "department")]
+    public Guid? DepartmentFilter { get; set; }
+
+    private string PageTitle => 
+        NavigationManager.Uri.Contains("/tasks/my") ? "Мои задачи" : 
+        NavigationManager.Uri.Contains("/tasks/overdue") ? "Просроченные задачи" : 
+        "Задачи";
+
+    private MudTable<TaskModel> table;
+    private bool isLoading = true;
+    private List<TaskModel> tasks = new List<TaskModel>();
+    private List<TaskModel> filteredTasks = new List<TaskModel>();
+    private List<UserModel> users = new List<UserModel>();
+    private List<DepartmentModel> departments = new List<DepartmentModel>();
+
+    private int? selectedStatusId;
+    private int? selectedPriorityId;
+    private Guid? selectedAssigneeId;
+    private Guid? selectedDepartmentId;
+
+    private List<StatusModel> statuses = new List<StatusModel>
+    {
+        new StatusModel { Id = 1, Name = "Создана" },
+        new StatusModel { Id = 2, Name = "В работе" },
+        new StatusModel { Id = 3, Name = "Требует уточнения" },
+        new StatusModel { Id = 4, Name = "На проверке" },
+        new StatusModel { Id = 5, Name = "Выполнена" },
+        new StatusModel { Id = 6, Name = "Отклонена" }
+    };
+
+    private List<PriorityModel> priorities = new List<PriorityModel>
+    {
+        new PriorityModel { Id = 1, Name = "Низкий" },
+        new PriorityModel { Id = 2, Name = "Средний" },
+        new PriorityModel { Id = 3, Name = "Высокий" },
+        new PriorityModel { Id = 4, Name = "Критический" }
+    };
+
+    private async Task LoadFiltersDataAsync()
+    {
+        users = (await UserService.GetAllUsersAsync())
+            .Select(dto => dto.ToModel())
+            .ToList();
+
+        departments = (await DepartmentService.GetAllDepartmentsAsync())
+            .Select(dto => dto.ToModel())
+            .ToList();
+    }
+
+    private async Task LoadTasksAsync()
+    {
+        isLoading = true;
+        try
+        {
+            if (NavigationManager.Uri.Contains("/tasks/overdue"))
+            {
+                var tasksDto = await TaskService.GetOverdueTasksAsync();
+                tasks = tasksDto.Select(dto => dto.ToModel()).ToList();
+            }
+            else if (NavigationManager.Uri.Contains("/tasks/my"))
+            {
+                var currentUser = await UserService.GetCurrentUserAsync();
+                var tasksDto = await TaskService.GetTasksByAssigneeAsync(currentUser.Id);
+                tasks = tasksDto.Select(dto => dto.ToModel()).ToList();
+            }
+            else
+            {
+                var tasksDto = await TaskService.GetAllTasksAsync();
+                tasks = tasksDto.Select(dto => dto.ToModel()).ToList();
+            }
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить задачи: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFiltersDataAsync();
+
+        selectedStatusId = StatusFilter;
+        selectedPriorityId = PriorityFilter;
+        selectedAssigneeId = AssigneeFilter;
+        selectedDepartmentId = DepartmentFilter;
+
+        if (NavigationManager.Uri.Contains("/tasks/my"))
+        {
+            var currentUser = await UserService.GetCurrentUserAsync();
+            selectedAssigneeId = currentUser.Id;
+        }
+
+        if (NavigationManager.Uri.Contains("/tasks/overdue"))
+        {
+            var tasksDto = await TaskService.GetOverdueTasksAsync();
+            tasks = tasksDto.Select(dto => dto.ToModel()).ToList();
+        }
+        else
+        {
+            await LoadTasksAsync();
+        }
+    }
+
+
+    private void ApplyFilters()
+    {
+        filteredTasks = tasks;
+
+        if (selectedStatusId.HasValue)
+        {
+            filteredTasks = filteredTasks.Where(t => t.StatusId == selectedStatusId.Value).ToList();
+        }
+
+        if (selectedPriorityId.HasValue)
+        {
+            filteredTasks = filteredTasks.Where(t => t.PriorityId == selectedPriorityId.Value).ToList();
+        }
+
+        if (selectedAssigneeId.HasValue)
+        {
+            filteredTasks = filteredTasks.Where(t => t.AssigneeId == selectedAssigneeId.Value).ToList();
+        }
+
+        if (selectedDepartmentId.HasValue)
+        {
+            filteredTasks = filteredTasks.Where(t => t.DepartmentId == selectedDepartmentId.Value).ToList();
+        }
+
+        table?.ReloadServerData();
+    }
+
+    private void FilterChanged(string filterType, object value)
+    {
+        switch (filterType)
+        {
+            case "status":
+                selectedStatusId = (int?)value;
+                break;
+            case "priority":
+                selectedPriorityId = (int?)value;
+                break;
+            case "assignee":
+                selectedAssigneeId = (Guid?)value;
+                break;
+            case "department":
+                selectedDepartmentId = (Guid?)value;
+                break;
+        }
+
+        ApplyFilters();
+    }
+
+    private async Task<TableData<TaskModel>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        var sortedTasks = filteredTasks;
+
+        // Сортировка
+        if (!string.IsNullOrEmpty(state.SortLabel))
+        {
+            Comparison<TaskModel> comparison = null;
+            switch (state.SortLabel)
+            {
+                case "Title":
+                    comparison = (a, b) => string.Compare(a.Title, b.Title, StringComparison.Ordinal);
+                    break;
+                case "StatusId":
+                    comparison = (a, b) => a.StatusId.CompareTo(b.StatusId);
+                    break;
+                case "PriorityId":
+                    comparison = (a, b) => a.PriorityId.CompareTo(b.PriorityId);
+                    break;
+                case "AssigneeName":
+                    comparison = (a, b) => string.Compare(a.AssigneeName, b.AssigneeName, StringComparison.Ordinal);
+                    break;
+                case "DueDate":
+                    comparison = (a, b) => Nullable.Compare(a.DueDate, b.DueDate);
+                    break;
+                case "CreatedAt":
+                    comparison = (a, b) => a.CreatedAt.CompareTo(b.CreatedAt);
+                    break;
+            }
+
+            if (comparison != null)
+            {
+                if (state.SortDirection == SortDirection.Descending)
+                {
+                    sortedTasks = sortedTasks.OrderByDescending(x => x, Comparer<TaskModel>.Create(comparison)).ToList();
+                }
+                else
+                {
+                    sortedTasks = sortedTasks.OrderBy(x => x, Comparer<TaskModel>.Create(comparison)).ToList();
+                }
+            }
+        }
+
+        // Пагинация
+        var pagedTasks = sortedTasks
+            .Skip(state.Page * state.PageSize)
+            .Take(state.PageSize)
+            .ToList();
+
+        return new TableData<TaskModel> { TotalItems = sortedTasks.Count, Items = pagedTasks };
+    }
+
+    private void CreateTask()
+    {
+        NavigationManager.NavigateTo("/tasks/create");
+    }
+
+    private void ViewTask(Guid id)
+    {
+        NavigationManager.NavigateTo($"/tasks/{id}");
+    }
+
+    private void EditTask(Guid id)
+    {
+        NavigationManager.NavigateTo($"/tasks/edit/{id}");
+    }
+
+    private async Task UpdateTaskStatus(Guid id, int statusId)
+    {
+        var parameters = new DialogParameters
+        {
+            { "TaskId", id },
+            { "NewStatusId", statusId },
+            { "Statuses", statuses }
+        };
+
+        var dialog = await DialogService.ShowAsync<UpdateTaskStatusDialog>("Изменение статуса задачи", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadTasksAsync();
+        }
+    }
+
+    private class StatusModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+
+    private class PriorityModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+}

@@ -1,0 +1,120 @@
+﻿@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Application.DTOs
+@using MudBlazor
+@using MudBlazor.Utilities
+@inject ITaskService TaskService
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-width: 500px; padding: 16px">
+            <MudText Typo="Typo.h6" Class="mb-4">Сообщение о форс-мажоре</MudText>
+            
+            <MudText Class="mb-4">
+                Сообщение о форс-мажоре будет отправлено руководству. 
+                Пожалуйста, опишите ситуацию и причины, по которым задача не может быть выполнена в срок.
+            </MudText>
+            
+            <MudTextField @bind-Value="description" Label="Описание ситуации" Lines="5" Required="true" 
+                         RequiredError="Необходимо описать ситуацию" />
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Warning" OnClick="Submit" Disabled="@(isSubmitting || string.IsNullOrWhiteSpace(description))">
+            @if (isSubmitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Отправка...</MudText>
+            }
+            else
+            {
+                <MudText>Отправить</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance? MudDialog { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
+
+    private string description = "";
+    private bool isSubmitting = false;
+
+    private void Cancel()
+    {
+        MudDialog?.Cancel();
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(description))
+            return;
+            
+        isSubmitting = true;
+        
+        try
+        {
+            // Создаем комментарий о форс-мажоре
+            var commentModel = new TaskCommentCreateModel
+            {
+                TaskId = TaskId,
+                Comment = $"ФОРС-МАЖОР: {description}"
+            };
+            // Преобразуем в DTO
+            var commentDto = new TaskCommentCreateDto
+                {
+                    TaskId = commentModel.TaskId,
+                    Comment = commentModel.Comment
+                };
+            await TaskService.AddCommentAsync(TaskId, commentDto);
+
+            // Обновляем статус задачи, устанавливая флаг форс-мажора
+            var taskDto = await TaskService.GetTaskByIdAsync(TaskId);
+            var updateModel = new TaskUpdateModel
+            {
+                Title = taskDto.Title,
+                Description = taskDto.Description,
+                StatusId = taskDto.StatusId,
+                PriorityId = taskDto.PriorityId,
+                AssigneeId = taskDto.AssigneeId,
+                DepartmentId = taskDto.DepartmentId,
+                StartDate = taskDto.StartDate,
+                DueDate = taskDto.DueDate,
+                CompletedDate = taskDto.CompletedDate,
+                EstimatedHours = taskDto.EstimatedHours,
+                ActualHours = taskDto.ActualHours,
+                ProductId = taskDto.ProductId,
+                Quantity = taskDto.Quantity,
+                IsForceMarked = true
+            };
+            // Преобразуем в DTO
+            var updateDto = new TaskUpdateDto
+                {
+                    Title = updateModel.Title,
+                    Description = updateModel.Description,
+                    StatusId = updateModel.StatusId,
+                    PriorityId = updateModel.PriorityId,
+                    AssigneeId = updateModel.AssigneeId,
+                    DepartmentId = updateModel.DepartmentId,
+                    StartDate = updateModel.StartDate,
+                    DueDate = updateModel.DueDate,
+                    CompletedDate = updateModel.CompletedDate,
+                    EstimatedHours = updateModel.EstimatedHours,
+                    ActualHours = updateModel.ActualHours,
+                    ProductId = updateModel.ProductId,
+                    Quantity = updateModel.Quantity,
+                    IsForceMarked = updateModel.IsForceMarked
+                };
+            await TaskService.UpdateTaskAsync(TaskId, updateDto);
+
+            MudDialog?.Close(DialogResult.Ok(true));
+        }
+        catch (Exception)
+        {
+            isSubmitting = false;
+        }
+    }
+}

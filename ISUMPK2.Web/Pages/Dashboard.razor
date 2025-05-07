@@ -1,0 +1,221 @@
+﻿@page "/"
+@attribute [Authorize]
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Web.Dialogs
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Web.Extensions
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@inject ITaskService TaskService
+@inject IUserService UserService
+@inject IMaterialService MaterialService
+@inject IProductService ProductService
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<PageTitle>Панель управления - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Панель управления</MudText>
+
+    <MudGrid>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="d-flex flex-column pa-4 mud-height-full">
+                <MudText Typo="Typo.subtitle1">Мои задачи</MudText>
+                <MudText Typo="Typo.h3" Class="my-4">@myTasks.Count</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/tasks/my"))">Просмотреть</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="d-flex flex-column pa-4 mud-height-full">
+                <MudText Typo="Typo.subtitle1">Задачи на проверке</MudText>
+                <MudText Typo="Typo.h3" Class="my-4">@tasksOnReview.Count</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/tasks?status=4"))">Просмотреть</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="d-flex flex-column pa-4 mud-height-full">
+                <MudText Typo="Typo.subtitle1">Просроченные задачи</MudText>
+                <MudText Typo="Typo.h3" Class="my-4"@>overdueTasks.Count</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => NavigationManager.NavigateTo("/tasks/overdue"))">Просмотреть</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="d-flex flex-column pa-4 mud-height-full">
+                <MudText Typo="Typo.subtitle1">Материалы с низким запасом</MudText>
+                <MudText Typo="Typo.h3" Class="my-4" @(lowStockMaterials.Count > 0 ? "mud-warning-text" : "")">@lowStockMaterials.Count</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => NavigationManager.NavigateTo("/materials/low-stock"))">Просмотреть</MudButton>
+            </MudPaper>
+        </MudItem>
+
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4 mud-height-full">
+                <MudText Typo="Typo.h6" Class="mb-4">Задачи, требующие внимания</MudText>
+                <MudTable Items="@tasksForDashboard.Where(t => t.PriorityId >= 3 || t.IsOverdue).Take(5)" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@isLoading" LoadingProgressColor="Color.Primary">
+                    <HeaderContent>
+                        <MudTh>Название</MudTh>
+                        <MudTh>Статус</MudTh>
+                        <MudTh>Приоритет</MudTh>
+                        <MudTh>Срок</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Название">
+                            <MudLink Href="@($"/tasks/{context.Id}")">@context.Title</MudLink>
+                        </MudTd>
+                        <MudTd DataLabel="Статус">
+                            <MudChip T="String" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), context.StatusBadgeColor, true))" Size="Size.Small">@context.StatusName</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Приоритет">
+                            <MudChip T="String" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), context.PriorityBadgeColor, true))" Size="Size.Small">@context.PriorityName</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Срок">
+                            @(context.DueDate.HasValue ? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")
+                            @if(context.IsOverdue)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" Class="ml-1" />
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <MudText>Нет задач, требующих внимания</MudText>
+                    </NoRecordsContent>
+                </MudTable>
+                @if (tasksForDashboard.Where(t => t.PriorityId >= 3 || t.IsOverdue).Count() > 5)
+                {
+                    <MudButton Class="mt-2" Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/tasks"))">Показать все</MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4 mud-height-full">
+                <MudText Typo="Typo.h6" Class="mb-4">Последние уведомления</MudText>
+                <MudList T="NotificationModel" Clickable="true">
+                    @foreach (var notification in notifications.Take(5))
+                    {
+                        <MudListItem T="NotificationModel" Icon="@(notification.IsRead ? Icons.Material.Outlined.Notifications : Icons.Material.Filled.Notifications)"
+                                     IconColor="@(notification.IsRead ? Color.Default : Color.Primary)"
+                                     OnClick="@(() => HandleNotificationClick(notification))">
+                            <div>
+                                <MudText Typo="Typo.body1">@notification.Title</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">@notification.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+                @if (notifications.Count == 0)
+                {
+                    <MudText Class="my-4">У вас нет уведомлений</MudText>
+                }
+                @if (notifications.Count > 5)
+                {
+                    <MudButton Class="mt-2" Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/notifications"))">Показать все</MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private bool isLoading = true;
+    private Guid? currentUserId;
+    private List<TaskModel> tasksForDashboard = new List<TaskModel>();
+    private List<TaskModel> myTasks = new List<TaskModel>();
+    private List<TaskModel> tasksOnReview = new List<TaskModel>();
+    private List<TaskModel> overdueTasks = new List<TaskModel>();
+    private List<MaterialModel> lowStockMaterials = new List<MaterialModel>();
+    private List<NotificationModel> notifications = new List<NotificationModel>();
+
+    private async Task<Guid> GetCurrentUserId()
+    {
+        if (!currentUserId.HasValue)
+        {
+            var currentUser = await UserService.GetCurrentUserAsync();
+            currentUserId = currentUser.Id;
+        }
+        return currentUserId.Value;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        await LoadDashboardData();
+        isLoading = false;
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            var userId = await GetCurrentUserId();
+
+            // Загружаем задачи для дашборда с маппингом
+            tasksForDashboard = (await TaskService.GetTasksForDashboardAsync(userId))
+                .Select(dto => dto.ToModel())
+                .ToList();
+
+            // Фильтруем задачи
+            myTasks = tasksForDashboard.Where(t => t.StatusId != 5 && t.StatusId != 6).ToList();
+            tasksOnReview = tasksForDashboard.Where(t => t.StatusId == 4).ToList();
+            overdueTasks = tasksForDashboard.Where(t => t.IsOverdue).ToList();
+
+            // Получаем материалы с низким запасом с маппингом
+            lowStockMaterials = (await MaterialService.GetMaterialsWithLowStockAsync())
+                .Select(dto => dto.ToModel())
+                .ToList();
+
+            // Получаем уведомления с маппингом
+            notifications = (await NotificationService.GetAllNotificationsForUserAsync(userId))
+                .Where(dto => !dto.IsRead)
+                .Select(dto => new NotificationModel
+                    {
+                        Id = dto.Id,
+                        UserId = dto.UserId,
+                        Title = dto.Title,
+                        Message = dto.Message,
+                        IsRead = dto.IsRead,
+                        TaskId = dto.TaskId,
+                        TaskTitle = dto.TaskTitle,
+                        CreatedAt = dto.CreatedAt
+                    })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить данные: {ex.Message}");
+        }
+    }
+
+
+
+    private async Task HandleNotificationClick(NotificationModel notification)
+    {
+        if (!notification.IsRead)
+        {
+            await NotificationService.MarkAsReadAsync(notification.Id);
+            notification.IsRead = true;
+        }
+
+        if (notification.TaskId.HasValue)
+        {
+            NavigationManager.NavigateTo($"/tasks/{notification.TaskId}");
+        }
+        else
+        {
+            var parameters = new DialogParameters
+            {
+                { "Title", notification.Title },
+                { "Message", notification.Message },
+                { "Date", notification.CreatedAt }
+            };
+
+            await DialogService.ShowAsync<NotificationDialog>("Уведомление", parameters);
+        }
+    }
+}
