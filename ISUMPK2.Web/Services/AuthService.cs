@@ -1,17 +1,17 @@
-﻿using Microsoft.AspNetCore.Components.Authorization;
-using ISUMPK2.Web.Auth;
+﻿using ISUMPK2.Web.Auth;
 using ISUMPK2.Web.Models;
+using System.Net.Http.Json;
 
 namespace ISUMPK2.Web.Services
-{
+{   
     public class AuthService : IAuthService
     {
         private readonly HttpClient _httpClient;
-        private readonly AuthenticationStateProvider _authenticationStateProvider;
+        private readonly ApiAuthenticationStateProvider _authenticationStateProvider;
         private readonly ILocalStorageService _localStorage;
 
         public AuthService(HttpClient httpClient,
-                          AuthenticationStateProvider authenticationStateProvider,
+                          ApiAuthenticationStateProvider authenticationStateProvider,
                           ILocalStorageService localStorage)
         {
             _httpClient = httpClient;

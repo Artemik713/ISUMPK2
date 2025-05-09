@@ -307,7 +307,7 @@
         ApplyFilters();
     }
 
-    private async Task<TableData<TaskModel>> ServerReload(TableState state, CancellationToken cancellationToken)
+    private async Task<TableData<TaskModel>> ServerReload(TableState state)
     {
         var sortedTasks = filteredTasks;
 

@@ -54,6 +54,7 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         public async Task<ActionResult<UserDto>> CreateUser([FromBody] UserCreateDto userDto)
         {
             try

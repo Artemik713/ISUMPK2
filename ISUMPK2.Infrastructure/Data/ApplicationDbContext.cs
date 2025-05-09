@@ -7,7 +7,7 @@ using TaskStatus = ISUMPK2.Domain.Entities.TaskStatus;
 
 namespace ISUMPK2.Infrastructure.Data
 {
-    public class ApplicationDbContext :DbContext
+    public class ApplicationDbContext : DbContext
     {
             public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
                 : base(options)
@@ -125,6 +125,56 @@ namespace ISUMPK2.Infrastructure.Data
                 .HasOne(cm => cm.Department)
                 .WithMany(d => d.ChatMessages)
                 .HasForeignKey(cm => cm.DepartmentId);
+            // Настройка десятичных свойств для Material
+            modelBuilder.Entity<Material>()
+                .Property(m => m.CurrentStock)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Material>()
+                .Property(m => m.MinimumStock)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Material>()
+                .Property(m => m.Price)
+                .HasPrecision(18, 2);
+
+            // Настройка десятичных свойств для MaterialTransaction
+            modelBuilder.Entity<MaterialTransaction>()
+                .Property(mt => mt.Quantity)
+                .HasPrecision(18, 2);
+
+            // Настройка десятичных свойств для Product
+            modelBuilder.Entity<Product>()
+                .Property(p => p.CurrentStock)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.Price)
+                .HasPrecision(18, 2);
+
+            // Настройка десятичных свойств для ProductMaterial
+            modelBuilder.Entity<ProductMaterial>()
+                .Property(pm => pm.Quantity)
+                .HasPrecision(18, 2);
+
+            // Настройка десятичных свойств для ProductTransaction
+            modelBuilder.Entity<ProductTransaction>()
+                .Property(pt => pt.Quantity)
+                .HasPrecision(18, 2);
+
+            // Настройка десятичных свойств для WorkTask
+            modelBuilder.Entity<WorkTask>()
+                .Property(t => t.ActualHours)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<WorkTask>()
+                .Property(t => t.EstimatedHours)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<WorkTask>()
+                .Property(t => t.Quantity)
+                .HasPrecision(18, 2);
+
         }
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

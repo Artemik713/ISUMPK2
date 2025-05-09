@@ -8,11 +8,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="9.0.4" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ISUMPK2.Domain\ISUMPK2.Domain.csproj" />
+        <ProjectReference Include="..\ISUMPK2.Infrastructure\ISUMPK2.Infrastructure.csproj" />
+	    <ProjectReference Include="..\ISUMPK2.Domain\ISUMPK2.Domain.csproj" />
   </ItemGroup>
 
 </Project>

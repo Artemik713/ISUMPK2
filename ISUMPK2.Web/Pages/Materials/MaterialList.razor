@@ -166,7 +166,7 @@
         table?.ReloadServerData();
     }
 
-    private Task<TableData<MaterialModel>> ServerReload(TableState state, CancellationToken cancellationToken)
+    private Task<TableData<MaterialModel>> ServerReload(TableState state)
     {
         var sortedMaterials = filteredMaterials;
 

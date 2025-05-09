@@ -38,7 +38,7 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
     [Parameter] public Guid ProductId { get; set; }
 
     private MudForm form;

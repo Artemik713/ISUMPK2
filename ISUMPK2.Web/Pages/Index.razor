@@ -1,9 +1,254 @@
 ﻿@page "/"
+@using MudBlazor
+@using System.Collections.Generic
+@using ISUMPK2.Web.Services
+@inject NavigationManager NavigationManager
+@inject IAuthService AuthService
+@implements IDisposable
 
-<PageTitle>Index</PageTitle>
+<PageTitle>УралТехПром - Главная</PageTitle>
 
-<h1>Hello, world!</h1>
+@if (!initialized)
+{
+    <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+}
+else {
+<div class="page-container">
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 px-4">
+        <MudPaper Elevation="0" Class="welcome-banner pa-8 mb-6">
+            <div class="welcome-content">
+                <div class="text-content">
+                    <MudText Typo="Typo.h3" Color="Color.Primary" Class="mb-4 welcome-title">
+                        Информационная система <br />управления производством <br />металлоконструкций
+                    </MudText>
+                    <MudText Typo="Typo.subtitle1" Class="mb-6">
+                        Добро пожаловать в единую систему управления производством. Система позволяет контролировать задачи,
+                        отслеживать материалы и управлять всеми аспектами производственного процесса.
+                    </MudText>
+                    <div class="d-flex flex-wrap gap-3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                                   OnClick="@(() => NavigationManager.NavigateTo("/login"))">
+                            Войти в систему
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large">
+                            Узнать больше
+                        </MudButton>
+                    </div>
+                </div>
+                <div class="logo-container">
+                    <img src="images/logo.svg" alt="Логотип УралТехПром" class="logo-image" />
+                </div>
+            </div>
+        </MudPaper>
 
-Welcome to your new app.
+        <MudText Typo="Typo.h5" Class="mb-4">Ключевые функции системы</MudText>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+        <MudGrid>
+            @foreach (var feature in features)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="2" Class="feature-card h-100">
+                        <MudCardHeader>
+                            <CardHeaderAvatar>
+                                <MudIcon Icon="@feature.Icon" Color="@feature.Color" Size="Size.Large" />
+                            </CardHeaderAvatar>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">@feature.Title</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText>@feature.Description</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <MudDivider Class="my-6" />
+
+        <MudText Typo="Typo.subtitle1" Align="Align.Center" Class="mt-8 mb-4">
+            © @DateTime.Now.Year УралТехПром. Все права защищены.
+        </MudText>
+    </MudContainer>
+</div>
+}
+
+<style>
+    .page-container {
+        max-width: 1400px;
+        margin: 24px auto;
+        padding: 24px;
+        background-color: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 0 0 1px rgba(63, 81, 181, 0.12), 0 0 0 4px rgba(63, 81, 181, 0.05), 0 8px 32px rgba(0, 0, 0, 0.08);
+        border: 1px solid #e0e5ec;
+        position: relative;
+    }
+
+        .page-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border: 2px solid rgba(63, 81, 181, 0.2);
+            border-radius: 16px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+    .welcome-banner {
+        background: linear-gradient(135deg, #ffffff 0%, #f0f4f8 100%);
+        border-radius: 16px;
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Новый контейнер для контента приветствия */
+    .welcome-content {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        grid-gap: 32px;
+        align-items: center;
+    }
+
+    .text-content {
+        min-width: 0; /* Позволяет тексту сжиматься при необходимости */
+    }
+
+    .welcome-title {
+        font-weight: 700;
+        color: #2e3b55;
+    }
+
+    .logo-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+    }
+
+    .logo-image {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        max-height: 300px;
+    }
+
+    .feature-card {
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        position: relative;
+        z-index: 1;
+    }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+    /* Медиа-запрос для мобильных устройств */
+    @@media (max-width: 768px) {
+        .welcome-content {
+            grid-template-columns: 1fr;
+            grid-gap: 24px;
+        }
+
+        .logo-container {
+            grid-row: 1; /* Перемещаем логотип вверх на мобильных устройствах */
+            max-width: 200px;
+            margin: 0 auto;
+        }
+
+        .text-content {
+            grid-row: 2;
+        }
+
+        .page-container {
+            margin: 0;
+            padding: 16px;
+            border-radius: 0;
+        }
+
+            .page-container::before {
+                border-radius: 0;
+            }
+    }
+</style>
+
+@code {
+    private bool initialized = false;
+    private bool isAuthenticated = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Проверяем авторизацию пользователя
+        isAuthenticated = await AuthService.IsUserAuthenticated();
+
+        // Если пользователь авторизован, перенаправляем на Home.razor
+        if (isAuthenticated)
+        {
+            NavigationManager.NavigateTo("/home");
+        }
+
+        initialized = true;
+    }
+    public void Dispose()
+    {
+        // Освобождаем ресурсы, если необходимо
+    }
+    private List<FeatureInfo> features = new List<FeatureInfo>
+    {
+        new FeatureInfo
+        {
+            Title = "Управление задачами",
+            Description = "Создавайте задачи, назначайте исполнителей, отслеживайте прогресс выполнения и формируйте отчеты.",
+            Icon = Icons.Material.Filled.Assignment,
+            Color = Color.Primary
+        },
+        new FeatureInfo
+        {
+            Title = "Контроль материалов",
+            Description = "Учет поступления, расхода и остатков материалов. Автоматические уведомления о критических запасах.",
+            Icon = Icons.Material.Filled.Inventory,
+            Color = Color.Secondary
+        },
+        new FeatureInfo
+        {
+            Title = "Учет продукции",
+            Description = "Полный цикл учета изготовляемой продукции от планирования до отгрузки заказчику.",
+            Icon = Icons.Material.Filled.LocalShipping,
+            Color = Color.Tertiary
+        },
+        new FeatureInfo
+        {
+            Title = "Уведомления",
+            Description = "Автоматические уведомления о новых задачах, сроках выполнения и критических событиях.",
+            Icon = Icons.Material.Filled.Notifications,
+            Color = Color.Info
+        },
+        new FeatureInfo
+        {
+            Title = "Интеграция",
+            Description = "Взаимодействие с другими системами предприятия, включая бухгалтерские и ERP-системы.",
+            Icon = Icons.Material.Filled.CompareArrows,
+            Color = Color.Success
+        },
+        new FeatureInfo
+        {
+            Title = "Аналитика",
+            Description = "Детальная статистика и аналитика по всем аспектам производственной деятельности.",
+            Icon = Icons.Material.Filled.BarChart,
+            Color = Color.Warning
+        }
+    };
+
+    private class FeatureInfo
+    {
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string Icon { get; set; }
+        public Color Color { get; set; }
+    }
+}

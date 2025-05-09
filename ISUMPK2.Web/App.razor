@@ -1,14 +1,28 @@
 ﻿<CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
-            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+            <ErrorBoundary>
+                <ChildContent>
+                    <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+                </ChildContent>
+                <ErrorContent>
+                    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6 pa-4">
+                        <MudAlert Severity="Severity.Error">Произошла ошибка при обработке запроса</MudAlert>
+                        <MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/"))">
+                            Вернуться на главную
+                        </MudButton>
+                    </MudContainer>
+                </ErrorContent>
+            </ErrorBoundary>
         </Found>
         <NotFound>
-            <PageTitle>Not found</PageTitle>
             <LayoutView Layout="@typeof(MainLayout)">
-                <p role="alert">Sorry, there's nothing at this address.</p>
+                <p>Страница не найдена</p>
             </LayoutView>
         </NotFound>
     </Router>
 </CascadingAuthenticationState>
+
+@code {
+    [Inject] NavigationManager NavigationManager { get; set; }
+}

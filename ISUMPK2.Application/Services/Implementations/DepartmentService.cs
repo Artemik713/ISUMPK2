@@ -11,10 +11,10 @@ namespace ISUMPK2.Application.Services.Implementations
 {
     public class DepartmentService : IDepartmentService
     {
-        private readonly IRepository<Department> _departmentRepository;
+        private readonly IDepartmentRepository _departmentRepository;
         private readonly IUserRepository _userRepository;
 
-        public DepartmentService(IRepository<Department> departmentRepository, IUserRepository userRepository)
+        public DepartmentService(IDepartmentRepository departmentRepository, IUserRepository userRepository)
         {
             _departmentRepository = departmentRepository;
             _userRepository = userRepository;

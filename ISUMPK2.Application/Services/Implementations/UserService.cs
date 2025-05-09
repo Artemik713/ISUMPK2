@@ -3,6 +3,7 @@ using ISUMPK2.Application.DTOs;
 using ISUMPK2.Application.Services;
 using ISUMPK2.Domain.Entities;
 using ISUMPK2.Domain.Repositories;
+using ISUMPK2.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Http;
 using System;
@@ -11,6 +12,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Task = System.Threading.Tasks.Task;
+using Microsoft.EntityFrameworkCore;
 
 namespace ISUMPK2.Application.Services.Implementations
 {
@@ -20,17 +22,19 @@ namespace ISUMPK2.Application.Services.Implementations
         private readonly IJwtTokenGenerator _jwtTokenGenerator;
         private readonly IPasswordHasher<User> _passwordHasher;
         private readonly IHttpContextAccessor _httpContextAccessor;
-
+        private readonly ApplicationDbContext _context;
         public UserService(
             IUserRepository userRepository,
             IJwtTokenGenerator jwtTokenGenerator,
             IPasswordHasher<User> passwordHasher,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            ApplicationDbContext context)
         {
             _userRepository = userRepository;
             _jwtTokenGenerator = jwtTokenGenerator;
             _passwordHasher = passwordHasher;
             _httpContextAccessor = httpContextAccessor;
+            _context = context;
         }
 
         public async Task<UserDto> GetUserByIdAsync(Guid id)
@@ -114,49 +118,93 @@ namespace ISUMPK2.Application.Services.Implementations
 
         public async Task<UserDto> CreateUserAsync(UserCreateDto userDto)
         {
-            var existingUser = await _userRepository.GetByUsernameAsync(userDto.UserName);
-            if (existingUser != null)
-                throw new ApplicationException($"User with username {userDto.UserName} already exists.");
-
-            if (!string.IsNullOrEmpty(userDto.Email))
+            try
             {
-                existingUser = await _userRepository.GetByEmailAsync(userDto.Email);
+                // Проверяем существование пользователя
+                var existingUser = await _userRepository.GetByUsernameAsync(userDto.UserName);
                 if (existingUser != null)
-                    throw new ApplicationException($"User with email {userDto.Email} already exists.");
+                    throw new ApplicationException($"Пользователь с именем {userDto.UserName} уже существует.");
+
+                if (!string.IsNullOrEmpty(userDto.Email))
+                {
+                    existingUser = await _userRepository.GetByEmailAsync(userDto.Email);
+                    if (existingUser != null)
+                        throw new ApplicationException($"Пользователь с email {userDto.Email} уже существует.");
+                }
+
+                // Предварительно проверяем существование всех ролей
+                foreach (var roleName in userDto.Roles)
+                {
+                    var roleExists = await _userRepository.CheckRoleExistsAsync(roleName);
+                    if (!roleExists)
+                        throw new ApplicationException($"Роль {roleName} не найдена в системе");
+                }
+
+
+                // Создаем пользователя
+                var user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    UserName = userDto.UserName,
+                    NormalizedUserName = userDto.UserName.ToUpper(),
+                    Email = userDto.Email,
+                    NormalizedEmail = userDto.Email?.ToUpper(),
+                    FirstName = userDto.FirstName,
+                    LastName = userDto.LastName,
+                    MiddleName = userDto.MiddleName,
+                    PhoneNumber = userDto.PhoneNumber,
+                    DepartmentId = userDto.DepartmentId,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    EmailConfirmed = true, // Добавляем инициализацию обязательных полей
+                    PhoneNumberConfirmed = false,
+                    TwoFactorEnabled = false,
+                    LockoutEnabled = true,
+                    AccessFailedCount = 0
+                };
+
+                // Хешируем пароль
+                user.PasswordHash = _passwordHasher.HashPassword(user, userDto.Password);
+                user.SecurityStamp = Guid.NewGuid().ToString();
+                user.ConcurrencyStamp = Guid.NewGuid().ToString();
+
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        await _userRepository.AddAsync(user);
+                        await _userRepository.SaveChangesAsync();
+
+                        foreach (var role in userDto.Roles)
+                        {
+                            await _userRepository.AddToRoleAsync(user.Id, role);
+                        }
+
+                        await _userRepository.SaveChangesAsync();
+                        await transaction.CommitAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        await transaction.RollbackAsync();
+                        throw new ApplicationException($"Ошибка при создании пользователя: {ex.Message}", ex);
+                    }
+                }
+
+
+                // Получаем обновленные данные пользователя с ролями
+                var refreshedUser = await _userRepository.GetByIdAsync(user.Id);
+                var roles = await GetRolesAsync(user.Id);
+
+                return MapUserToDto(refreshedUser, roles);
             }
-
-            var user = new User
+            catch (Exception ex)
             {
-                Id = Guid.NewGuid(),
-                UserName = userDto.UserName,
-                NormalizedUserName = userDto.UserName.ToUpper(),
-                Email = userDto.Email,
-                NormalizedEmail = userDto.Email?.ToUpper(),
-                FirstName = userDto.FirstName,
-                LastName = userDto.LastName,
-                MiddleName = userDto.MiddleName,
-                PhoneNumber = userDto.PhoneNumber,
-                DepartmentId = userDto.DepartmentId,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            // Хеширование пароля
-            user.PasswordHash = _passwordHasher.HashPassword(user, userDto.Password);
-            user.SecurityStamp = Guid.NewGuid().ToString();
-
-            await _userRepository.AddAsync(user);
-            await _userRepository.SaveChangesAsync();
-
-            // Добавление ролей
-            foreach (var role in userDto.Roles)
-            {
-                await _userRepository.AddToRoleAsync(user.Id, role);
+                Console.WriteLine($"Ошибка при создании пользователя: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                throw;
             }
-
-            var roles = await GetRolesAsync(user.Id);
-            return MapUserToDto(user, roles);
         }
+
 
         public async Task<UserDto> UpdateUserAsync(Guid id, UserUpdateDto userDto)
         {

@@ -16,5 +16,6 @@ namespace ISUMPK2.Domain.Repositories
         Task<bool> IsInRoleAsync(Guid userId, string roleName);
         Task AddToRoleAsync(Guid userId, string roleName);
         Task RemoveFromRoleAsync(Guid userId, string roleName);
+        Task<bool> CheckRoleExistsAsync(string roleName);
     }
 }

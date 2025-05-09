@@ -1,6 +1,4 @@
-﻿@page "/tasks"
-@page "/tasks/my"
-@page "/tasks/overdue"
+﻿@page "/tasks/{id:guid}"
 @attribute [Authorize]
 @using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
@@ -303,7 +301,7 @@
         ApplyFilters();
     }
 
-    private async Task<TableData<TaskModel>> ServerReload(TableState state,CancellationToken cancellationToken)
+    private async Task<TableData<TaskModel>> ServerReload(TableState state)
     {
         var sortedTasks = filteredTasks;
 

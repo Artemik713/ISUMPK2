@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ISUMPK2.Application\ISUMPK2.Application.csproj" />
     <ProjectReference Include="..\ISUMPK2.Client\ISUMPK2.Client.csproj" />
     <ProjectReference Include="..\ISUMPK2.Domain\ISUMPK2.Domain.csproj" />
   </ItemGroup>

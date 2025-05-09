@@ -1,7 +1,61 @@
-﻿@page "/"
+﻿@page "/home"
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@attribute [Authorize]
 
-<PageTitle>Home</PageTitle>
+<PageTitle>УралТехПром - Главная страница</PageTitle>
 
-<h1>Hello, world!</h1>
+<MudContainer Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Добро пожаловать в информационную систему завода УралТехПром</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudText>Вы успешно авторизовались в системе управления производством металлоконструкций.</MudText>
+            
+            <MudDivider Class="my-4" />
+            
+            <MudText Typo="Typo.h6" Class="mb-3">Быстрый доступ</MudText>
+            
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" Class="mb-2" />
+                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Управление задачами</MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/tasks"))">Перейти</MudButton>
+                    </MudPaper>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Учет материалов</MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="@(() => NavigationManager.NavigateTo("/materials"))">Перейти</MudButton>
+                    </MudPaper>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Large" Color="Color.Tertiary" Class="mb-2" />
+                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Продукция</MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Tertiary" OnClick="@(() => NavigationManager.NavigateTo("/products"))">Перейти</MudButton>
+                    </MudPaper>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Notifications" Size="Size.Large" Color="Color.Info" Class="mb-2" />
+                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Уведомления</MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Info" OnClick="@(() => NavigationManager.NavigateTo("/notifications"))">Перейти</MudButton>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
 
-Welcome to your new app.
+@code {
+    [Inject] NavigationManager NavigationManager { get; set; }
+}

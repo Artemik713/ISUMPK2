@@ -32,7 +32,7 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
     [Parameter] public Guid TaskId { get; set; }
     [Parameter] public int NewStatusId { get; set; }
     [Parameter] public List<StatusModel> Statuses { get; set; } = new List<StatusModel>();

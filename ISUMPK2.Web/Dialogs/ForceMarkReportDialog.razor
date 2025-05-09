@@ -37,7 +37,7 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] IMudDialogInstance? MudDialog { get; set; }
+    [CascadingParameter] MudDialogInstance? MudDialog { get; set; }
     [Parameter] public Guid TaskId { get; set; }
 
     private string description = "";

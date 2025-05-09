@@ -162,7 +162,7 @@
         ApplyFilters();
     }
 
-    private async Task<TableData<ProductModel>> ServerReload(TableState state,CancellationToken cancellationToken)
+    private async Task<TableData<ProductModel>> ServerReload(TableState state)
     {
         var sortedProducts = filteredProducts;
         await Task.CompletedTask;

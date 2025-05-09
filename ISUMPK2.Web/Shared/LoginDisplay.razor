@@ -1,3 +1,67 @@
-﻿<AuthorizeView>
-    Hello, @context.User.Identity?.Name!
+﻿@using ISUMPK2.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+
+<AuthorizeView>
+    <Authorized>
+        <div class="d-flex align-center">
+            <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <ActivatorContent>
+                    <div class="d-flex align-center">
+                        <MudAvatar Color="Color.Primary" Class="mr-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" />
+                        </MudAvatar>
+                        <div>
+                            <MudText Typo="Typo.body1">@context.User.Identity?.Name</MudText>
+                            @if (context.User.IsInRole("Administrator"))
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Администратор</MudText>
+                            }
+                            else if (context.User.IsInRole("GeneralDirector"))
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Генеральный директор</MudText>
+                            }
+                            else if (context.User.IsInRole("MetalShopManager"))
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Начальник цеха металлообработки</MudText>
+                            }
+                            else if (context.User.IsInRole("PaintShopManager"))
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Начальник цеха покраски</MudText>
+                            }
+                            else if (context.User.IsInRole("Worker"))
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Рабочий цеха</MudText>
+                            }
+                            else if (context.User.IsInRole("Storekeeper"))
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Кладовщик</MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Пользователь</MudText>
+                            }
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ml-1" />
+                    </div>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Person">Профиль</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Settings">Настройки</MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="LogoutClick">Выход</MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        </div>
+    </Authorized>
 </AuthorizeView>
+
+@code {
+    private async Task LogoutClick()
+    {
+        await AuthService.Logout();
+        NavigationManager.NavigateTo("/");
+    }
+}
