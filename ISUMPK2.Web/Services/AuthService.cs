@@ -1,5 +1,7 @@
-﻿using ISUMPK2.Web.Auth;
+﻿using ISUMPK2.Application.DTOs;
+using ISUMPK2.Web.Auth;
 using ISUMPK2.Web.Models;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
 namespace ISUMPK2.Web.Services
@@ -66,5 +68,24 @@ namespace ISUMPK2.Web.Services
             var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
             return authState.User.Identity.IsAuthenticated;
         }
+        public async Task<UserModel> GetUserInfoAsync()
+        {
+            var token = await _localStorage.GetItemAsync<string>("authToken");
+            if (string.IsNullOrEmpty(token))
+                return null;
+
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            try
+            {
+                var userDto = await _httpClient.GetFromJsonAsync<UserDto>("api/users/current");
+                return userDto.ToModel(); // Метод преобразования DTO в модель
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+
     }
 }

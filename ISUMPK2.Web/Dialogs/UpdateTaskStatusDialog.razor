@@ -1,0 +1,78 @@
+﻿@using MudBlazor
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@inject IDialogService DialogService
+@inject ITaskService TaskService
+@inject IAuthService AuthService
+
+<MudDialog>
+    <DialogContent>
+        <MudText>Вы уверены, что хотите изменить статус задачи?</MudText>
+        <MudSelect T="int" @bind-Value="@selectedStatusId" Label="Новый статус" Class="mt-3">
+            @foreach (var status in Statuses.Where(s => s.Id == NewStatusId))
+            {
+                <MudSelectItem T="int" Value="@status.Id">@status.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="comment" Label="Комментарий" Lines="3" Class="mt-3"></MudTextField>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Подтвердить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
+    [Parameter] public int NewStatusId { get; set; }
+    [Parameter] public IEnumerable<StatusModel> Statuses { get; set; }
+
+    private int selectedStatusId;
+    private string comment = "";
+    private Guid currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        selectedStatusId = NewStatusId;
+        var user = await AuthService.GetUserInfoAsync();
+        if (user != null)
+        {
+            currentUserId = user.Id;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        if (currentUserId == Guid.Empty)
+        {
+            // Получаем пользователя, если он не был получен в OnInitializedAsync
+            var user = await AuthService.GetUserInfoAsync();
+            if (user != null)
+            {
+                currentUserId = user.Id;
+            }
+            else
+            {
+                // В случае если пользователь не найден, можно показать ошибку
+                return;
+            }
+        }
+
+        var statusDto = new TaskStatusUpdateDto
+            {
+                StatusId = selectedStatusId,
+                Comment = string.IsNullOrWhiteSpace(comment)
+                        ? $"Статус изменен на '{Statuses.FirstOrDefault(s => s.Id == selectedStatusId)?.Name}'"
+                        : comment
+            };
+
+        await TaskService.UpdateTaskStatusAsync(TaskId, currentUserId, statusDto);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}
+

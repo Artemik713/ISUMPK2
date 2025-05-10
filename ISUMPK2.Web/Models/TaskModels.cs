@@ -98,6 +98,17 @@
         public string Comment { get; set; }
         public DateTime CreatedAt { get; set; }
     }
+    public class StatusModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+
+    public class PriorityModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
 
     public class TaskCommentCreateModel
     {

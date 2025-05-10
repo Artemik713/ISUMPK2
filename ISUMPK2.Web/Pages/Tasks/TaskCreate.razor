@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using ISUMPK2.Application.Services
 @using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Dialogs
 @using ISUMPK2.Web.Services
 @using ISUMPK2.Web.Extensions
 @using Microsoft.AspNetCore.Authorization
@@ -392,12 +393,6 @@
         {
             await LoadTasksAsync();
         }
-    }
-
-    private class StatusModel
-    {
-        public int Id { get; set; }
-        public string Name { get; set; }
     }
 
     private class PriorityModel

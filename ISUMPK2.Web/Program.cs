@@ -9,6 +9,10 @@ using ISUMPK2.Web.Services;
 using ISUMPK2.Web.Auth;
 using ISUMPK2.Infrastructure.Repositories;
 using ISUMPK2.Domain.Repositories;
+using ISUMPK2.Web.Repositories;
+using ISUMPK2.Application.Auth;
+using ISUMPK2.Domain.Entities;
+using Microsoft.AspNetCore.Identity;
 
 namespace ISUMPK2.Web
 {
@@ -26,37 +30,40 @@ namespace ISUMPK2.Web
             // Добавление сервисов MudBlazor
             builder.Services.AddMudServices();
 
+
             // Настройка аутентификации
             builder.Services.AddOptions();
             builder.Services.AddAuthorizationCore();
-            builder.Services.AddScoped<AuthenticationStateProvider, ApiAuthenticationStateProvider>();
-            builder.Services.AddScoped<ApiAuthenticationStateProvider>(); // если требуется напрямую
+            builder.Services.AddScoped<AuthenticationStateProvider, ISUMPK2.Web.Auth.ApiAuthenticationStateProvider>();
+            builder.Services.AddScoped<ISUMPK2.Web.Auth.ApiAuthenticationStateProvider>(); // если требуется напрямую
             builder.Services.AddScoped<IAuthService, AuthService>();
-
             // Локальное хранилище
             builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 
             // Сервис навигации
             builder.Services.AddScoped<INavigationService, NavigationService>();
 
-            // Регистрация репозиториев
-            builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
-            builder.Services.AddScoped<IMaterialRepository, MaterialRepository>();
-            builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
-            builder.Services.AddScoped<IUserRepository, UserRepository>();
-            builder.Services.AddScoped<ITaskRepository, TaskRepository>();
-            builder.Services.AddScoped<IProductRepository, ProductRepository>();
-            builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+            // Регистрация репозиториев - замените на клиентские реализации
+            builder.Services.AddScoped<INotificationRepository, ClientNotificationRepository>();
+            builder.Services.AddScoped<IMaterialRepository, ClientMaterialRepository>();
+            builder.Services.AddScoped<IDepartmentRepository, ClientDepartmentRepository>();
+            builder.Services.AddScoped<IUserRepository, ClientUserRepository>();
+            builder.Services.AddScoped<ITaskRepository, ClientTaskRepository>();
+            builder.Services.AddScoped<IProductRepository, ClientProductRepository>();
+            builder.Services.AddScoped(typeof(IRepository<>), typeof(ClientRepository<>));
+
+            // Уберите дублирующиеся регистрации MudServices
 
             // Регистрация сервисов приложения
             builder.Services.AddScoped<ITaskService, TaskService>();
-            builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddScoped<IUserService, ClientUserService>();
             builder.Services.AddScoped<IMaterialService, MaterialService>();
             builder.Services.AddScoped<IProductService, ProductService>();
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddScoped<IChatService, ChatService>();
             builder.Services.AddScoped<IDepartmentService, DepartmentService>();
-
+            builder.Services.AddScoped<IJwtTokenGenerator, WebAssemblyJwtTokenGenerator>();
+            builder.Services.AddScoped<IPasswordHasher<User>, DummyPasswordHasher>();
             // Настройка SignalR для уведомлений
             builder.Services.AddSingleton<INotificationHubService, NotificationHubService>();
             builder.Services.AddSingleton<IChatHubService, ChatHubService>();

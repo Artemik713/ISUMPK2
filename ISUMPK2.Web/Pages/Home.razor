@@ -14,11 +14,11 @@
         </MudCardHeader>
         <MudCardContent>
             <MudText>Вы успешно авторизовались в системе управления производством металлоконструкций.</MudText>
-            
+
             <MudDivider Class="my-4" />
-            
+
             <MudText Typo="Typo.h6" Class="mb-3">Быстрый доступ</MudText>
-            
+
             <MudGrid>
                 <MudItem xs="12" sm="6" md="3">
                     <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
@@ -27,7 +27,7 @@
                         <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/tasks"))">Перейти</MudButton>
                     </MudPaper>
                 </MudItem>
-                
+
                 <MudItem xs="12" sm="6" md="3">
                     <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
                         <MudIcon Icon="@Icons.Material.Filled.Inventory" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
@@ -35,7 +35,7 @@
                         <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="@(() => NavigationManager.NavigateTo("/materials"))">Перейти</MudButton>
                     </MudPaper>
                 </MudItem>
-                
+
                 <MudItem xs="12" sm="6" md="3">
                     <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
                         <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Large" Color="Color.Tertiary" Class="mb-2" />
@@ -43,12 +43,48 @@
                         <MudButton Variant="Variant.Text" Color="Color.Tertiary" OnClick="@(() => NavigationManager.NavigateTo("/products"))">Перейти</MudButton>
                     </MudPaper>
                 </MudItem>
-                
+
                 <MudItem xs="12" sm="6" md="3">
                     <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
                         <MudIcon Icon="@Icons.Material.Filled.Notifications" Size="Size.Large" Color="Color.Info" Class="mb-2" />
                         <MudText Typo="Typo.subtitle1" Align="Align.Center">Уведомления</MudText>
                         <MudButton Variant="Variant.Text" Color="Color.Info" OnClick="@(() => NavigationManager.NavigateTo("/notifications"))">Перейти</MudButton>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Large" Color="Color.Success" Class="mb-2" />
+                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Цеха</MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Success" OnClick="@(() => NavigationManager.NavigateTo("/departments"))">Перейти</MudButton>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+
+            <MudText Typo="Typo.h6" Class="mb-3">Цеха</MudText>
+
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudPaper Class="pa-4 d-flex flex-column" Elevation="2" Style="height: 150px;">
+                        <MudText Typo="Typo.h6" Color="Color.Primary">Цех металлообработки</MudText>
+                        <MudText Typo="Typo.body2" Class="flex-grow-1">Производство металлических изделий и конструкций</MudText>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                   OnClick="@(() => NavigateToFilteredDepartment("Цех металлообработки"))">
+                            Перейти
+                        </MudButton>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudPaper Class="pa-4 d-flex flex-column" Elevation="2" Style="height: 150px;">
+                        <MudText Typo="Typo.h6" Color="Color.Secondary">Малярный цех</MudText>
+                        <MudText Typo="Typo.body2" Class="flex-grow-1">Покраска и финишная обработка изделий</MudText>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                                   OnClick="@(() => NavigateToFilteredDepartment("Малярный"))">
+                            Перейти
+                        </MudButton>
                     </MudPaper>
                 </MudItem>
             </MudGrid>
@@ -58,4 +94,13 @@
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; }
+
+    private void NavigateToFilteredDepartment(string departmentName)
+    {
+        // Если у вас есть возможность фильтрации по имени отдела
+        //NavigationManager.NavigateTo($"/departments?name={Uri.EscapeDataString(departmentName)}");
+
+        // Или, если фильтрация по имени отсутствует, просто перейти к списку отделов
+        NavigationManager.NavigateTo("/departments");
+    }
 }

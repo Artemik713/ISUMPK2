@@ -1,0 +1,55 @@
+﻿@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using MudBlazor
+@inject IDepartmentService DepartmentService
+@inject MudBlazor.ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            <MudTextField @bind-Value="model.Name" Label="Название отдела"
+                          Required="true" RequiredError="Название обязательно" />
+            
+            <MudTextField @bind-Value="model.Description" Label="Описание" 
+                          Lines="3" Class="mt-3" />
+            
+            <MudSelect @bind-Value="model.HeadId" Label="Руководитель" Class="mt-3">
+                @foreach (var user in Users)
+                {
+                    <MudSelectItem Value="@user.Id">@($"{user.LastName} {user.FirstName}")</MudSelectItem>
+                }
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Создать</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public IEnumerable<UserDto> Users { get; set; } = new List<UserDto>();
+    
+    private MudForm form;
+    private DepartmentCreateDto model = new DepartmentCreateDto();
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        form.Validate();
+        if (form.IsValid)
+        {
+            try
+            {
+                await DepartmentService.CreateDepartmentAsync(model);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

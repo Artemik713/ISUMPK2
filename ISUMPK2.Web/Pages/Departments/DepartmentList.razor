@@ -1,0 +1,127 @@
+﻿@page "/departments"
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Domain.Entities
+@using ISUMPK2.Web.Dialogs
+@using MudBlazor
+@inject IDepartmentService DepartmentService
+@inject IUserService UserService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Отделы - УралТехПром</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h4" Class="mb-4">Управление отделами</MudText>
+        
+        <MudButton Class="mb-4" Variant="Variant.Filled" Color="Color.Primary" OnClick="@OpenCreateDialog">
+            <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" /> Добавить отдел
+        </MudButton>
+
+        @if (loading)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (departments == null || !departments.Any())
+        {
+            <MudAlert Severity="Severity.Info">Нет доступных отделов</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@departments" Hover="true" Striped="true" Elevation="2">
+                <HeaderContent>
+                    <MudTh>Название</MudTh>
+                    <MudTh>Описание</MudTh>
+                    <MudTh>Руководитель</MudTh>
+                    <MudTh>Действия</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Название">@context.Name</MudTd>
+                    <MudTd DataLabel="Описание">@context.Description</MudTd>
+                    <MudTd DataLabel="Руководитель">@context.HeadName</MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" 
+                            OnClick="@(() => OpenEditDialog(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" 
+                            OnClick="@(() => OpenDeleteDialog(context))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private bool loading = true;
+    private IEnumerable<DepartmentDto> departments;
+    private IEnumerable<UserDto> users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        loading = true;
+        departments = await DepartmentService.GetAllDepartmentsAsync();
+        users = await UserService.GetAllUsersAsync();
+        loading = false;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            ["Users"] = users
+        };
+
+        var dialog = DialogService.Show<DepartmentCreateDialog>("Создание отдела", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            await LoadData();
+            Snackbar.Add("Отдел успешно создан", Severity.Success);
+        }
+    }
+
+    // Проверьте этот метод в DepartmentList.razor
+    private async Task OpenEditDialog(DepartmentDto department)
+    {
+        var parameters = new DialogParameters
+            {
+                ["Department"] = department,
+                ["Users"] = users // Убедитесь, что users заполнено!
+            };
+
+        var dialog = DialogService.Show<DepartmentEditDialog>("Редактирование отдела", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            await LoadData();
+            Snackbar.Add("Отдел успешно обновлен", Severity.Success);
+        }
+    }
+
+
+    private async Task OpenDeleteDialog(DepartmentDto department)
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = $"Вы уверены, что хотите удалить отдел '{department.Name}'?"
+        };
+
+        var dialog = DialogService.Show<ConfirmDialog>("Подтверждение", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            await DepartmentService.DeleteDepartmentAsync(department.Id);
+            await LoadData();
+            Snackbar.Add("Отдел успешно удален", Severity.Success);
+        }
+    }
+}

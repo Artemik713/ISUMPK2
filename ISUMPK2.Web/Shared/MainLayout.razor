@@ -1,41 +1,57 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
 
+<MudThemeProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
 <PageTitle>ИСУ ПМК - УралТехПром</PageTitle>
 
 <AuthorizeView>
     <Authorized>
-        <div class="page">
-            <div class="sidebar">
+        <MudLayout>
+            <MudAppBar Elevation="1" Color="Color.Primary">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                               OnClick="@((e) => DrawerToggle())" />
+                <MudText Typo="Typo.h5" Class="ml-3">УралТехПром</MudText>
+                <MudSpacer />
+                <LoginDisplay />
+            </MudAppBar>
+
+            <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
                 <NavMenu />
-            </div>
+            </MudDrawer>
 
-            <main>
-                <div class="top-row px-4 auth">
-                    <LoginDisplay />
-                </div>
-
-                <article class="content px-4">
+            <MudMainContent>
+                <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4 pt-4">
                     @Body
-                </article>
-            </main>
-        </div>
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
     </Authorized>
     <NotAuthorized>
-        <div class="page">
-            <main class="full-width">
-                <article class="content px-4">
+        <MudLayout>
+            <MudAppBar Elevation="1" Color="Color.Primary">
+                <MudText Typo="Typo.h5" Class="ml-3">УралТехПром</MudText>
+                <MudSpacer />
+                <MudButton Href="/login" Variant="Variant.Text" Color="Color.Inherit">Войти</MudButton>
+            </MudAppBar>
+
+            <MudMainContent>
+                <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16 pt-4">
                     @Body
-                </article>
-            </main>
-        </div>
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
     </NotAuthorized>
 </AuthorizeView>
 
-<style>
-    .full-width {
-        width: 100%;
-        margin-left: 0;
+@code {
+    private bool _drawerOpen = true;
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
     }
-</style>
+}
