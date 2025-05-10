@@ -36,6 +36,7 @@ namespace ISUMPK2.Application.DTOs
         public string UnitOfMeasure { get; set; }
         public decimal MinimumStock { get; set; }
         public decimal Price { get; set; }
+        public decimal CurrentStock { get; set; }
     }
 
     public class MaterialTransactionDto

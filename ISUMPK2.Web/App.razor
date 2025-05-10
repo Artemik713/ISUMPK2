@@ -3,7 +3,28 @@
         <Found Context="routeData">
             <ErrorBoundary>
                 <ChildContent>
-                    <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+                    <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                        <NotAuthorized>
+                            @if (context.User.Identity?.IsAuthenticated != true)
+                            {
+                                <RedirectToLogin />
+                            }
+                            else
+                            {
+                                <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6 pa-4">
+                                    <MudAlert Severity="Severity.Error">У вас нет доступа к этой странице.</MudAlert>
+                                    <MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/"))">
+                                        Вернуться на главную
+                                    </MudButton>
+                                </MudContainer>
+                            }
+                        </NotAuthorized>
+                        <Authorizing>
+                            <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6 pa-4 d-flex justify-center">
+                                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                            </MudContainer>
+                        </Authorizing>
+                    </AuthorizeRouteView>
                 </ChildContent>
                 <ErrorContent>
                     <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6 pa-4">
@@ -17,7 +38,12 @@
         </Found>
         <NotFound>
             <LayoutView Layout="@typeof(MainLayout)">
-                <p>Страница не найдена</p>
+                <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6 pa-4">
+                    <MudAlert Severity="Severity.Warning">Страница не найдена</MudAlert>
+                    <MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/"))">
+                        Вернуться на главную
+                    </MudButton>
+                </MudContainer>
             </LayoutView>
         </NotFound>
     </Router>
@@ -25,4 +51,17 @@
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; }
+
+    public class RedirectToLogin : ComponentBase
+    {
+        [Inject]
+        private NavigationManager NavigationManager { get; set; }
+
+        protected override void OnInitialized()
+        {
+            var returnUrl = NavigationManager.Uri;
+            NavigationManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}", true);
+        }
+    }
 }
+

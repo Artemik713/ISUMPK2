@@ -1,6 +1,11 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
 @using MudBlazor
+@using System.Text.RegularExpressions
+@using ISUMPK2.Web.Services
+@inject NavigationManager NavigationManager
+@inject IAuthService AuthService
+@implements IDisposable
 
 <MudThemeProvider />
 <MudDialogProvider />
@@ -8,20 +13,25 @@
 
 <PageTitle>ИСУ ПМК - УралТехПром</PageTitle>
 
+@{
+    // Проверяем, является ли текущая страница страницей логина или индексной страницей
+    var currentPath = NavigationManager.Uri;
+    var isLoginPage = Regex.IsMatch(currentPath, @"/login$");
+    var isIndexPage = Regex.IsMatch(currentPath, @"/$") ||
+                     Regex.IsMatch(currentPath, @"/index$") ||
+                     NavigationManager.Uri.EndsWith(NavigationManager.BaseUri);
+}
+
 <AuthorizeView>
     <Authorized>
         <MudLayout>
             <MudAppBar Elevation="1" Color="Color.Primary">
-                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                               OnClick="@((e) => DrawerToggle())" />
-                <MudText Typo="Typo.h5" Class="ml-3">УралТехПром</MudText>
+                <MudLink Href="/home" Class="d-flex align-center ml-3">
+                    <img src="images/logo.svg" alt="Логотип УралТехПром" height="40" class="mr-2" />
+                </MudLink>
                 <MudSpacer />
                 <LoginDisplay />
             </MudAppBar>
-
-            <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
-                <NavMenu />
-            </MudDrawer>
 
             <MudMainContent>
                 <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4 pt-4">
@@ -31,27 +41,63 @@
         </MudLayout>
     </Authorized>
     <NotAuthorized>
-        <MudLayout>
-            <MudAppBar Elevation="1" Color="Color.Primary">
-                <MudText Typo="Typo.h5" Class="ml-3">УралТехПром</MudText>
-                <MudSpacer />
-                <MudButton Href="/login" Variant="Variant.Text" Color="Color.Inherit">Войти</MudButton>
-            </MudAppBar>
+        @if (!(isLoginPage || isIndexPage))
+        {
+            <MudLayout>
+                <MudAppBar Elevation="1" Color="Color.Primary">
+                    <MudLink Href="/" Class="d-flex align-center ml-3">
+                        <img src="images/logo.svg" alt="Логотип УралТехПром" height="40" class="mr-2" />
+                    </MudLink>
+                    <MudSpacer />
+                    <MudButton Href="/login" Variant="Variant.Text" Color="Color.Inherit">Войти</MudButton>
+                </MudAppBar>
 
-            <MudMainContent>
-                <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16 pt-4">
-                    @Body
-                </MudContainer>
-            </MudMainContent>
-        </MudLayout>
+                <MudMainContent>
+                    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16 pt-4">
+                        @Body
+                    </MudContainer>
+                </MudMainContent>
+            </MudLayout>
+        }
+        else
+        {
+            @* Для страниц логина и индекса не отображаем AppBar *@
+            @Body
+        }
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
-    private bool _drawerOpen = true;
+    private bool _isAuthenticated = false;
 
-    private void DrawerToggle()
+    protected override async Task OnInitializedAsync()
     {
-        _drawerOpen = !_drawerOpen;
+        _isAuthenticated = await AuthService.IsUserAuthenticated();
+        AuthService.AuthenticationChanged += OnAuthenticationChanged;
+    }
+
+    private void OnAuthenticationChanged(bool isAuthenticated)
+    {
+        _isAuthenticated = isAuthenticated;
+        InvokeAsync(StateHasChanged); // Явно вызываем обновление UI
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // Убедимся, что состояние приложения соответствует состоянию аутентификации
+        if (firstRender)
+        {
+            InvokeAsync(async () =>
+            {
+                _isAuthenticated = await AuthService.IsUserAuthenticated();
+                StateHasChanged();
+            });
+        }
+    }
+
+
+    public void Dispose()
+    {
+        AuthService.AuthenticationChanged -= OnAuthenticationChanged;
     }
 }

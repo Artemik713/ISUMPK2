@@ -61,7 +61,10 @@
 @code {
     private async Task LogoutClick()
     {
+        // Перенаправляем сначала на главную страницу
+        NavigationManager.NavigateTo("/", true); // Используем true для полной перезагрузки страницы
+
+        // Затем выполняем выход из системы
         await AuthService.Logout();
-        NavigationManager.NavigateTo("/");
     }
 }

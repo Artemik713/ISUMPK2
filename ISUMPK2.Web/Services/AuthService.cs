@@ -5,12 +5,14 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
 namespace ISUMPK2.Web.Services
-{   
+{
     public class AuthService : IAuthService
     {
         private readonly HttpClient _httpClient;
         private readonly ApiAuthenticationStateProvider _authenticationStateProvider;
         private readonly ILocalStorageService _localStorage;
+
+        public event Action<bool> AuthenticationChanged;
 
         public AuthService(HttpClient httpClient,
                           ApiAuthenticationStateProvider authenticationStateProvider,
@@ -43,12 +45,16 @@ namespace ISUMPK2.Web.Services
             await _localStorage.SetItemAsync("userRoles", userLoginResponse.Roles);
             await _localStorage.SetItemAsync("tokenExpiration", userLoginResponse.TokenExpiration);
 
-            ((ApiAuthenticationStateProvider)_authenticationStateProvider).MarkUserAsAuthenticated(userLoginResponse);
+            // Обновление состояния аутентификации
+            _authenticationStateProvider.MarkUserAsAuthenticated(userLoginResponse);
+            AuthenticationChanged?.Invoke(true);
 
+            // Установка заголовка авторизации для HTTP запросов
             _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", userLoginResponse.Token);
 
             return new LoginResult { Successful = true };
         }
+
 
         public async Task Logout()
         {
@@ -59,6 +65,7 @@ namespace ISUMPK2.Web.Services
             await _localStorage.RemoveItemAsync("tokenExpiration");
 
             ((ApiAuthenticationStateProvider)_authenticationStateProvider).MarkUserAsLoggedOut();
+            AuthenticationChanged?.Invoke(false);
 
             _httpClient.DefaultRequestHeaders.Authorization = null;
         }
@@ -68,6 +75,7 @@ namespace ISUMPK2.Web.Services
             var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
             return authState.User.Identity.IsAuthenticated;
         }
+
         public async Task<UserModel> GetUserInfoAsync()
         {
             var token = await _localStorage.GetItemAsync<string>("authToken");
@@ -85,7 +93,5 @@ namespace ISUMPK2.Web.Services
                 return null;
             }
         }
-
-
     }
 }

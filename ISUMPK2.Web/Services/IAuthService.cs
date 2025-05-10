@@ -5,10 +5,10 @@ namespace ISUMPK2.Web.Services
 {
     public interface IAuthService
     {
+        event Action<bool> AuthenticationChanged;
         Task<LoginResult> Login(LoginModel loginModel);
         Task Logout();
         Task<bool> IsUserAuthenticated();
         Task<UserModel> GetUserInfoAsync();
     }
 }
-

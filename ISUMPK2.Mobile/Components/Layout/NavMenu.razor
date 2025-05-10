@@ -23,5 +23,15 @@
                 <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
             </NavLink>
         </div>
+        <div>
+            <AuthorizeView Roles="Administrator">
+    <MudNavGroup Title="Администрирование" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="false">
+        <MudNavLink Href="/admin/user-testing" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.PeopleAlt">
+            Тестирование пользователей
+        </MudNavLink>
+        <!-- Другие административные страницы -->
+    </MudNavGroup>
+</AuthorizeView>
+        </div>
     </nav>
 </div>
