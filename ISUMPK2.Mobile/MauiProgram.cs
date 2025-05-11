@@ -9,16 +9,19 @@ using IAuthService = ISUMPK2.Mobile.Services.IAuthService;
 using ITaskService = ISUMPK2.Mobile.Services.ITaskService;
 using TaskService = ISUMPK2.Mobile.Services.TaskService;
 using AuthService = ISUMPK2.Mobile.Services.AuthService;
-using ISUMPK.Mobile;
 using Microsoft.Extensions.Logging;
+using ISUMPK.Mobile;
 
-namespace ISUMPK.Components.src.ISUPMK.Mobile
+namespace ISUMPK2.Mobile
 {
     public static class MauiProgram
     {
         public static MauiApp CreateMauiApp()
         {
             var builder = MauiApp.CreateBuilder();
+#if DEBUG
+            HttpsClientHandlerService.Initialize();
+#endif
             builder
                 .UseMauiApp<App>() // Предполагается, что класс App существует в текущем пространстве имен
                 .ConfigureFonts(fonts =>
@@ -75,6 +78,23 @@ namespace ISUMPK.Components.src.ISUPMK.Mobile
 #endif
 
             return builder.Build();
+
         }
     }
+    public static class HttpsClientHandlerService
+{
+    public static void Initialize()
+    {
+#if DEBUG
+        // Игнорирование ошибок SSL сертификата только в режиме отладки
+        var handler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = 
+                (message, cert, chain, errors) => true
+        };
+        
+        var httpClient = new HttpClient(handler);
+#endif
+    }
+}
 }

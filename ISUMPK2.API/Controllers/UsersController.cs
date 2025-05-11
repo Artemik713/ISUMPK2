@@ -5,23 +5,26 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace ISUMPK2.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Administrator,GeneralDirector")]
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly ILogger<UsersController> _logger;
 
-        public UsersController(IUserService userService)
+        public UsersController(IUserService userService, ILogger<UsersController> logger)
         {
             _userService = userService;
+            _logger = logger;
         }
 
         [HttpGet]
+        [Authorize(Roles = "Administrator,GeneralDirector")]
         public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsers()
         {
             var users = await _userService.GetAllUsersAsync();
@@ -29,6 +32,7 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Administrator,GeneralDirector")]
         public async Task<ActionResult<UserDto>> GetUserById(Guid id)
         {
             var user = await _userService.GetUserByIdAsync(id);
@@ -40,6 +44,7 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpGet("by-role/{role}")]
+        [Authorize(Roles = "Administrator,GeneralDirector")]
         public async Task<ActionResult<IEnumerable<UserDto>>> GetUsersByRole(string role)
         {
             var users = await _userService.GetUsersByRoleAsync(role);
@@ -47,6 +52,7 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpGet("by-department/{departmentId}")]
+        [Authorize(Roles = "Administrator,GeneralDirector")]
         public async Task<ActionResult<IEnumerable<UserDto>>> GetUsersByDepartment(Guid departmentId)
         {
             var users = await _userService.GetUsersByDepartmentAsync(departmentId);
@@ -69,6 +75,7 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Administrator,GeneralDirector")]
         public async Task<ActionResult<UserDto>> UpdateUser(Guid id, [FromBody] UserUpdateDto userDto)
         {
             try
@@ -83,6 +90,7 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Administrator,GeneralDirector")]
         public async Task<ActionResult> DeleteUser(Guid id)
         {
             try
@@ -97,7 +105,7 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpGet("profile")]
-        [Authorize]
+        [Authorize] // Доступен всем авторизованным
         public async Task<ActionResult<UserDto>> GetUserProfile()
         {
             if (!Guid.TryParse(User.Identity.Name, out var userId))
@@ -111,6 +119,43 @@ namespace ISUMPK2.API.Controllers
                 return NotFound();
             }
             return Ok(user);
+        }
+
+        // Добавленный метод для получения текущего пользователя
+        [HttpGet("current")]
+        [Authorize] // Доступен всем авторизованным
+        public async Task<ActionResult<UserDto>> GetCurrentUser()
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var user = await _userService.GetUserByIdAsync(userId);
+                if (user == null)
+                {
+                    return NotFound("Пользователь не найден");
+                }
+                return Ok(user);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Unauthorized("Пользователь не авторизован");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении данных текущего пользователя");
+                return StatusCode(500, new { message = "Ошибка при получении данных пользователя" });
+            }
+        }
+
+        // Добавленный вспомогательный метод для получения ID текущего пользователя
+        private Guid GetCurrentUserId()
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
+            {
+                throw new UnauthorizedAccessException("Пользователь не авторизован или ID некорректный");
+            }
+            return userId;
         }
     }
 }

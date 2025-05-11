@@ -2,7 +2,6 @@
 using Microsoft.Maui.Hosting;
 using Microsoft.Maui.Controls.Hosting;
 using ISUMPK2.Mobile;
-using ISUMPK.Components.src.ISUPMK.Mobile;
 
 namespace ISUMPK2.Mobile.WinUI
 {

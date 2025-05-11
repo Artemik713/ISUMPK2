@@ -1,4 +1,6 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@using MudBlazor
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">ISUMPK2.Mobile</a>
     </div>
@@ -25,13 +27,14 @@
         </div>
         <div>
             <AuthorizeView Roles="Administrator">
-    <MudNavGroup Title="Администрирование" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="false">
-        <MudNavLink Href="/admin/user-testing" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.PeopleAlt">
-            Тестирование пользователей
-        </MudNavLink>
-        <!-- Другие административные страницы -->
-    </MudNavGroup>
-</AuthorizeView>
+                <MudNavGroup Title="Администрирование" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="false">
+                    <MudNavLink Href="/admin/user-testing" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.PeopleAlt">
+                        Тестирование пользователей
+                    </MudNavLink>
+                    <!-- Другие административные страницы -->
+                </MudNavGroup>
+            </AuthorizeView>
         </div>
     </nav>
 </div>
+

@@ -1,0 +1,297 @@
+﻿@page "/materials/metal-construction"
+@page "/materials/create"
+@attribute [Authorize(Roles = "Administrator,GeneralDirector,Storekeeper")]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Dialogs
+@using MudBlazor
+@inject IMaterialService MaterialService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Материалы для металлоконструкций - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Материалы для металлоконструкций</MudText>
+
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+        <MudTabPanel Text="Добавить материал">
+            <MudForm @ref="form" @bind-IsValid="@isValid">
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" Label="Код" @bind-Value="newMaterial.Code" Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" Label="Наименование" @bind-Value="newMaterial.Name" Required="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField T="string" Label="Описание" @bind-Value="newMaterial.Description" Lines="3" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="string" Label="Тип материала" @bind-Value="selectedType" Required="true">
+                            <MudSelectItem Value="@("Листовой металл")">Листовой металл</MudSelectItem>
+                            <MudSelectItem Value="@("Профили и трубы")">Профили и трубы</MudSelectItem>
+                            <MudSelectItem Value="@("Крепежные элементы")">Крепежные элементы</MudSelectItem>
+                            <MudSelectItem Value="@("Сварочные материалы")">Сварочные материалы</MudSelectItem>
+                            <MudSelectItem Value="@("Ростверк")">Ростверк</MudSelectItem>
+                            <MudSelectItem Value="@("Фахверк")">Фахверк</MudSelectItem>
+                            <MudSelectItem Value="@("Траверса")">Траверса</MudSelectItem>
+                            <MudSelectItem Value="@("Балки")">Балки</MudSelectItem>
+                            <MudSelectItem Value="@("Ригели")">Ригели</MudSelectItem>
+                            <MudSelectItem Value="@("Закладные изделия")">Закладные изделия</MudSelectItem>
+                            <MudSelectItem Value="@("Опоры трубопроводов")">Опоры трубопроводов</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" Label="Единица измерения" @bind-Value="newMaterial.UnitOfMeasure" Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudNumericField T="decimal" Label="Минимальный запас" @bind-Value="newMaterial.MinimumStock" Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudNumericField T="decimal" Label="Цена" @bind-Value="newMaterial.Price" Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudTextField T="string" Label="Производитель" @bind-Value="newMaterial.Manufacturer" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" Label="Номер детали/артикул" @bind-Value="newMaterial.PartNumber" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" Label="Технические характеристики" @bind-Value="newMaterial.Specifications" Lines="3" />
+                    </MudItem>
+                </MudGrid>
+
+                <div class="d-flex justify-end mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateMaterial"
+                               Disabled="@(!isValid || isProcessing)">
+                        @if (isProcessing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Сохранение...</span>
+                        }
+                        else
+                        {
+                            <span>Добавить материал</span>
+                        }
+                    </MudButton>
+                </div>
+            </MudForm>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Список материалов">
+            <MudPaper Elevation="0" Class="pa-4">
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="searchTerm" Label="Поиск" Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search" OnKeyDown="@SearchOnEnter" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="string" Label="Фильтр по типу" @bind-Value="filterType">
+                            <MudSelectItem Value="@string.Empty">Все типы</MudSelectItem>
+                            <MudSelectItem Value="@("Листовой металл")">Листовой металл</MudSelectItem>
+                            <MudSelectItem Value="@("Профили и трубы")">Профили и трубы</MudSelectItem>
+                            <MudSelectItem Value="@("Крепежные элементы")">Крепежные элементы</MudSelectItem>
+                            <MudSelectItem Value="@("Сварочные материалы")">Сварочные материалы</MudSelectItem>
+                            <MudSelectItem Value="@("Ростверк")">Ростверк</MudSelectItem>
+                            <MudSelectItem Value="@("Фахверк")">Фахверк</MudSelectItem>
+                            <MudSelectItem Value="@("Траверса")">Траверса</MudSelectItem>
+                            <MudSelectItem Value="@("Балки")">Балки</MudSelectItem>
+                            <MudSelectItem Value="@("Ригели")">Ригели</MudSelectItem>
+                            <MudSelectItem Value="@("Закладные изделия")">Закладные изделия</MudSelectItem>
+                            <MudSelectItem Value="@("Опоры трубопроводов")">Опоры трубопроводов</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+
+                @if (isLoading)
+                {
+                    <div class="d-flex justify-center my-4">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                    </div>
+                }
+                else if (!materials.Any())
+                {
+                    <MudAlert Severity="Severity.Info" Class="mt-4">Материалы не найдены</MudAlert>
+                }
+                else
+                {
+                    <MudTable Items="@filteredMaterials" Hover="true" Breakpoint="Breakpoint.Sm" Dense="false" Class="mt-4">
+                        <HeaderContent>
+                            <MudTh>Код</MudTh>
+                            <MudTh>Наименование</MudTh>
+                            <MudTh>Тип</MudTh>
+                            <MudTh>Запас</MudTh>
+                            <MudTh>Цена</MudTh>
+                            <MudTh>Действия</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Код">@context.Code</MudTd>
+                            <MudTd DataLabel="Наименование">@context.Name</MudTd>
+                            <MudTd DataLabel="Тип">@context.CategoryName</MudTd>
+                            <MudTd DataLabel="Запас">
+                                @context.CurrentStock @context.UnitOfMeasure
+                                @if (context.CurrentStock < context.MinimumStock)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" Class="ml-1" />
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Цена">@context.Price.ToString("C2")</MudTd>
+                            <MudTd>
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditMaterial(context.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteMaterial(context.Id))" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudPaper>
+        </MudTabPanel>
+    </MudTabs>
+</MudContainer>
+
+@code {
+    private MudForm form;
+    private bool isValid;
+    private bool isProcessing;
+    private bool isLoading = true;
+    private MaterialCreateDto newMaterial = new MaterialCreateDto();
+    private string selectedType = string.Empty;
+    private List<MaterialDto> materials = new List<MaterialDto>();
+    private List<MaterialDto> filteredMaterials = new List<MaterialDto>();
+    private string searchTerm = string.Empty;
+    private string filterType = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMaterialsAsync();
+    }
+
+    private async Task LoadMaterialsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            materials = (await MaterialService.GetAllMaterialsAsync()).ToList();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке материалов: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredMaterials = materials;
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredMaterials = filteredMaterials.Where(m =>
+                (m.Name?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (m.Code?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (m.Description?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(filterType))
+        {
+            filteredMaterials = filteredMaterials.Where(m => m.CategoryName == filterType).ToList();
+        }
+    }
+
+    private async Task SearchOnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            ApplyFilters();
+        }
+    }
+
+    private async Task CreateMaterial()
+    {
+        if (!isValid) return;
+
+        isProcessing = true;
+        try
+        {
+            // Добавляем выбранный тип материала в категорию
+            newMaterial.CategoryId = await GetOrCreateCategoryId(selectedType);
+
+            await MaterialService.CreateMaterialAsync(newMaterial);
+            Snackbar.Add("Материал успешно добавлен", Severity.Success);
+
+            // Очищаем форму
+            newMaterial = new MaterialCreateDto();
+            selectedType = string.Empty;
+            await form.ResetAsync();
+
+            // Обновляем список материалов
+            await LoadMaterialsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при добавлении материала: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task<Guid> GetOrCreateCategoryId(string categoryName)
+    {
+        // Ищем категорию по имени
+        var categories = await MaterialService.GetAllCategoriesAsync();
+        var existingCategory = categories.FirstOrDefault(c => c.Name == categoryName);
+
+        if (existingCategory != null)
+            return existingCategory.Id;
+
+        // Если категория не найдена, создаем новую
+        var newCategory = new MaterialCategoryDto
+            {
+                Name = categoryName,
+                Description = $"Категория материалов: {categoryName}"
+            };
+
+        var createdCategory = await MaterialService.CreateCategoryAsync(newCategory);
+        return createdCategory.Id;
+    }
+
+
+    private void EditMaterial(Guid id)
+    {
+        NavigationManager.NavigateTo($"/materials/edit/{id}");
+    }
+
+    private async Task DeleteMaterial(Guid id)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", "Вы уверены, что хотите удалить этот материал?" },
+            { "ButtonText", "Удалить" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Подтверждение", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                await MaterialService.DeleteMaterialAsync(id);
+                Snackbar.Add("Материал успешно удален", Severity.Success);
+                await LoadMaterialsAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка при удалении материала: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

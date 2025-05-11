@@ -1,6 +1,14 @@
-﻿<Router AppAssembly="@typeof(MauiProgram).Assembly">
+﻿@using ISUMPK2.Mobile
+
+<Router AppAssembly="@typeof(MauiProgram).Assembly">
     <Found Context="routeData">
         <RouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(Layout.MainLayout)">
+            <p role="alert">Страница не найдена.</p>
+        </LayoutView>
+    </NotFound>
 </Router>
+

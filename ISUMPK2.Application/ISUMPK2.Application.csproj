@@ -13,8 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-        <ProjectReference Include="..\ISUMPK2.Infrastructure\ISUMPK2.Infrastructure.csproj" />
 	    <ProjectReference Include="..\ISUMPK2.Domain\ISUMPK2.Domain.csproj" />
+	    <ProjectReference Include="..\ISUMPK2.Infrastructure\ISUMPK2.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

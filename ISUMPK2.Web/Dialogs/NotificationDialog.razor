@@ -1,28 +1,23 @@
 ﻿@using MudBlazor
 
-
 <MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Title</MudText>
+    </TitleContent>
     <DialogContent>
-        <MudContainer Style="max-width: 500px; padding: 16px">
-            <MudText Typo="Typo.h6">@Title</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-4">@Date.ToString("dd.MM.yyyy HH:mm")</MudText>
-            <MudText>@Message</MudText>
-        </MudContainer>
+        <MudText>@Message</MudText>
+        <MudText Typo="Typo.caption" Class="mt-2">@Date.ToString("dd.MM.yyyy HH:mm")</MudText>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Close">Закрыть</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Close">OK</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
-    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
     [Parameter] public string Title { get; set; }
     [Parameter] public string Message { get; set; }
     [Parameter] public DateTime Date { get; set; }
 
-    private void Close()
-    {
-        MudDialog.Close();
-    }
+    private void Close() => MudDialog.Close();
 }
-

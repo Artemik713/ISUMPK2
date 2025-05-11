@@ -1,7 +1,10 @@
-﻿@using ISUMPK2.Web.Services
+﻿@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Services
 @using Microsoft.AspNetCore.Components.Authorization
 @using MudBlazor
+@using ISUMPK2.Application.DTOs
 @inject IAuthService AuthService
+@inject IUserService UserService
 @inject NavigationManager NavigationManager
 
 <AuthorizeView>
@@ -14,34 +17,83 @@
                             <MudIcon Icon="@Icons.Material.Filled.Person" />
                         </MudAvatar>
                         <div>
-                            <MudText Typo="Typo.body1">@context.User.Identity?.Name</MudText>
-                            @if (context.User.IsInRole("Administrator"))
+                            @if (currentUser != null)
                             {
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Администратор</MudText>
-                            }
-                            else if (context.User.IsInRole("GeneralDirector"))
-                            {
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Генеральный директор</MudText>
-                            }
-                            else if (context.User.IsInRole("MetalShopManager"))
-                            {
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Начальник цеха металлообработки</MudText>
-                            }
-                            else if (context.User.IsInRole("PaintShopManager"))
-                            {
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Начальник цеха покраски</MudText>
-                            }
-                            else if (context.User.IsInRole("Worker"))
-                            {
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Рабочий цеха</MudText>
-                            }
-                            else if (context.User.IsInRole("Storekeeper"))
-                            {
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Кладовщик</MudText>
+                                <MudText Typo="Typo.body1">
+                                    @(currentUser.FirstName + (string.IsNullOrEmpty(currentUser.MiddleName) ? "" : " " + currentUser.MiddleName))
+                                </MudText>
+
+                                @if (currentUser.Roles != null)
+                                {
+                                    @if (currentUser.Roles.Contains("Administrator"))
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Администратор</MudText>
+                                    }
+                                    else if (currentUser.Roles.Contains("GeneralDirector"))
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Генеральный директор</MudText>
+                                    }
+                                    else if (currentUser.Roles.Contains("MetalShopManager"))
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Начальник цеха металлообработки</MudText>
+                                    }
+                                    else if (currentUser.Roles.Contains("PaintShopManager"))
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Начальник цеха покраски</MudText>
+                                    }
+                                    else if (currentUser.Roles.Contains("Worker"))
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Рабочий цеха</MudText>
+                                    }
+                                    else if (currentUser.Roles.Contains("Storekeeper"))
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Кладовщик</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Пользователь</MudText>
+                                    }
+                                }
+
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Пользователь</MudText>
+                                }
                             }
                             else
                             {
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Пользователь</MudText>
+                                <MudText Typo="Typo.body1">@context.User.Identity?.Name</MudText>
+
+                                @* Используем fallback к context.User.IsInRole если currentUser не загружен *@
+                                @if (context.User.IsInRole("Administrator"))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Администратор</MudText>
+                                }
+                                else if (context.User.IsInRole("GeneralDirector"))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Генеральный директор</MudText>
+                                }
+                                else if (context.User.IsInRole("MetalShopManager"))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Начальник цеха металлообработки</MudText>
+                                }
+                                else if (context.User.IsInRole("PaintShopManager"))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Начальник цеха покраски</MudText>
+                                }
+                                else if (context.User.IsInRole("Worker"))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Рабочий цеха</MudText>
+                                }
+                                else if (context.User.IsInRole("Storekeeper"))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Кладовщик</MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Пользователь</MudText>
+                                }
+
                             }
                         </div>
                         <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ml-1" />
@@ -59,6 +111,41 @@
 </AuthorizeView>
 
 @code {
+    private UserDto currentUser;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            currentUser = await UserService.GetCurrentUserAsync();
+
+            // Добавим логирование для отладки
+            Console.WriteLine($"Loaded user: {currentUser?.UserName}, Roles: {(currentUser?.Roles != null ? string.Join(", ", currentUser.Roles) : "null")}");
+
+            // Добавляем эту строку для диагностики
+            if (currentUser?.Roles != null)
+            {
+                foreach (var role in currentUser.Roles)
+                {
+                    Console.WriteLine($"User role: '{role}'");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Улучшенная обработка ошибок
+            Console.WriteLine($"Error loading user: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+        // В методе OnInitializedAsync() в LoginDisplay.razor
+        Console.WriteLine($"Roles count: {currentUser?.Roles?.Count ?? 0}");
+
+    }
+
     private async Task LogoutClick()
     {
         // Перенаправляем сначала на главную страницу

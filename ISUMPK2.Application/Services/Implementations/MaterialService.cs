@@ -13,12 +13,18 @@ namespace ISUMPK2.Application.Services.Implementations
     {
         private readonly IMaterialRepository _materialRepository;
         private readonly INotificationService _notificationService;
+        private readonly IMaterialCategoryRepository _materialCategoryRepository;
 
-        public MaterialService(IMaterialRepository materialRepository, INotificationService notificationService)
+        public MaterialService(
+            IMaterialRepository materialRepository,
+            INotificationService notificationService,
+            IMaterialCategoryRepository materialCategoryRepository)
         {
             _materialRepository = materialRepository;
             _notificationService = notificationService;
+            _materialCategoryRepository = materialCategoryRepository;
         }
+
 
         public async Task<MaterialDto> GetMaterialByIdAsync(Guid id)
         {
@@ -56,6 +62,11 @@ namespace ISUMPK2.Application.Services.Implementations
                 CurrentStock = 0,
                 MinimumStock = materialDto.MinimumStock,
                 Price = materialDto.Price,
+                CategoryId = materialDto.CategoryId,
+                // Добавляем недостающие свойства
+                Specifications = materialDto.Specifications,
+                Manufacturer = materialDto.Manufacturer,
+                PartNumber = materialDto.PartNumber,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -65,6 +76,7 @@ namespace ISUMPK2.Application.Services.Implementations
 
             return MapToDto(material);
         }
+
 
         public async Task<MaterialDto> UpdateMaterialAsync(Guid id, MaterialUpdateDto materialDto)
         {
@@ -156,10 +168,17 @@ namespace ISUMPK2.Application.Services.Implementations
                 CurrentStock = material.CurrentStock,
                 MinimumStock = material.MinimumStock,
                 Price = material.Price,
+                CategoryId = material.CategoryId,
+                CategoryName = material.Category?.Name,
+                // Добавляем отображение недостающих свойств
+                Specifications = material.Specifications,
+                Manufacturer = material.Manufacturer,
+                PartNumber = material.PartNumber,
                 CreatedAt = material.CreatedAt,
                 UpdatedAt = material.UpdatedAt
             };
         }
+
 
         private MaterialTransactionDto MapToDto(MaterialTransaction transaction)
         {
@@ -176,6 +195,103 @@ namespace ISUMPK2.Application.Services.Implementations
                 UserName = transaction.User?.UserName,
                 Notes = transaction.Notes,
                 CreatedAt = transaction.CreatedAt
+            };
+        }
+        public async Task<MaterialCategoryDto> GetCategoryByIdAsync(Guid id)
+        {
+            var category = await _materialCategoryRepository.GetByIdAsync(id);
+            return category != null ? MapCategoryToDto(category) : null;
+        }
+
+        public async Task<IEnumerable<MaterialCategoryDto>> GetAllCategoriesAsync()
+        {
+            var categories = await _materialCategoryRepository.GetAllAsync();
+            return categories.Select(MapCategoryToDto);
+        }
+
+        public async Task<IEnumerable<MaterialCategoryDto>> GetTopLevelCategoriesAsync()
+        {
+            var categories = await _materialCategoryRepository.GetTopLevelCategoriesAsync();
+            return categories.Select(MapCategoryToDto);
+        }
+
+        public async Task<IEnumerable<MaterialCategoryDto>> GetSubcategoriesAsync(Guid parentCategoryId)
+        {
+            var categories = await _materialCategoryRepository.GetSubcategoriesAsync(parentCategoryId);
+            return categories.Select(MapCategoryToDto);
+        }
+
+        public async Task<MaterialCategoryDto> CreateCategoryAsync(MaterialCategoryDto categoryDto)
+        {
+            var category = new MaterialCategory
+            {
+                Name = categoryDto.Name,
+                Description = categoryDto.Description,
+                ParentCategoryId = categoryDto.ParentCategoryId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            await _materialCategoryRepository.AddAsync(category);
+            await _materialCategoryRepository.SaveChangesAsync();
+
+            return MapCategoryToDto(category);
+        }
+
+        public async Task<MaterialCategoryDto> UpdateCategoryAsync(Guid id, MaterialCategoryDto categoryDto)
+        {
+            var category = await _materialCategoryRepository.GetByIdAsync(id);
+            if (category == null)
+                return null;
+
+            category.Name = categoryDto.Name;
+            category.Description = categoryDto.Description;
+            category.ParentCategoryId = categoryDto.ParentCategoryId;
+            category.UpdatedAt = DateTime.UtcNow;
+
+            await _materialCategoryRepository.UpdateAsync(category);
+            await _materialCategoryRepository.SaveChangesAsync();
+
+            return MapCategoryToDto(category);
+        }
+
+        public async Task DeleteCategoryAsync(Guid id)
+        {
+            await _materialCategoryRepository.DeleteAsync(id);
+            await _materialCategoryRepository.SaveChangesAsync();
+        }
+
+        public async Task<IEnumerable<MaterialDto>> GetMaterialsByCategoryAsync(Guid categoryId, bool includeSubcategories = false)
+        {
+            var materials = await _materialCategoryRepository.GetMaterialsByCategoryAsync(categoryId, includeSubcategories);
+            return materials.Select(MapToDto);
+        }
+
+        public async Task<IEnumerable<MaterialDto>> SearchMaterialsAsync(string searchTerm)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+                return await GetAllMaterialsAsync();
+
+            var materials = await _materialRepository.FindAsync(m =>
+                m.Name.Contains(searchTerm) ||
+                m.Code.Contains(searchTerm) ||
+                m.Description.Contains(searchTerm) ||
+                m.Specifications.Contains(searchTerm) ||
+                m.Manufacturer.Contains(searchTerm) ||
+                m.PartNumber.Contains(searchTerm));
+
+            return materials.Select(MapToDto);
+        }
+
+        private MaterialCategoryDto MapCategoryToDto(MaterialCategory category)
+        {
+            return new MaterialCategoryDto
+            {
+                Id = category.Id,
+                Name = category.Name,
+                Description = category.Description,
+                ParentCategoryId = category.ParentCategoryId,
+                ParentCategoryName = category.ParentCategory?.Name
             };
         }
     }

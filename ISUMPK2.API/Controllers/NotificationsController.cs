@@ -25,20 +25,29 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpGet]
+        [Authorize]
         public async Task<ActionResult<IEnumerable<NotificationDto>>> GetAllNotifications()
         {
             try
             {
                 var userId = GetCurrentUserId();
+
+                // Явная фильтрация уведомлений по ID текущего пользователя
                 var notifications = await _notificationService.GetAllNotificationsForUserAsync(userId);
+
                 return Ok(notifications);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Unauthorized("Пользователь не авторизован");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting notifications");
+                _logger.LogError(ex, "Ошибка при получении уведомлений");
                 return StatusCode(500, "Ошибка при получении уведомлений");
             }
         }
+
 
         [HttpGet("unread")]
         public async Task<ActionResult<IEnumerable<NotificationDto>>> GetUnreadNotifications()

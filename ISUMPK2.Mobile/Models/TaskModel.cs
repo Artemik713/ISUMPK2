@@ -35,30 +35,15 @@ namespace ISUMPK2.Mobile.Models
         public List<TaskCommentModel> Comments { get; set; } = new List<TaskCommentModel>();
 
         // Вычисляемые свойства
-        [Ignore]
-        public bool IsOverdue => DueDate.HasValue && DueDate.Value.Date < DateTime.Now.Date && StatusId != 5 && StatusId != 6;
 
         [Ignore]
-        public string StatusColor => StatusId switch
-        {
-            1 => "#2196F3", // Создана - Primary
-            2 => "#03A9F4", // В работе - Info
-            3 => "#FF9800", // Требует уточнения - Warning
-            4 => "#9E9E9E", // На проверке - Secondary
-            5 => "#4CAF50", // Выполнена - Success
-            6 => "#F44336", // Отклонена - Error
-            _ => "#9E9E9E"  // Default - Secondary
-        };
+        public bool IsOverdue { get; set; }
 
         [Ignore]
-        public string PriorityColor => PriorityId switch
-        {
-            1 => "#03A9F4", // Низкий - Info
-            2 => "#4CAF50", // Средний - Success
-            3 => "#FF9800", // Высокий - Warning
-            4 => "#F44336", // Критический - Error
-            _ => "#9E9E9E"  // Default - Secondary
-        };
+        public string StatusBadgeColor { get; set; } // Переименовано с StatusColor на StatusBadgeColor
+
+        [Ignore]
+        public string PriorityBadgeColor { get; set; }
     }
 
     public class TaskCommentModel

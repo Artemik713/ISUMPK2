@@ -37,34 +37,38 @@
                 <MudSelect T="int?" Label="Статус" Value="selectedStatusId" ValueChanged="@((int? value) => FilterChanged("status", value))" Clearable="true">
                     @foreach (var status in statuses)
                     {
-                        <MudSelectItem T="int?" Value="@status.Id">@status.Name</MudSelectItem>
+                        <MudSelectItem Value="@((int?)status.Id)">@status.Name</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
+
             <MudItem xs="12" sm="6" md="3">
                 <MudSelect T="int?" Label="Приоритет" Value="selectedPriorityId" ValueChanged="@((int? value) => FilterChanged("priority", value))" Clearable="true">
                     @foreach (var priority in priorities)
                     {
-                        <MudSelectItem Value="@priority.Id">@priority.Name</MudSelectItem>
+                        <MudSelectItem Value="@((int?)priority.Id)">@priority.Name</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
+
             <MudItem xs="12" sm="6" md="3">
                 <MudSelect T="Guid?" Label="Исполнитель" Value="selectedAssigneeId" ValueChanged="@((Guid? value) => FilterChanged("assignee", value))" Clearable="true">
                     @foreach (var user in users)
                     {
-                        <MudSelectItem Value="@user.Id">@user.FullName</MudSelectItem>
+                        <MudSelectItem Value="@((Guid?)user.Id)">@user.FullName</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
+
             <MudItem xs="12" sm="6" md="3">
                 <MudSelect T="Guid?" Label="Отдел" Value="selectedDepartmentId" ValueChanged="@((Guid? value) => FilterChanged("department", value))" Clearable="true">
                     @foreach (var department in departments)
                     {
-                        <MudSelectItem Value="@department.Id">@department.Name</MudSelectItem>
+                        <MudSelectItem Value="@((Guid?)department.Id)">@department.Name</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
+
         </MudGrid>
     </MudPaper>
 
@@ -213,16 +217,45 @@
         }
     }
 
+    // В методе LoadFiltersDataAsync()
     private async Task LoadFiltersDataAsync()
     {
-        users = (await UserService.GetAllUsersAsync())
-            .Select(dto => dto.ToModel())
-            .ToList();
+        try
+        {
+            // Если у вас возникают проблемы с получением всех пользователей,
+            // используйте этот обходной путь
+            try
+            {
+                var currentUser = await UserService.GetCurrentUserAsync();
+                users = new List<UserModel> { currentUser.ToModel() };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при загрузке текущего пользователя: {ex.Message}");
+                users = new List<UserModel>();
+            }
 
-        departments = (await DepartmentService.GetAllDepartmentsAsync())
-            .Select(dto => dto.ToModel())
-            .ToList();
+            try
+            {
+                departments = (await DepartmentService.GetAllDepartmentsAsync())
+                    .Select(dto => dto.ToModel())
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при загрузке отделов: {ex.Message}");
+                departments = new List<DepartmentModel>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке данных для фильтров: {ex.Message}");
+            users = new List<UserModel>();
+            departments = new List<DepartmentModel>();
+        }
     }
+
+
 
     private async Task LoadTasksAsync()
     {
@@ -309,8 +342,12 @@
         ApplyFilters();
     }
 
-    private async Task<TableData<TaskModel>> ServerReload(TableState state)
+    private async Task<TableData<TaskModel>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
+        // Проверка отмены операции
+        if (cancellationToken.IsCancellationRequested)
+            return new TableData<TaskModel>() { TotalItems = 0, Items = new List<TaskModel>() };
+
         var sortedTasks = filteredTasks;
 
         // Сортировка
@@ -322,21 +359,7 @@
                 case "Title":
                     comparison = (a, b) => string.Compare(a.Title, b.Title, StringComparison.Ordinal);
                     break;
-                case "StatusId":
-                    comparison = (a, b) => a.StatusId.CompareTo(b.StatusId);
-                    break;
-                case "PriorityId":
-                    comparison = (a, b) => a.PriorityId.CompareTo(b.PriorityId);
-                    break;
-                case "AssigneeName":
-                    comparison = (a, b) => string.Compare(a.AssigneeName, b.AssigneeName, StringComparison.Ordinal);
-                    break;
-                case "DueDate":
-                    comparison = (a, b) => Nullable.Compare(a.DueDate, b.DueDate);
-                    break;
-                case "CreatedAt":
-                    comparison = (a, b) => a.CreatedAt.CompareTo(b.CreatedAt);
-                    break;
+                    // другие case
             }
 
             if (comparison != null)

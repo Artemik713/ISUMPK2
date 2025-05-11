@@ -39,9 +39,17 @@ namespace ISUMPK2.Application.Services.Implementations
 
         public async Task<IEnumerable<NotificationDto>> GetAllNotificationsForUserAsync(Guid userId)
         {
+            // Убедитесь, что здесь есть проверка входного параметра
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("ID пользователя не может быть пустым", nameof(userId));
+            }
+
+            // И что здесь происходит правильная фильтрация
             var notifications = await _notificationRepository.FindAsync(n => n.UserId == userId);
             return notifications.Select(MapNotificationToDto).OrderByDescending(n => n.CreatedAt);
         }
+
 
         public async Task<IEnumerable<NotificationDto>> GetUnreadNotificationsForUserAsync(Guid userId)
         {

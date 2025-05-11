@@ -80,7 +80,7 @@
         var dialog = DialogService.Show<DepartmentCreateDialog>("Создание отдела", parameters);
         var result = await dialog.Result;
 
-        if (!result.Cancelled)
+        if (!result.Canceled)
         {
             await LoadData();
             Snackbar.Add("Отдел успешно создан", Severity.Success);
@@ -99,7 +99,7 @@
         var dialog = DialogService.Show<DepartmentEditDialog>("Редактирование отдела", parameters);
         var result = await dialog.Result;
 
-        if (!result.Cancelled)
+        if (!result.Canceled)
         {
             await LoadData();
             Snackbar.Add("Отдел успешно обновлен", Severity.Success);
@@ -117,7 +117,7 @@
         var dialog = DialogService.Show<ConfirmDialog>("Подтверждение", parameters);
         var result = await dialog.Result;
 
-        if (!result.Cancelled)
+        if (!result.Canceled)
         {
             await DepartmentService.DeleteDepartmentAsync(department.Id);
             await LoadData();

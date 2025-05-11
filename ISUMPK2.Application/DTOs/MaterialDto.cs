@@ -13,19 +13,34 @@ namespace ISUMPK2.Application.DTOs
         public decimal CurrentStock { get; set; }
         public decimal MinimumStock { get; set; }
         public decimal Price { get; set; }
+        public Guid? CategoryId { get; set; }
+        public string CategoryName { get; set; }
+        public string Specifications { get; set; }
+        public string Manufacturer { get; set; }
+        public string PartNumber { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }
-
+    public class MaterialCategoryDto
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public Guid? ParentCategoryId { get; set; }
+        public string ParentCategoryName { get; set; }
+    }
     public class MaterialCreateDto
     {
         public string Code { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
         public string UnitOfMeasure { get; set; }
-        public decimal CurrentStock { get; set; }
         public decimal MinimumStock { get; set; }
         public decimal Price { get; set; }
+        public Guid? CategoryId { get; set; }
+        public string Specifications { get; set; }
+        public string Manufacturer { get; set; }
+        public string PartNumber { get; set; }
     }
 
     public class MaterialUpdateDto

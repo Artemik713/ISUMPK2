@@ -71,7 +71,7 @@ namespace ISUMPK2.API.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
-
+        
         [HttpDelete("{id}")]
         [Authorize(Roles = "Administrator,GeneralDirector")]
         public async Task<ActionResult> DeleteProductType(Guid id)

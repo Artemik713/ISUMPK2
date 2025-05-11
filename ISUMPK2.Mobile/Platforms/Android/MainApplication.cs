@@ -1,6 +1,6 @@
 ﻿using Android.App;
 using Android.Runtime;
-using ISUMPK.Components.src.ISUPMK.Mobile;
+using ISUMPK2.Mobile;
 
 namespace ISUMPK2.Mobile
 {

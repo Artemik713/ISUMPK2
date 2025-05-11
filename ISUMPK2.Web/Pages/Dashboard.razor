@@ -40,14 +40,14 @@
         <MudItem xs="12" sm="6" md="3">
             <MudPaper Class="d-flex flex-column pa-4 mud-height-full">
                 <MudText Typo="Typo.subtitle1">Просроченные задачи</MudText>
-                <MudText Typo="Typo.h3" Class="my-4"@>overdueTasks.Count</MudText>
+                <MudText Typo="Typo.h3" Class="my-4">@overdueTasks.Count</MudText>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => NavigationManager.NavigateTo("/tasks/overdue"))">Просмотреть</MudButton>
             </MudPaper>
         </MudItem>
         <MudItem xs="12" sm="6" md="3">
             <MudPaper Class="d-flex flex-column pa-4 mud-height-full">
                 <MudText Typo="Typo.subtitle1">Материалы с низким запасом</MudText>
-                <MudText Typo="Typo.h3" Class="my-4" @(lowStockMaterials.Count > 0 ? "mud-warning-text" : "")">@lowStockMaterials.Count</MudText>
+                <MudText Typo="Typo.h3" Class="@($"my-4 {(lowStockMaterials.Count > 0 ? "mud-warning-text" : "")}")">@lowStockMaterials.Count</MudText>
                 <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => NavigationManager.NavigateTo("/materials/low-stock"))">Просмотреть</MudButton>
             </MudPaper>
         </MudItem>
@@ -99,7 +99,9 @@
                 <MudList T="NotificationModel" Clickable="true">
                     @foreach (var notification in notifications.Take(5))
                     {
-                        <MudListItem T="NotificationModel" Icon="@(notification.IsRead ? Icons.Material.Outlined.Notifications : Icons.Material.Filled.Notifications)"
+                        <MudListItem T="NotificationModel"
+                                     Value="@notification"
+                                     Icon="@(notification.IsRead ? Icons.Material.Outlined.Notifications : Icons.Material.Filled.Notifications)"
                                      IconColor="@(notification.IsRead ? Color.Default : Color.Primary)"
                                      OnClick="@(() => HandleNotificationClick(notification))">
                             <div>
@@ -109,6 +111,7 @@
                         </MudListItem>
                     }
                 </MudList>
+
                 @if (notifications.Count == 0)
                 {
                     <MudText Class="my-4">У вас нет уведомлений</MudText>
@@ -191,8 +194,6 @@
             await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить данные: {ex.Message}");
         }
     }
-
-
 
     private async Task HandleNotificationClick(NotificationModel notification)
     {

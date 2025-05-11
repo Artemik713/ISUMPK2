@@ -1,4 +1,6 @@
-﻿namespace ISUMPK.Mobile;
+﻿using Microsoft.Maui.Controls;
+
+namespace ISUMPK.Mobile;
 
 public partial class App : Application
 {

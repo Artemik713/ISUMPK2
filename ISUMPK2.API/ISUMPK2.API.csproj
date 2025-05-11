@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="9.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="9.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.4" />
+    <PackageReference Include="MudBlazor" Version="7.9.0" />
     <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.1" />
     <PackageReference Include="Swashbuckle.AspNetCore.Swagger" Version="8.1.1" />

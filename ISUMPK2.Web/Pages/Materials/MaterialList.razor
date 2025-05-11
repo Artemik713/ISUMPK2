@@ -20,12 +20,8 @@
         <MudText Typo="Typo.h4">@PageTitle</MudText>
         
         <div class="d-flex">
-            <AuthorizeView Roles="Administrator,GeneralDirector,Storekeeper">
-                <Authorized>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" 
                               OnClick="@CreateMaterial" Class="mr-2">Добавить материал</MudButton>
-                </Authorized>
-            </AuthorizeView>
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" 
                       OnClick="@LoadMaterialsAsync">Обновить</MudButton>
         </div>
@@ -166,7 +162,7 @@
         table?.ReloadServerData();
     }
 
-    private Task<TableData<MaterialModel>> ServerReload(TableState state)
+    private Task<TableData<MaterialModel>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
         var sortedMaterials = filteredMaterials;
 

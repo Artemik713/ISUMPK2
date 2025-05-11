@@ -30,7 +30,20 @@ namespace ISUMPK2.Mobile.Services
         private readonly ISecureStorage _secureStorage;
         private readonly IPreferences _preferences;
 
-        public string ApiUrl => "https://localhost:7001/";  // В реальном приложении это нужно вынести в конфигурацию
+        public string ApiUrl
+        {
+            get
+            {
+#if     ANDROID
+                // Для Android эмулятора используем специальный IP
+                return "https://10.0.2.2:7110/"; 
+#else
+                // Для других платформ
+                return "https://localhost:7110/";
+#endif
+            }
+        }
+
 
         public SettingsService(ISecureStorage secureStorage)
         {
