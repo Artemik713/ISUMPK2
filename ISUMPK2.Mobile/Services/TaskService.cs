@@ -181,7 +181,37 @@ namespace ISUMPK2.Mobile.Services
                 throw new Exception("Для добавления комментария требуется подключение к интернету");
             }
 
-            return await _apiService.PostAsync<TaskCommentModel>("api/tasks/comments", comment);
+            try
+            {
+                // Преобразование модели комментария в DTO для API
+                var commentDto = new
+                {
+                    TaskId = comment.TaskId,
+                    Comment = comment.Comment
+                };
+
+                // Вызов API для добавления комментария
+                var result = await _apiService.PostAsync<TaskCommentModel>("api/tasks/comments", commentDto);
+
+                // Обновление локальной задачи с новым комментарием
+                var task = await _offlineDataService.GetTaskAsync(comment.TaskId);
+                if (task != null)
+                {
+                    if (task.Comments == null)
+                        task.Comments = new List<TaskCommentModel>();
+
+                    task.Comments.Add(result);
+                    await _offlineDataService.SaveTaskAsync(task);
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при добавлении комментария: {ex.Message}");
+                throw;
+            }
         }
+
     }
 }

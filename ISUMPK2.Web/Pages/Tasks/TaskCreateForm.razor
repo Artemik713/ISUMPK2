@@ -1,0 +1,258 @@
+﻿@page "/tasks/add"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Extensions
+@using ISUMPK2.Web.Services;
+@using MudBlazor
+@inject ITaskService TaskService
+@inject IUserService UserService
+@inject IDepartmentService DepartmentService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IAuthService AuthService
+
+<PageTitle>Создание задачи - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <MudText Typo="Typo.h5">Создание новой задачи</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudForm @ref="form" @bind-IsValid="@isValid">
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudTextField T="string" Label="Название задачи" @bind-Value="newTask.Title" Required="true" RequiredError="Название задачи обязательно" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField T="string" Label="Описание" @bind-Value="newTask.Description" Lines="5" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="int" Label="Приоритет" @bind-Value="newTask.PriorityId" Required="true">
+                            @foreach (var priority in priorities)
+                            {
+                                <MudSelectItem T="int" Value="priority.Id">@priority.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="Guid?" @bind-Value="newTask.AssigneeId" Label="Исполнитель" Clearable="true">
+                            @foreach (var user in users)
+                            {
+                                <MudSelectItem Value="@((Guid?)user.Id)">@user.FullName</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="Guid?" Label="Отдел" @bind-Value="newTask.DepartmentId" Clearable="true">
+                            @foreach (var department in departments)
+                            {
+                                <MudSelectItem T="Guid?" Value="department.Id">@department.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudDatePicker Label="Срок выполнения" @bind-Date="dueDate" />
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="Cancel">Отмена</MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitTask"
+                       Disabled="@(!isValid || isProcessing)">
+                @if (isProcessing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Сохранение...</span>
+                }
+                else
+                {
+                    <span>Создать задачу</span>
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private MudForm? form;
+    private bool isValid;
+    private bool isProcessing;
+
+    private TaskCreateModel newTask = new TaskCreateModel();
+    private DateTime? dueDate;
+    private List<UserModel> users = new List<UserModel>();
+    private List<DepartmentModel> departments = new List<DepartmentModel>();
+
+    private List<PriorityModel> priorities = new List<PriorityModel>
+    {
+        new PriorityModel { Id = 1, Name = "Низкий" },
+        new PriorityModel { Id = 2, Name = "Средний" },
+        new PriorityModel { Id = 3, Name = "Высокий" },
+        new PriorityModel { Id = 4, Name = "Критический" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Загружаем все необходимые данные
+            await LoadUsersAndDepartments();
+            
+            // Получаем текущего пользователя для установки CreatorId
+            var currentUser = await UserService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                newTask.CreatorId = currentUser.Id;
+                Console.WriteLine($"Loaded user: {currentUser.UserName}, CreatorId: {newTask.CreatorId}");
+                
+                // Автоматически устанавливаем отдел текущего пользователя
+                if (currentUser.DepartmentId.HasValue)
+                {
+                    newTask.DepartmentId = currentUser.DepartmentId.Value;
+                }
+            }
+            else
+            {
+                Console.WriteLine("Current user is null!");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка в OnInitializedAsync: {ex.Message}");
+            Snackbar.Add($"Ошибка загрузки данных: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadUsersAndDepartments()
+    {
+        try {
+            users = (await UserService.GetAllUsersAsync())
+                .Select(dto => new UserModel { 
+                    Id = dto.Id, 
+                    FullName = $"{dto.FirstName} {dto.LastName}" 
+                })
+                .ToList();
+
+            departments = (await DepartmentService.GetAllDepartmentsAsync())
+                .Select(dto => new DepartmentModel { 
+                    Id = dto.Id, 
+                    Name = dto.Name 
+                })
+                .ToList();
+                
+            Console.WriteLine($"Loaded {users.Count} users and {departments.Count} departments");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке справочников: {ex.Message}");
+            Snackbar.Add($"Ошибка загрузки данных: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SubmitTask()
+    {
+        if (!isValid) return;
+
+        isProcessing = true;
+        try
+        {
+            newTask.DueDate = dueDate;
+
+            // Проверка наличия CreatorId
+            if (newTask.CreatorId == Guid.Empty)
+            {
+                var currentUser = await UserService.GetCurrentUserAsync();
+                if (currentUser != null)
+                {
+                    newTask.CreatorId = currentUser.Id;
+                }
+                else
+                {
+                    throw new Exception("Не удалось определить текущего пользователя");
+                }
+            }
+
+            Console.WriteLine($"Creating task with CreatorId: {newTask.CreatorId}");
+
+            var taskDto = new TaskCreateDto
+                {
+                    Title = newTask.Title ?? string.Empty,
+                    Description = newTask.Description ?? string.Empty,
+                    StatusId = 1, // По умолчанию "Создана"
+                    PriorityId = newTask.PriorityId,
+                    AssigneeId = newTask.AssigneeId,
+                    DepartmentId = newTask.DepartmentId,
+                    DueDate = newTask.DueDate
+                };
+
+            try
+            {
+                var createdTask = await TaskService.CreateTaskAsync(newTask.CreatorId, taskDto);
+                Console.WriteLine($"Задача успешно создана: {createdTask?.Id}");
+
+                Snackbar.Add("Задача успешно создана", Severity.Success);
+                NavigationManager.NavigateTo("/tasks");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка внутри CreateTaskAsync: {ex}");
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при создании задачи: {ex.Message}");
+            Snackbar.Add($"Ошибка при создании задачи: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/tasks");
+    }
+
+    public class TaskCreateModel
+    {
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+        public int StatusId { get; set; } = 1; // По умолчанию "Создана"
+        public int PriorityId { get; set; } = 2; // По умолчанию "Средний"
+        public Guid? AssigneeId { get; set; }
+        public Guid CreatorId { get; set; }
+        public Guid? DepartmentId { get; set; }
+        public DateTime? DueDate { get; set; }
+    }
+
+    private class PriorityModel
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+    }
+    
+    public class UserModel
+    {
+        public Guid Id { get; set; }
+        public string FullName { get; set; }
+    }
+    
+    public class DepartmentModel
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+    }
+}

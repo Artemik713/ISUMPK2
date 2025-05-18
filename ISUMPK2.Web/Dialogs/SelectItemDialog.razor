@@ -1,0 +1,44 @@
+﻿@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-height: 300px; overflow-y: auto;">
+            @if (AllowClear)
+            {
+                <MudButton OnClick="@(() => SelectItemById(null))" FullWidth="true" Class="mb-2">Не выбрано</MudButton>
+                <MudDivider />
+            }
+            @foreach (var item in Items)
+            {
+                <MudButton OnClick="@(() => SelectItemById(item.Id))" FullWidth="true" Class="my-1">
+                    @item.Name
+                </MudButton>
+            }
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance? MudDialog { get; set; }
+
+    [Parameter] public string Title { get; set; } = "Выбор";
+    [Parameter] public List<ItemData> Items { get; set; } = new List<ItemData>();
+    [Parameter] public string? SelectedId { get; set; }
+    [Parameter] public bool AllowClear { get; set; } = false;
+
+    private void Cancel() => MudDialog?.Cancel();
+
+    private void SelectItemById(string? id)
+    {
+        MudDialog?.Close(DialogResult.Ok(id));
+    }
+
+    public class ItemData
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+}

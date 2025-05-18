@@ -19,7 +19,7 @@ namespace ISUMPK2.Web.Repositories
             HttpClient = httpClient;
         }
 
-        public virtual async Task<T> GetByIdAsync(Guid id)
+        public virtual async Task<T?> GetByIdAsync(Guid id)
         {
             return await HttpClient.GetFromJsonAsync<T>($"{ApiEndpoint}/{id}");
         }

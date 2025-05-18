@@ -44,23 +44,13 @@ namespace ISUMPK2.Infrastructure.Repositories
 
         public virtual Task UpdateAsync(T entity)
         {
-            // Получаем текущее состояние из базы данных
-            var existingEntity = _dbSet.Find(entity.Id);
-            if (existingEntity != null)
-            {
-                // Сохраняем значения полей, которые не нужно обновлять
-                var createdAt = existingEntity.CreatedAt;
+            // Исправленный метод обновления
+            // Переключаемся на использование Attach + State вместо прямой загрузки сущности
+            _context.Entry(entity).State = EntityState.Modified;
 
-                // Помечаем сущность как измененную
-                _context.Entry(entity).State = EntityState.Modified;
+            // Не изменяем CreatedAt
+            _context.Entry(entity).Property(e => e.CreatedAt).IsModified = false;
 
-                // Если в базе данных нет столбца CreatedAt, то исключаем его из обновления
-                _context.Entry(entity).Property(e => e.CreatedAt).IsModified = false;
-                _context.Entry(entity).Property(e => e.UpdatedAt).IsModified = false;
-
-                // Устанавливаем сохраненное значение CreatedAt
-                entity.CreatedAt = createdAt;
-            }
             return Task.CompletedTask;
         }
 
@@ -75,7 +65,25 @@ namespace ISUMPK2.Infrastructure.Repositories
 
         public async Task SaveChangesAsync()
         {
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                // Логирование исключения
+                Console.WriteLine($"Ошибка конкурентности при обновлении: {ex.Message}");
+
+                // Получить записи, вызвавшие конфликт
+                foreach (var entry in ex.Entries)
+                {
+                    // Обновляем значения из базы данных
+                    await entry.ReloadAsync();
+                }
+
+                // Повторно пробуем сохранить изменения
+                await _context.SaveChangesAsync();
+            }
         }
     }
 }

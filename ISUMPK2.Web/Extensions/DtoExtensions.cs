@@ -13,7 +13,7 @@ namespace ISUMPK2.Web.Extensions
         {
             if (dto == null) return null;
 
-            return new TaskModel
+            var model = new TaskModel
             {
                 Id = dto.Id,
                 Title = dto.Title,
@@ -25,7 +25,7 @@ namespace ISUMPK2.Web.Extensions
                 CreatorId = dto.CreatorId,
                 CreatorName = dto.CreatorName,
                 AssigneeId = dto.AssigneeId,
-                AssigneeName = dto.AssigneeName,
+                AssigneeName = !string.IsNullOrEmpty(dto.AssigneeName) ? dto.AssigneeName : "Не назначен",
                 DepartmentId = dto.DepartmentId,
                 DepartmentName = dto.DepartmentName,
                 StartDate = dto.StartDate,
@@ -42,6 +42,9 @@ namespace ISUMPK2.Web.Extensions
                 Comments = dto.Comments?.Select(c => c.ToModel()).ToList() ?? new List<TaskCommentModel>()
                 // Удаляем назначение вычисляемым свойствам, так как они сами вычисляют свои значения
             };
+            Console.WriteLine($"ToModel преобразование для задачи {dto.Id}: AssigneeId={dto.AssigneeId}, AssigneeName={dto.AssigneeName} -> {model.AssigneeName}");
+
+            return model;
         }
 
 

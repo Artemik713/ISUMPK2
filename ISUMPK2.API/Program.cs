@@ -97,9 +97,10 @@ builder.Services.AddScoped<IMaterialCategoryRepository, MaterialCategoryReposito
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
-builder.Services.AddScoped<IMaterialService, MaterialService>();
+builder.Services.AddScoped<ISUMPK2.Application.Services.IMaterialService, MaterialService>();
 builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<ISUMPK2.Application.Services.INotificationService, ISUMPK2.Application.Services.Implementations.NotificationService>();
+
 
 
 // 8. Регистрация служб аутентификации

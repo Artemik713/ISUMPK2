@@ -71,7 +71,7 @@ namespace ISUMPK2.Web
             // Уберите дублирующиеся регистрации MudServices
 
             // Регистрация сервисов приложения
-            builder.Services.AddScoped<ITaskService, TaskService>();
+            builder.Services.AddScoped<ITaskService, ClientTaskService>();
             builder.Services.AddScoped<IUserService, ClientUserService>();
             builder.Services.AddScoped<IMaterialService, MaterialService>();
             builder.Services.AddScoped<IProductService, ProductService>();

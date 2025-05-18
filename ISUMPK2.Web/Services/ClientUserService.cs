@@ -30,11 +30,30 @@ namespace ISUMPK2.Web.Services
             _localStorageService = localStorageService;
         }
 
+        // В ISUMPK2.Web/Services/ClientUserService.cs
         public async Task<UserDto> GetUserByIdAsync(Guid id)
         {
-            await SetAuthorizationHeaderAsync();
-            return await _httpClient.GetFromJsonAsync<UserDto>($"api/users/{id}");
+            try
+            {
+                await SetAuthorizationHeaderAsync();
+                var response = await _httpClient.GetAsync($"api/users/{id}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<UserDto>();
+                }
+
+                Console.WriteLine($"Ошибка при получении пользователя: {response.StatusCode}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Исключение при получении пользователя: {ex.Message}");
+                return null;
+            }
         }
+
+
 
         public async Task<UserDto> GetUserByUsernameAsync(string username)
         {

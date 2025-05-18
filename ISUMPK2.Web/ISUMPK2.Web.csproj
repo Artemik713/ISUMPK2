@@ -6,6 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="Services\ClientMaterialService.cs" />
+    <Compile Remove="Services\IMaterialService.cs" />
+    <Compile Remove="Services\INotificationService.cs" />
+    <Compile Remove="Services\NotificationService.cs" />
+  </ItemGroup>
+
 	<ItemGroup>
 		<PackageReference Include="FluentValidation" Version="12.0.0" />
 		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.4" />

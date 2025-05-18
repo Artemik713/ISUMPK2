@@ -31,16 +31,31 @@ namespace ISUMPK2.API.Controllers
             return Ok(users);
         }
 
+        // В ISUMPK2.API/Controllers/UsersController.cs
         [HttpGet("{id}")]
-        [Authorize(Roles = "Administrator,GeneralDirector")]
+        [ProducesResponseType(typeof(UserDto), 200)]
+        [ProducesResponseType(404)]
         public async Task<ActionResult<UserDto>> GetUserById(Guid id)
         {
-            var user = await _userService.GetUserByIdAsync(id);
-            if (user == null)
+            // Проверяем id на валидность
+            if (id == Guid.Empty)
             {
-                return NotFound();
+                return NotFound(new { message = "Указан некорректный ID пользователя" });
             }
-            return Ok(user);
+
+            try
+            {
+                var user = await _userService.GetUserByIdAsync(id);
+                if (user == null)
+                    return NotFound(new { message = $"Пользователь с ID {id} не найден" });
+
+                return Ok(user);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Ошибка при получении пользователя с ID {id}");
+                return StatusCode(500, new { message = "Ошибка сервера при получении данных пользователя" });
+            }
         }
 
         [HttpGet("by-role/{role}")]
@@ -108,18 +123,21 @@ namespace ISUMPK2.API.Controllers
         [Authorize] // Доступен всем авторизованным
         public async Task<ActionResult<UserDto>> GetUserProfile()
         {
-            if (!Guid.TryParse(User.Identity.Name, out var userId))
+            // Используйте безопасную проверку на null
+            var userId = User?.Identity?.Name;
+            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
             {
                 return Unauthorized();
             }
 
-            var user = await _userService.GetUserByIdAsync(userId);
+            var user = await _userService.GetUserByIdAsync(userGuid);
             if (user == null)
             {
                 return NotFound();
             }
             return Ok(user);
         }
+
 
         // Добавленный метод для получения текущего пользователя
         [HttpGet("current")]

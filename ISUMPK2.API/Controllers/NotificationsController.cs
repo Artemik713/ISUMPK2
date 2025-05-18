@@ -24,14 +24,13 @@ namespace ISUMPK2.API.Controllers
             _logger = logger;
         }
 
-        [HttpGet]
+        [HttpGet("user")]
         [Authorize]
         public async Task<ActionResult<IEnumerable<NotificationDto>>> GetAllNotifications()
         {
             try
             {
                 var userId = GetCurrentUserId();
-
                 // Явная фильтрация уведомлений по ID текущего пользователя
                 var notifications = await _notificationService.GetAllNotificationsForUserAsync(userId);
 

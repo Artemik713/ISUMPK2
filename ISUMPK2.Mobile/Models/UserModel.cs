@@ -4,7 +4,7 @@ namespace ISUMPK2.Mobile.Models
 {
     public class UserModel
     {
-        public Guid Id { get; set; }
+        public Guid? Id { get; set; }
         public string UserName { get; set; }
         public string Email { get; set; }
         public string FirstName { get; set; }

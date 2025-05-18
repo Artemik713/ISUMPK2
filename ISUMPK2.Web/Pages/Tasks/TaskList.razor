@@ -99,7 +99,7 @@
             <MudTd DataLabel="Приоритет">
                 <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), context.PriorityBadgeColor, true))" Size="Size.Small">@context.PriorityName</MudChip>
             </MudTd>
-            <MudTd DataLabel="Исполнитель">@context.AssigneeName</MudTd>
+            <MudTd DataLabel="Исполнитель">@(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)</MudTd>
             <MudTd DataLabel="Срок">
                 @(context.DueDate.HasValue ? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")
                 @if(context.IsOverdue)
@@ -222,17 +222,18 @@
     {
         try
         {
-            // Если у вас возникают проблемы с получением всех пользователей,
-            // используйте этот обходной путь
+            // Загрузка ВСЕХ пользователей вместо только текущего
             try
             {
-                var currentUser = await UserService.GetCurrentUserAsync();
-                users = new List<UserModel> { currentUser.ToModel() };
+                users = (await UserService.GetAllUsersAsync())
+                    .Select(dto => dto.ToModel())
+                    .ToList();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка при загрузке текущего пользователя: {ex.Message}");
-                users = new List<UserModel>();
+                Console.WriteLine($"Ошибка при загрузке пользователей: {ex.Message}");
+                var currentUser = await UserService.GetCurrentUserAsync();
+                users = new List<UserModel> { currentUser.ToModel() };
             }
 
             try
@@ -254,6 +255,7 @@
             departments = new List<DepartmentModel>();
         }
     }
+
 
 
 
@@ -386,7 +388,7 @@
 
     private void CreateTask()
     {
-        NavigationManager.NavigateTo("/tasks/create");
+        NavigationManager.NavigateTo("/tasks/add");
     }
 
     private void ViewTask(Guid id)

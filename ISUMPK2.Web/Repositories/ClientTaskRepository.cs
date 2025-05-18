@@ -16,6 +16,23 @@ namespace ISUMPK2.Web.Repositories
         public ClientTaskRepository(HttpClient httpClient) : base(httpClient)
         {
         }
+        public override async Task<WorkTask> GetByIdAsync(Guid id)
+        {
+            try
+            {
+                var task = await HttpClient.GetFromJsonAsync<WorkTask>($"{ApiEndpoint}/{id}");
+                return task;
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при загрузке задачи {id}: {ex.Message}");
+                throw;
+            }
+        }
 
         public async System.Threading.Tasks.Task<IEnumerable<WorkTask>> GetTasksByAssignedToAsync(Guid userId)
         {
@@ -84,5 +101,12 @@ namespace ISUMPK2.Web.Repositories
         {
             return await HttpClient.GetFromJsonAsync<IEnumerable<WorkTask>>($"{ApiEndpoint}/dashboard/{userId}");
         }
+        public override async Task UpdateAsync(WorkTask entity)
+        {
+            // Отправляем PUT-запрос на правильный URL с ID в URL-пути
+            var response = await HttpClient.PutAsJsonAsync($"{ApiEndpoint}/{entity.Id}", entity);
+            response.EnsureSuccessStatusCode();
+        }
+
     }
 }

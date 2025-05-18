@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Task = System.Threading.Tasks.Task;
+using Microsoft.EntityFrameworkCore;
+using ISUMPK2.Infrastructure.Data;
 
 
 namespace ISUMPK2.Application.Services.Implementations
@@ -17,15 +19,18 @@ namespace ISUMPK2.Application.Services.Implementations
         private readonly ITaskRepository _taskRepository;
         private readonly IUserRepository _userRepository;
         private readonly INotificationService _notificationService;
+        private readonly ApplicationDbContext _context;
 
         public TaskService(
             ITaskRepository taskRepository,
             IUserRepository userRepository,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            ApplicationDbContext context)
         {
             _taskRepository = taskRepository;
             _userRepository = userRepository;
             _notificationService = notificationService;
+            _context = context;
         }
 
         public async Task<TaskDto> GetTaskByIdAsync(Guid id)
@@ -288,8 +293,9 @@ namespace ISUMPK2.Application.Services.Implementations
                 UpdatedAt = DateTime.UtcNow
             };
 
-            task.Comments.Add(comment);
-            await _taskRepository.SaveChangesAsync();
+            _context.TaskComments.Add(comment);
+            await _context.SaveChangesAsync();
+
 
             return new TaskCommentDto
             {
@@ -321,6 +327,22 @@ namespace ISUMPK2.Application.Services.Implementations
 
         private TaskDto MapTaskToDto(WorkTask task)
         {
+            string assigneeName = null;
+            if (task.Assignee != null)
+            {
+                assigneeName = $"{task.Assignee.FirstName} {task.Assignee.LastName}";
+                Console.WriteLine($"Найден исполнитель: {assigneeName} для задачи {task.Id}");
+            }
+            else if (task.AssigneeId.HasValue)
+            {
+                Console.WriteLine($"Для задачи {task.Id} указан AssigneeId={task.AssigneeId}, но объект Assignee не загружен");
+                assigneeName = "Не назначен";
+            }
+            else
+            {
+                Console.WriteLine($"Для задачи {task.Id} не указан AssigneeId");
+                assigneeName = "Не назначен";
+            }
             return new TaskDto
             {
                 Id = task.Id,
@@ -333,7 +355,7 @@ namespace ISUMPK2.Application.Services.Implementations
                 CreatorId = task.CreatorId,
                 CreatorName = task.Creator != null ? $"{task.Creator.FirstName} {task.Creator.LastName}" : null,
                 AssigneeId = task.AssigneeId,
-                AssigneeName = task.Assignee != null ? $"{task.Assignee.FirstName} {task.Assignee.LastName}" : null,
+                AssigneeName = assigneeName,
                 DepartmentId = task.DepartmentId,
                 DepartmentName = task.Department?.Name,
                 StartDate = task.StartDate,
