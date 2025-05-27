@@ -1,0 +1,141 @@
+﻿@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using MudBlazor
+@inject ISubTaskService SubTaskService
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@isValid">
+            <MudTextField T="string" @bind-Value="subTask.Title" Label="Название" Required="true"
+                          RequiredError="Укажите название подзадачи" />
+
+            <MudTextField T="string" @bind-Value="subTask.Description" Label="Описание" Lines="3" Class="mt-3" />
+
+            <MudSelect T="int" @bind-Value="subTask.StatusId" Label="Статус" Class="mt-3" Required="true">
+                <MudSelectItem Value="1">Создана</MudSelectItem>
+                <MudSelectItem Value="2">В работе</MudSelectItem>
+                <MudSelectItem Value="3">Требует уточнения</MudSelectItem>
+                <MudSelectItem Value="4">На проверке</MudSelectItem>
+                <MudSelectItem Value="5">Выполнена</MudSelectItem>
+                <MudSelectItem Value="6">Отклонена</MudSelectItem>
+            </MudSelect>
+
+            @* Замените существующий код выбора исполнителя *@
+            <MudSelect T="Guid?" @bind-Value="subTask.AssigneeId" Label="Исполнитель" Class="mt-3">
+                <MudSelectItem Value="@((Guid?)null)">Не назначен</MudSelectItem>
+                @foreach (var user in users)
+                {
+                    <MudSelectItem T="Guid?" Value="@user.Id">@(user.FirstName + " " + user.LastName)</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudDatePicker @bind-Date="dueDate" Label="Срок выполнения" Class="mt-3" />
+
+            <MudNumericField T="decimal?" @bind-Value="subTask.EstimatedHours" Label="Оценка (часы)" Class="mt-3"
+                             Min="0" Step="0.5m" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(!isValid)">Сохранить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? SubTaskId { get; set; }
+    [Parameter] public Guid ParentTaskId { get; set; }
+    [Parameter] public SubTaskModel SubTask { get; set; }
+    [Parameter] public string Title { get; set; }
+
+    private MudForm form;
+    private bool isValid;
+    private DateTime? dueDate;
+    private SubTaskModel subTask = new SubTaskModel();
+    private List<UserDto> users = new List<UserDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            users = (await UserService.GetAllUsersAsync()).ToList();
+
+            if (SubTaskId.HasValue && SubTaskId != Guid.Empty)
+            {
+                // Редактирование существующей подзадачи
+                var existingSubTask = await SubTaskService.GetSubTaskByIdAsync(SubTaskId.Value);
+                if (existingSubTask != null)
+                {
+                    subTask.Id = existingSubTask.Id;
+                    subTask.ParentTaskId = existingSubTask.ParentTaskId;
+                    subTask.Title = existingSubTask.Title;
+                    subTask.Description = existingSubTask.Description;
+                    subTask.StatusId = existingSubTask.StatusId;
+                    subTask.AssigneeId = existingSubTask.AssigneeId;
+                    subTask.DueDate = existingSubTask.DueDate;
+                    subTask.EstimatedHours = existingSubTask.EstimatedHours;
+
+                    if (existingSubTask.DueDate.HasValue)
+                        dueDate = existingSubTask.DueDate;
+                }
+            }
+            else
+            {
+                // Создание новой подзадачи
+                subTask.ParentTaskId = ParentTaskId;
+                subTask.StatusId = 1; // По умолчанию "Создана"
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Submit()
+    {
+        try
+        {
+            subTask.DueDate = dueDate;
+
+            if (SubTaskId.HasValue && SubTaskId != Guid.Empty)
+            {
+                // Обновление существующей подзадачи
+                await SubTaskService.UpdateSubTaskAsync(subTask.Id, new SubTaskUpdateDto
+                {
+                    Title = subTask.Title,
+                    Description = subTask.Description,
+                    StatusId = subTask.StatusId,
+                    AssigneeId = subTask.AssigneeId,
+                    DueDate = subTask.DueDate,
+                    EstimatedHours = subTask.EstimatedHours
+                });
+            }
+            else
+            {
+                // Создание новой подзадачи
+                await SubTaskService.CreateSubTaskAsync(new SubTaskCreateDto
+                {
+                    ParentTaskId = ParentTaskId,
+                    Title = subTask.Title,
+                    Description = subTask.Description,
+                    StatusId = subTask.StatusId,
+                    AssigneeId = subTask.AssigneeId,
+                    DueDate = subTask.DueDate,
+                    EstimatedHours = subTask.EstimatedHours
+                });
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

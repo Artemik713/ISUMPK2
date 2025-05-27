@@ -188,7 +188,11 @@ namespace ISUMPK2.Infrastructure.Repositories
                 .Include(t => t.Department)
                 .Include(t => t.Product)
                 .Include(t => t.Comments)
-                .ThenInclude(c => c.User)
+                   .ThenInclude(c => c.User)
+                .Include(t => t.SubTasks)
+                    .ThenInclude(s => s.Assignee)
+                .Include(t => t.SubTasks)
+                    .ThenInclude(s => s.Status)
                 .FirstOrDefaultAsync(t => t.Id == id);
         }
     }

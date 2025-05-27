@@ -89,6 +89,8 @@ builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IMaterialCategoryRepository, MaterialCategoryRepository>();
+builder.Services.AddScoped<ISubTaskRepository, SubTaskRepository>();
+
 
 
 
@@ -96,6 +98,7 @@ builder.Services.AddScoped<IMaterialCategoryRepository, MaterialCategoryReposito
 // 7. Регистрация служб приложения
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+builder.Services.AddScoped<ISubTaskService, SubTaskService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<ISUMPK2.Application.Services.IMaterialService, MaterialService>();
 builder.Services.AddScoped<IProductService, ProductService>();

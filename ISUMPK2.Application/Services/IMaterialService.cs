@@ -10,8 +10,8 @@ namespace ISUMPK2.Application.Services
         Task<MaterialDto> GetMaterialByIdAsync(Guid id);
         Task<IEnumerable<MaterialDto>> GetAllMaterialsAsync();
         Task<IEnumerable<MaterialDto>> GetMaterialsWithLowStockAsync();
-        Task<MaterialDto> CreateMaterialAsync(MaterialCreateDto materialDto);
-        Task<MaterialDto> UpdateMaterialAsync(Guid id, MaterialUpdateDto materialDto);
+        Task<MaterialDto> CreateMaterialAsync(MaterialCreateDto model);
+        Task<MaterialDto> UpdateMaterialAsync(Guid id, MaterialUpdateDto model);
         Task DeleteMaterialAsync(Guid id);
         Task<bool> HasSufficientStockAsync(Guid materialId, decimal requiredQuantity);
         Task<MaterialTransactionDto> AddTransactionAsync(Guid userId, MaterialTransactionCreateDto transactionDto);

@@ -1,0 +1,78 @@
+﻿@using ISUMPK2.Application.DTOs
+@using MudBlazor
+
+<MudPaper Class="pa-4 mb-4" Elevation="0">
+    <div class="d-flex justify-space-between align-center mb-2">
+        <MudText Typo="Typo.h6">Подзадачи</MudText>
+        @if (CanEdit)
+        {
+            <MudButton Variant="Variant.Outlined" 
+                       Color="Color.Primary" 
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => OnAddSubTask.InvokeAsync())">
+                Добавить подзадачу
+            </MudButton>
+        }
+    </div>
+
+    @if (SubTasks == null || !SubTasks.Any())
+    {
+        <MudText>Нет подзадач</MudText>
+    }
+    else
+    {
+        <MudTable Items="@SubTasks" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true">
+            <HeaderContent>
+                <MudTh>Название</MudTh>
+                <MudTh>Статус</MudTh>
+                <MudTh>Исполнитель</MudTh>
+                <MudTh>Срок</MudTh>
+                @if (CanEdit)
+                {
+                    <MudTh>Действия</MudTh>
+                }
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Title</MudTd>
+                <MudTd>
+                    <MudChip T="string" Color="@GetStatusColor(context.StatusId)" Size="Size.Small">
+                        @context.StatusName
+                    </MudChip>
+                </MudTd>
+                <MudTd>@(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)</MudTd>
+                <MudTd>@(context.DueDate.HasValue ? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")</MudTd>
+                @if (CanEdit)
+                {
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       OnClick="@(() => OnEditSubTask.InvokeAsync(context.Id))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" 
+                                      OnClick="@(() => OnDeleteSubTask.InvokeAsync(context.Id))" />
+                    </MudTd>
+                }
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public List<SubTaskDto> SubTasks { get; set; }
+    [Parameter] public bool CanEdit { get; set; } = false;
+    [Parameter] public EventCallback OnAddSubTask { get; set; }
+    [Parameter] public EventCallback<Guid> OnEditSubTask { get; set; }
+    [Parameter] public EventCallback<Guid> OnDeleteSubTask { get; set; }
+
+    private Color GetStatusColor(int statusId)
+    {
+        return statusId switch
+        {
+            1 => Color.Default, // Создана
+            2 => Color.Info,    // В работе
+            3 => Color.Warning, // Требует уточнения
+            4 => Color.Primary, // На проверке
+            5 => Color.Success, // Выполнена
+            6 => Color.Error,   // Отклонена
+            _ => Color.Default
+        };
+    }
+}

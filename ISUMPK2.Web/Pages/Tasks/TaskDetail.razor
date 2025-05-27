@@ -8,6 +8,7 @@
 @using ISUMPK2.Web.Extensions
 @using Microsoft.AspNetCore.Authorization
 @using MudBlazor
+@inject ISubTaskService SubTaskService
 @inject IUserService UserService
 @inject ITaskService TaskService
 @inject NavigationManager NavigationManager
@@ -189,6 +190,57 @@ else
                 </MudPaper>
             </MudItem>
 
+            
+<MudItem xs="12">
+    <MudPaper Elevation="2" Class="pa-4">
+        <div class="d-flex justify-space-between align-center mb-3">
+            <MudText Typo="Typo.h6">Подзадачи</MudText>
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Add" 
+                      OnClick="AddSubTask">
+                Добавить подзадачу
+            </MudButton>
+        </div>
+
+        @if (subTasks == null || !subTasks.Any())
+        {
+            <MudText>Нет подзадач</MudText>
+        }
+        else
+        {
+            <MudTable Items="@subTasks" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true">
+                <HeaderContent>
+                    <MudTh>Название</MudTh>
+                    <MudTh>Статус</MudTh>
+                    <MudTh>Исполнитель</MudTh>
+                    <MudTh>Срок</MudTh>
+                    <MudTh>Действия</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Title</MudTd>
+                                <MudTd>
+                                    <MudChip T="string" Color="@GetSubTaskStatusColor(context.StatusId)" Size="Size.Small">
+                                        @GetStatusName(context.StatusId)
+                                    </MudChip>
+                                </MudTd>
+                    <MudTd>@(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)</MudTd>
+                    <MudTd>@(context.DueDate.HasValue ? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")</MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                      Size="Size.Small" 
+                                      OnClick="@(() => EditSubTask(context.Id))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                      Size="Size.Small" 
+                                      Color="Color.Error" 
+                                      OnClick="@(() => DeleteSubTask(context.Id))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+</MudItem>
+
             <MudItem xs="12">
                 <MudPaper Elevation="2" Class="pa-4">
                     <MudText Typo="Typo.h6" Class="mb-3">Комментарии</MudText>
@@ -236,12 +288,36 @@ else
     private TaskModel? task;
     private bool isLoading = true;
     private string newComment = "";
+    private List<SubTaskModel> subTasks = new List<SubTaskModel>();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadTaskAsync();
     }
-
+    private async Task LoadSubTasksAsync()
+    {
+        try
+        {
+            // Предполагается, что у вас есть сервис для работы с подзадачами
+            var subTasksDto = await SubTaskService.GetByParentTaskIdAsync(id);
+            subTasks = subTasksDto.Select(dto => new SubTaskModel
+            {
+                Id = dto.Id,
+                ParentTaskId = dto.ParentTaskId,
+                Title = dto.Title,
+                Description = dto.Description,
+                StatusId = dto.StatusId,
+                AssigneeId = dto.AssigneeId,
+                AssigneeName = dto.AssigneeName,
+                DueDate = dto.DueDate
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке подзадач: {ex.Message}");
+            Snackbar.Add($"Не удалось загрузить подзадачи: {ex.Message}", Severity.Warning);
+        }
+    }
     protected override async Task OnParametersSetAsync()
     {
         if (id != Guid.Empty)
@@ -272,6 +348,7 @@ else
     private async Task LoadTaskAsync()
     {
         isLoading = true;
+        await LoadSubTasksAsync();
         try
         {
             Console.WriteLine($"Загрузка задачи с ID: {id}");
@@ -363,6 +440,80 @@ else
             5 => "Выполнена",
             6 => "Отклонена",
             _ => $"Статус {statusId}"
+        };
+    }
+    private async Task AddSubTask()
+    {
+        var parameters = new DialogParameters
+    {
+        { "ParentTaskId", id },
+        { "Title", "Новая подзадача" }
+    };
+
+        var dialog = await DialogService.ShowAsync<SubTaskDialog>("Добавление подзадачи", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadSubTasksAsync();
+            Snackbar.Add("Подзадача добавлена", Severity.Success);
+        }
+    }
+
+    private async Task EditSubTask(Guid subTaskId)
+    {
+        var subTask = subTasks.FirstOrDefault(s => s.Id == subTaskId);
+        if (subTask == null) return;
+
+        var parameters = new DialogParameters
+    {
+        { "SubTaskId", subTaskId },
+        { "ParentTaskId", id },
+        { "SubTask", subTask }
+    };
+
+        var dialog = await DialogService.ShowAsync<SubTaskDialog>("Редактирование подзадачи", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadSubTasksAsync();
+            Snackbar.Add("Подзадача обновлена", Severity.Success);
+        }
+    }
+
+    private async Task DeleteSubTask(Guid subTaskId)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Удаление подзадачи",
+            "Вы уверены, что хотите удалить эту подзадачу?",
+            "Да", "Отмена");
+
+        if (confirmed == true)
+        {
+            try
+            {
+                await SubTaskService.DeleteSubTaskAsync(subTaskId);
+                await LoadSubTasksAsync();
+                Snackbar.Add("Подзадача удалена", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка при удалении: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+    private Color GetSubTaskStatusColor(int statusId)
+    {
+        return statusId switch
+        {
+            1 => Color.Default,  // Создана
+            2 => Color.Info,     // В работе
+            3 => Color.Warning,  // Требует уточнения
+            4 => Color.Primary,  // На проверке
+            5 => Color.Success,  // Выполнена
+            6 => Color.Error,    // Отклонена
+            _ => Color.Default
         };
     }
 
