@@ -29,6 +29,20 @@ namespace ISUMPK2.Infrastructure.Repositories
 
         public virtual async Task<IEnumerable<T>> GetAllAsync()
         {
+            // Если это WorkTask, добавляем необходимые Include
+            if (typeof(T) == typeof(WorkTask))
+            {
+                return (IEnumerable<T>)await (_dbSet as DbSet<WorkTask>)
+                    .Include(t => t.Status)
+                    .Include(t => t.Priority)
+                    .Include(t => t.Creator)
+                    .Include(t => t.Assignee)  // Важно: включаем исполнителя
+                    .Include(t => t.Department)
+                    .Include(t => t.Product)
+                    .ToListAsync();
+            }
+
+            // Для других типов используем стандартную загрузку
             return await _dbSet.ToListAsync();
         }
 

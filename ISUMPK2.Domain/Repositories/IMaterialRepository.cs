@@ -8,6 +8,7 @@ namespace ISUMPK2.Domain.Repositories
 {
     public interface IMaterialRepository : IRepository<Material>
     {
+        Task AddTransactionAsync(MaterialTransaction transaction);
         Task<IEnumerable<Material>> GetMaterialsWithLowStockAsync();
         Task<bool> HasSufficientStockAsync(Guid materialId, decimal requiredQuantity);
         Task UpdateStockAsync(Guid materialId, decimal quantity, bool isAddition);

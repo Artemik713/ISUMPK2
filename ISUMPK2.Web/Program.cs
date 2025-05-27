@@ -67,13 +67,14 @@ namespace ISUMPK2.Web
             builder.Services.AddScoped<IMaterialCategoryRepository, ClientMaterialCategoryRepository>();
 
 
-
             // Уберите дублирующиеся регистрации MudServices
 
             // Регистрация сервисов приложения
             builder.Services.AddScoped<ITaskService, ClientTaskService>();
             builder.Services.AddScoped<IUserService, ClientUserService>();
-            builder.Services.AddScoped<IMaterialService, MaterialService>();
+            builder.Services.AddScoped<ISubTaskService, ClientSubTaskService>();
+            builder.Services.AddScoped<ISubTaskRepository, ClientSubTaskRepository>();
+            builder.Services.AddScoped<IMaterialService, ClientMaterialService>();
             builder.Services.AddScoped<IProductService, ProductService>();
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddScoped<IChatService, ChatService>();

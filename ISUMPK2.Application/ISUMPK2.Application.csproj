@@ -17,4 +17,8 @@
 	    <ProjectReference Include="..\ISUMPK2.Infrastructure\ISUMPK2.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Новая папка\" />
+  </ItemGroup>
+
 </Project>
