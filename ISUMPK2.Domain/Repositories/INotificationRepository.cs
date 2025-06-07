@@ -8,6 +8,7 @@ namespace ISUMPK2.Domain.Repositories
 {
     public interface INotificationRepository: IRepository<Notification>
     {
+        Task<IEnumerable<Notification>> GetReadNotificationsForUserAsync(Guid userId);
         Task<IEnumerable<Notification>> GetUnreadNotificationsForUserAsync(Guid userId);
         Task MarkAsReadAsync(Guid notificationId);
         Task MarkAllAsReadForUserAsync(Guid userId);

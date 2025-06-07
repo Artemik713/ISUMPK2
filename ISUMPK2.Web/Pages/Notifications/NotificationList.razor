@@ -9,72 +9,156 @@
 @using ISUMPK2.Web.Models
 @using ISUMPK2.Web.Services
 @using ISUMPK2.Web.Extensions
+@using ISUMPK2.Web.Shared
 @using Microsoft.AspNetCore.Authorization
+@using System.Text.Json
 @inject INotificationService NotificationService
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthService AuthService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Уведомления - ИСУ ПМК</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <div class="d-flex justify-space-between align-center mb-4">
-        <MudText Typo="Typo.h4">Уведомления</MudText>
-
-        <div class="d-flex">
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.DoneAll"
-                       OnClick="@MarkAllAsReadAsync" Disabled="@(!notifications.Any(n => !n.IsRead))">Отметить все как прочитанные</MudButton>
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-4">
+    <MudPaper Elevation="3" Class="pa-4 mb-4">
+        <div class="d-flex justify-space-between align-center">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Notifications" Color="Color.Primary" Class="mr-3" />
+                <MudText Typo="Typo.h5">Уведомления</MudText>
+            </div>
+            
+            <div class="d-flex">
+                <MudTooltip Text="Отметить все как прочитанные">
+                    <MudIconButton Icon="@Icons.Material.Filled.DoneAll" 
+                                Color="Color.Primary" 
+                                OnClick="@MarkAllAsReadAsync"
+                                Disabled="@(!unreadNotifications.Any())" />
+                </MudTooltip>
+                <MudTooltip Text="Очистить прочитанные">
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" 
+                                Color="Color.Error" 
+                                OnClick="@ClearReadNotifications"
+                                Disabled="@(!readNotifications.Any())" />
+                </MudTooltip>
+            </div>
         </div>
-    </div>
+    </MudPaper>
 
     @if (isLoading)
     {
-        <div class="d-flex justify-center">
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
         </div>
     }
     else if (errorMessage != null)
     {
-        <MudAlert Severity="Severity.Error" Class="my-4">@errorMessage</MudAlert>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="TryReloadAsync">Повторить</MudButton>
-    }
-    else if (!notifications.Any())
-    {
-        <MudAlert Severity="Severity.Info" Class="my-4">У вас нет уведомлений</MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mb-4" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Error">
+            @errorMessage
+            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="ml-auto" OnClick="TryReloadAsync">Повторить</MudButton>
+        </MudAlert>
     }
     else
     {
-        <MudList T="NotificationModel" Clickable="true">
-            @foreach (var notification in notifications)
+        <div class="d-flex align-center mb-4">
+            <div class="mr-auto">
+                <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined">
+                    <MudButton OnClick="() => SetTabIndex(0)" 
+                              Variant="@(activeTabIndex == 0 ? Variant.Filled : Variant.Outlined)"
+                              Color="@(activeTabIndex == 0 ? Color.Primary : Color.Default)">
+                        Все
+                    </MudButton>
+                    <MudButton OnClick="() => SetTabIndex(1)"
+                              Variant="@(activeTabIndex == 1 ? Variant.Filled : Variant.Outlined)"
+                              Color="@(activeTabIndex == 1 ? Color.Primary : Color.Default)">
+                        Непрочитанные
+                    </MudButton>
+                    <MudButton OnClick="() => SetTabIndex(2)"
+                              Variant="@(activeTabIndex == 2 ? Variant.Filled : Variant.Outlined)"
+                              Color="@(activeTabIndex == 2 ? Color.Primary : Color.Default)">
+                        Прочитанные
+                    </MudButton>
+                </MudButtonGroup>
+            </div>
+
+            @if (activeTabIndex == 0 && allNotifications.Any())
             {
-                <MudListItem OnClick="@(() => HandleNotificationClick(notification))">
-                    <div class="d-flex align-center">
-                        <MudIcon Icon="@(notification.IsRead ? Icons.Material.Outlined.Notifications : Icons.Material.Filled.Notifications)"
-                                 Color="@(notification.IsRead ? Color.Default : Color.Primary)" Class="mr-3" />
-                        <div class="flex-grow-1">
-                            <div class="d-flex justify-space-between">
-                                <MudText Typo="Typo.body1" Style="@(notification.IsRead ? "" : "font-weight: bold")">@notification.Title</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@notification.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
-                            </div>
-                            <MudText Typo="Typo.body2" Style="@(notification.IsRead ? "color: var(--mud-palette-text-secondary)" : "")">
-                                @(notification.Message?.Length > 100 ? notification.Message.Substring(0, 100) + "..." : notification.Message)
-                            </MudText>
-                        </div>
-                    </div>
-                </MudListItem>
-                <MudDivider />
+                <MudTextField T="string" @bind-Value="searchText" Placeholder="Поиск"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true" OnDebounceIntervalElapsed="FilterNotifications"
+                              Class="ms-auto" Style="width: 250px" />
             }
-        </MudList>
+        </div>
+
+        @if (activeTabIndex == 0)
+        {
+            @if (!filteredNotifications.Any())
+            {
+                <MudCard Elevation="0" Outlined="true" Class="pa-6 text-center">
+                    <MudIcon Icon="@Icons.Material.Outlined.Notifications" Size="Size.Large" 
+                             Color="Color.Default" Class="mb-4" />
+                    <MudText>У вас нет уведомлений</MudText>
+                </MudCard>
+            }
+            else
+            {
+                <NotificationListSimple Notifications="filteredNotifications" OnNotificationClick="HandleNotificationClick" />
+            }
+        }
+        else if (activeTabIndex == 1)
+        {
+            @if (!unreadNotifications.Any())
+            {
+                <MudCard Elevation="0" Outlined="true" Class="pa-6 text-center">
+                    <MudIcon Icon="@Icons.Material.Outlined.MarkEmailRead" Size="Size.Large" 
+                             Color="Color.Default" Class="mb-4" />
+                    <MudText>У вас нет непрочитанных уведомлений</MudText>
+                </MudCard>
+            }
+            else
+            {
+                <NotificationListSimple Notifications="unreadNotifications" OnNotificationClick="HandleNotificationClick" />
+            }
+        }
+        else
+        {
+            @if (!readNotifications.Any())
+            {
+                <MudCard Elevation="0" Outlined="true" Class="pa-6 text-center">
+                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Large" 
+                             Color="Color.Default" Class="mb-4" />
+                    <MudText>У вас нет прочитанных уведомлений</MudText>
+                </MudCard>
+            }
+            else
+            {
+                <NotificationListSimple Notifications="readNotifications" OnNotificationClick="HandleNotificationClick" />
+            }
+        }
     }
 </MudContainer>
 
 @code {
     private bool isLoading = true;
-    private List<NotificationModel> notifications = new List<NotificationModel>();
+    private List<NotificationModel> allNotifications = new List<NotificationModel>();
+    private List<NotificationModel> readNotifications = new List<NotificationModel>();
+    private List<NotificationModel> unreadNotifications = new List<NotificationModel>();
+    private List<NotificationModel> filteredNotifications = new List<NotificationModel>();
     private string userId;
     private string errorMessage;
+    private int activeTabIndex = 0;
+    private string selectedChip = "all"; // Изменен тип с MudChip на string
+    private string storageKey => $"read-notifications-{userId}";
+    private string searchText = "";
+
+    // Добавлен отсутствующий метод
+    private void SetTabIndex(int index)
+    {
+        activeTabIndex = index;
+        FilterNotifications();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -82,6 +166,28 @@
         if (!string.IsNullOrEmpty(userId))
         {
             await LoadNotificationsAsync();
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        FilterNotifications();
+    }
+
+    private void FilterNotifications()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            filteredNotifications = allNotifications;
+        }
+        else
+        {
+            var search = searchText.Trim().ToLower();
+            filteredNotifications = allNotifications
+                .Where(n => n.Title.ToLower().Contains(search) ||
+                            n.Message.ToLower().Contains(search) ||
+                            (n.TaskTitle != null && n.TaskTitle.ToLower().Contains(search)))
+                .ToList();
         }
     }
 
@@ -130,31 +236,6 @@
         }
     }
 
-    private async Task LoadNotificationsAsync()
-    {
-        isLoading = true;
-        errorMessage = null;
-
-        try
-        {
-            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out Guid userGuid))
-            {
-                throw new ApplicationException("Некорректный ID пользователя");
-            }
-
-            var notificationsDto = await NotificationService.GetAllNotificationsForUserAsync(userGuid);
-            notifications = notificationsDto.Select(dto => dto.ToModel()).ToList();
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Не удалось загрузить уведомления: {ex.Message}";
-        }
-        finally
-        {
-            isLoading = false;
-        }
-    }
-
     private async Task TryReloadAsync()
     {
         await LoadUserIdAsync();
@@ -172,8 +253,18 @@
             {
                 await NotificationService.MarkAsReadAsync(notification.Id);
                 notification.IsRead = true;
+
+                // Перемещаем из непрочитанных в прочитанные
+                unreadNotifications.Remove(notification);
+                if (!readNotifications.Any(n => n.Id == notification.Id))
+                {
+                    readNotifications.Add(notification);
+                    // Сохраняем в localStorage
+                    await SaveReadNotificationToStorage(notification);
+                }
             }
 
+            // Остальной код без изменений...
             if (notification.TaskId.HasValue)
             {
                 NavigationManager.NavigateTo($"/tasks/{notification.TaskId}");
@@ -181,11 +272,11 @@
             else
             {
                 var parameters = new DialogParameters
-                {
-                    { "Title", notification.Title },
-                    { "Message", notification.Message },
-                    { "Date", notification.CreatedAt }
-                };
+            {
+                { "Title", notification.Title },
+                { "Message", notification.Message },
+                { "Date", notification.CreatedAt }
+            };
 
                 await DialogService.ShowAsync<NotificationDialog>("Уведомление", parameters);
             }
@@ -196,25 +287,145 @@
         }
     }
 
+    private async Task LoadNotificationsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            // Загрузим только непрочитанные уведомления - этот метод работает
+            var unreadNotificationsDto = await NotificationService.GetUnreadNotificationsForUserAsync(Guid.Parse(userId));
+            unreadNotifications = unreadNotificationsDto.Select(dto => dto.ToModel()).ToList();
+
+            // Используем localStorage для прочитанных уведомлений
+            await LoadReadNotificationsFromLocalStorage();
+
+            // Объединяем для списка "Все"
+            allNotifications = new List<NotificationModel>();
+            allNotifications.AddRange(unreadNotifications);
+            allNotifications.AddRange(readNotifications);
+            allNotifications = allNotifications.OrderByDescending(n => n.CreatedAt).ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Не удалось загрузить уведомления: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadReadNotificationsFromLocalStorage()
+    {
+        try
+        {
+            readNotifications = new List<NotificationModel>();
+            var savedJson = await JSRuntime.InvokeAsync<string>("localStorage.getItem", storageKey);
+            if (!string.IsNullOrEmpty(savedJson))
+            {
+                var savedList = JsonSerializer.Deserialize<List<NotificationModel>>(savedJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (savedList != null)
+                {
+                    readNotifications = savedList;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке прочитанных уведомлений: {ex.Message}");
+            readNotifications = new List<NotificationModel>();
+        }
+    }
+
+    private async Task SaveReadNotificationToStorage(NotificationModel notification)
+    {
+        try
+        {
+            // Получаем текущие сохраненные уведомления
+            var existingJson = await JSRuntime.InvokeAsync<string>("localStorage.getItem", storageKey);
+            var savedNotifications = string.IsNullOrEmpty(existingJson)
+                ? new List<NotificationModel>()
+                : JsonSerializer.Deserialize<List<NotificationModel>>(existingJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<NotificationModel>();
+
+            // Проверяем, нет ли уже этого уведомления
+            if (!savedNotifications.Any(n => n.Id == notification.Id))
+            {
+                savedNotifications.Add(notification);
+                await JSRuntime.InvokeVoidAsync(
+                    "localStorage.setItem",
+                    storageKey,
+                    JsonSerializer.Serialize(savedNotifications)
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при сохранении уведомления: {ex.Message}");
+        }
+    }
+
     private async Task MarkAllAsReadAsync()
     {
         try
         {
-            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out Guid userGuid))
+            // Проверка ID пользователя
+            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
             {
                 throw new ApplicationException("Некорректный ID пользователя");
             }
 
+            // Отмечаем все как прочитанные на сервере
             await NotificationService.MarkAllAsReadForUserAsync(userGuid);
-            foreach (var notification in notifications)
+
+            // Сохраняем все непрочитанные уведомления в localStorage
+            foreach (var notification in unreadNotifications)
             {
                 notification.IsRead = true;
+                await SaveReadNotificationToStorage(notification);
             }
+
+            // Обновляем списки
+            readNotifications.AddRange(unreadNotifications);
+            unreadNotifications.Clear();
+
+            // Обновляем общий список
+            allNotifications.ForEach(n => n.IsRead = true);
+
             Snackbar.Add("Все уведомления отмечены как прочитанные", Severity.Success);
         }
         catch (Exception ex)
         {
             await DialogService.ShowMessageBox("Ошибка", $"Не удалось отметить уведомления как прочитанные: {ex.Message}");
+        }
+    }
+
+    private async Task ClearReadNotifications()
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Подтверждение",
+            "Вы действительно хотите очистить историю прочитанных уведомлений?",
+            yesText: "Да", noText: "Нет");
+
+        if (result == true)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("localStorage.removeItem", storageKey);
+                readNotifications.Clear();
+
+                // Обновляем общий список
+                allNotifications = new List<NotificationModel>(unreadNotifications);
+
+                Snackbar.Add("История прочитанных уведомлений очищена", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Ошибка", $"Не удалось очистить историю: {ex.Message}");
+            }
         }
     }
 }

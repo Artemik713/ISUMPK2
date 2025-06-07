@@ -1,0 +1,453 @@
+﻿@page "/worker/dashboard"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Dialogs
+@using ISUMPK2.Web.Extensions
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject ITaskService TaskService
+@inject IUserService UserService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Рабочее пространство - ИСУ ПМК</PageTitle>
+
+@if (isLoading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (currentUser == null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">Не удалось загрузить данные пользователя</MudAlert>
+    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/"))" Variant="Variant.Filled" Color="Color.Primary" Class="mt-2">
+        Вернуться на главную
+    </MudButton>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudPaper Elevation="3" Class="pa-4 worker-header">
+            <div class="d-flex justify-space-between align-center">
+                <div class="d-flex align-center">
+                    <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mr-3">
+                        @(currentUser.FullName?.Length > 0 ? currentUser.FullName.Substring(0, 1) : "?")
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.h4">@currentUser.FullName</MudText>
+                        <MudText Typo="Typo.subtitle1">Цех: @currentUser.DepartmentName</MudText>
+                    </div>
+                </div>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Color="Color.Default" Dense="true" Direction="Direction.Left">
+                    <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/account/profile"))">Мой профиль</MudMenuItem>
+                    <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/account/notifications"))">Уведомления</MudMenuItem>
+                    <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/account/logout"))">Выйти</MudMenuItem>
+                </MudMenu>
+            </div>
+        </MudPaper>
+
+        @if (hasActiveTask)
+        {
+            <MudGrid Class="mt-4">
+                <MudItem xs="12">
+                    <MudPaper Elevation="2" Class="pa-4">
+                        <MudGrid>
+                            <MudItem xs="12" md="8">
+                                <div class="d-flex align-center mb-3">
+                                    <MudIcon Icon="@Icons.Material.Filled.Assignment" Color="Color.Primary" Class="mr-2" />
+                                    <MudText Typo="Typo.h5">Текущая задача</MudText>
+                                </div>
+
+                                <MudCard Outlined="true">
+                                    <MudCardHeader>
+                                        <CardHeaderContent>
+                                            <MudText Typo="Typo.h6">@activeTask.Title</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                Продукт: @activeTask.ProductName
+                                            </MudText>
+                                        </CardHeaderContent>
+                                        <CardHeaderActions>
+                                            <MudChip Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), activeTask.StatusBadgeColor))"
+                                                     Size="Size.Small" T="string">
+                                                @activeTask.StatusName
+                                            </MudChip>
+                                        </CardHeaderActions>
+                                    </MudCardHeader>
+                                    <MudCardContent>
+                                        <MudText Typo="Typo.body1">@activeTask.Description</MudText>
+
+                                        <MudDivider Class="my-3" />
+
+                                        <div class="d-flex justify-space-between flex-wrap">
+                                            <MudText Typo="Typo.body2">
+                                                <strong>Приоритет:</strong>
+                                                <MudChip Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), activeTask.PriorityBadgeColor))"
+                                                         Size="Size.Small" T="string">
+                                                    @activeTask.PriorityName
+                                                </MudChip>
+                                            </MudText>
+                                            <MudText Typo="Typo.body2">
+                                                <strong>Срок выполнения:</strong>
+                                                @(activeTask.DueDate?.ToString("dd.MM.yyyy") ?? "-")
+                                                @if (activeTask.IsOverdue)
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" />
+                                                }
+                                            </MudText>
+                                        </div>
+
+                                        <div class="d-flex justify-space-between flex-wrap mt-2">
+                                            <MudText Typo="Typo.body2"><strong>Количество:</strong> @activeTask.Quantity</MudText>
+                                            <MudText Typo="Typo.body2"><strong>Плановые часы:</strong> @activeTask.EstimatedHours ч.</MudText>
+                                        </div>
+
+                                        <MudProgressLinear Color="Color.Success" Value="taskProgress" Class="my-4"
+                                                           Size="Size.Medium" Striped="true">
+                                            <MudText Typo="Typo.caption" Class="progress-text">@taskProgress%</MudText>
+                                        </MudProgressLinear>
+                                    </MudCardContent>
+                                    <MudCardActions>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                                   OnClick="@(() => NavigationManager.NavigateTo($"/tasks/{activeTask.Id}"))">
+                                            Подробнее
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                                                   OnClick="@(() => SendTaskForReview())">
+                                            Отправить на проверку
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                                                   OnClick="@(() => ReportIssue())">
+                                            Сообщить о проблеме
+                                        </MudButton>
+                                    </MudCardActions>
+                                </MudCard>
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudPaper Class="pa-4" Outlined="true">
+                                    <MudText Typo="Typo.h6" Class="mb-3">Прогресс выполнения</MudText>
+
+                                    <MudList Clickable="false" T="string">
+                                        <MudListItem T="string">
+                                            <div class="d-flex justify-space-between">
+                                                <MudText>Общий прогресс:</MudText>
+                                                <MudText>@taskProgress%</MudText>
+                                            </div>
+                                        </MudListItem>
+                                        <MudListItem T="string">
+                                            <div class="d-flex justify-space-between">
+                                                <MudText>План. время:</MudText>
+                                                <MudText>@activeTask.EstimatedHours ч.</MudText>
+                                            </div>
+                                        </MudListItem>
+                                        <MudListItem T="string">
+                                            <div class="d-flex justify-space-between">
+                                                <MudText>Факт. время:</MudText>
+                                                <MudText>@activeTask.ActualHours ч.</MudText>
+                                            </div>
+                                        </MudListItem>
+                                    </MudList>
+
+                                    <MudDivider Class="my-3" />
+
+                                    <MudText Typo="Typo.subtitle2" Class="mb-2">Обновить прогресс</MudText>
+                                    <MudSlider T="int" @bind-Value="updatedProgress" Min="0" Max="100" Step="5" Class="mb-3">
+                                        @updatedProgress%
+                                    </MudSlider>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                               OnClick="@UpdateTaskProgress">
+                                        Сохранить прогресс
+                                    </MudButton>
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                </MudItem>
+
+                <!-- Секция с комментариями/общением по задаче -->
+                <MudItem xs="12" Class="mt-2">
+                    <MudPaper Elevation="2" Class="pa-4">
+                        <MudText Typo="Typo.h6" Class="mb-3">Комментарии к задаче</MudText>
+
+                        @if (activeTask.Comments?.Any() != true)
+                        {
+                            <MudAlert Severity="Severity.Info">Нет комментариев к задаче</MudAlert>
+                        }
+                        else
+                        {
+                            <MudList Clickable="false" T="TaskCommentModel">
+                                @foreach (var comment in activeTask.Comments.OrderByDescending(c => c.CreatedAt))
+                                {
+                                    <MudListItem T="TaskCommentModel">
+                                        <div class="d-flex">
+                                            <MudAvatar Color="Color.Secondary" Size="Size.Small" Class="mr-2 mt-1">
+                                                @(comment.UserName?.Length > 0 ? comment.UserName.Substring(0, 1) : "?")
+                                            </MudAvatar>
+                                            <div>
+                                                <div class="d-flex align-center">
+                                                    <MudText Typo="Typo.body1"><strong>@comment.UserName</strong></MudText>
+                                                    <MudText Typo="Typo.caption" Class="ml-2">@comment.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                                                </div>
+                                                <MudText Typo="Typo.body2">@comment.Comment</MudText>
+                                            </div>
+                                        </div>
+                                    </MudListItem>
+                                    <MudDivider />
+                                }
+                            </MudList>
+                        }
+
+                        <div class="d-flex mt-4">
+                            <MudTextField @bind-Value="newComment" Label="Новый комментарий" Variant="Variant.Outlined"
+                                          Class="flex-grow-1 mr-2" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@AddComment"
+                                       DisableElevation="true">
+                                Отправить
+                            </MudButton>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-4">
+                У вас нет активных задач. Обратитесь к руководителю цеха.
+            </MudAlert>
+        }
+
+        <MudDivider Class="my-6" />
+
+        <MudText Typo="Typo.h5" Class="mb-4">История задач</MudText>
+        @if (completedTasks.Any())
+        {
+            <MudTable Items="@completedTasks" Hover="true" Breakpoint="Breakpoint.Sm" T="TaskModel">
+                <HeaderContent>
+                    <MudTh>Название</MudTh>
+                    <MudTh>Продукт</MudTh>
+                    <MudTh>Завершено</MudTh>
+                    <MudTh>Действия</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Название">@context.Title</MudTd>
+                    <MudTd DataLabel="Продукт">@context.ProductName</MudTd>
+                    <MudTd DataLabel="Завершено">@context.CompletedDate?.ToString("dd.MM.yyyy")</MudTd>
+                    <MudTd>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                   OnClick="@(() => NavigationManager.NavigateTo($"/tasks/{context.Id}"))">
+                            Просмотр
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info">У вас нет завершенных задач</MudAlert>
+        }
+    </MudContainer>
+}
+
+<style>
+    .worker-header {
+        background-image: linear-gradient(to right, var(--mud-palette-primary-darken), var(--mud-palette-primary));
+        color: white;
+    }
+
+    .progress-text {
+        position: absolute;
+        width: 100%;
+        text-align: center;
+        color: white;
+    }
+</style>
+
+@code {
+    private UserModel currentUser;
+    private TaskModel activeTask;
+    private List<TaskModel> completedTasks = new();
+    private bool isLoading = true;
+    private bool hasActiveTask = false;
+    private int taskProgress = 0;
+    private int updatedProgress = 0;
+    private string newComment = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserData();
+    }
+
+    private async Task LoadUserData()
+    {
+        isLoading = true;
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            // Получаем данные о текущем пользователе
+            var userName = user.Identity?.Name;
+            if (!string.IsNullOrEmpty(userName))
+            {
+                var users = await UserService.GetUsersByFilterAsync($"userName eq '{userName}'");
+                currentUser = users.FirstOrDefault()?.ToModel();
+
+                if (currentUser != null && currentUser.DepartmentId.HasValue)
+                {
+                    // Загружаем активные задачи пользователя
+                    // (ИД пользователя - обычный Guid, не Guid?)
+                    var tasksDto = await TaskService.GetTasksByAssigneeAsync(currentUser.Id);
+                    var tasks = tasksDto.Select(t => t.ToModel()).ToList();
+
+                    // Ищем активную задачу (не завершенную)
+                    activeTask = tasks.FirstOrDefault(t => t.StatusId < 5);
+                    hasActiveTask = activeTask != null;
+
+                    if (hasActiveTask)
+                    {
+                        taskProgress = CalculateTaskProgress(activeTask);
+                        updatedProgress = taskProgress;
+                    }
+
+                    // Загружаем завершенные задачи
+                    completedTasks = tasks.Where(t => t.StatusId == 5).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private int CalculateTaskProgress(TaskModel task)
+    {
+        // Логика расчета прогресса задачи
+        // Можно использовать данные из задачи или добавить специальное поле в модели
+        if (task.StatusId == 5) return 100; // Если задача завершена
+        if (task.StatusId == 1) return 0;   // Если задача только создана
+
+        // Пример расчета на основе соотношения фактических и плановых часов
+        if (task.ActualHours.HasValue && task.EstimatedHours.HasValue && task.EstimatedHours.Value > 0)
+        {
+            var progress = (int)((task.ActualHours.Value / task.EstimatedHours.Value) * 100);
+            return Math.Min(progress, 99); // Не больше 99%, т.к. 100% - это завершенная задача
+        }
+
+        // По умолчанию, на основе статуса
+        return task.StatusId * 20; // Примерное соответствие статуса и прогресса
+    }
+
+    private async Task UpdateTaskProgress()
+    {
+        if (activeTask == null) return;
+
+        try
+        {
+            // Здесь должна быть логика обновления прогресса задачи
+            // Например, вызов соответствующего API для обновления статуса задачи
+
+            // Временная логика (заменить на реальную):
+            taskProgress = updatedProgress;
+
+            Snackbar.Add("Прогресс задачи обновлен", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при обновлении прогресса: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SendTaskForReview()
+    {
+        try
+        {
+            // Логика отправки задачи на проверку
+            var options = new DialogOptions { CloseOnEscapeKey = true };
+            var parameters = new DialogParameters
+            {
+                { "TaskId", activeTask.Id },
+                { "Title", "Отправка на проверку" },
+                { "Message", "Вы уверены, что хотите отправить задачу на проверку?" }
+            };
+
+            var dialog = await DialogService.ShowAsync<ConfirmDialog>("Подтверждение", parameters, options);
+            var result = await dialog.Result;
+
+            if (!result.Canceled)
+            {
+                // Вызов API для изменения статуса задачи
+                Snackbar.Add("Задача отправлена на проверку", Severity.Success);
+                await LoadUserData(); // Перезагрузка данных
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ReportIssue()
+    {
+        try
+        {
+            // Открытие диалога для отчета о проблеме
+            var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+            var parameters = new DialogParameters
+            {
+                { "TaskId", activeTask.Id }
+            };
+
+            var dialog = await DialogService.ShowAsync<ReportIssueDialog>("Сообщить о проблеме", parameters, options);
+            var result = await dialog.Result;
+
+            if (!result.Canceled)
+            {
+                Snackbar.Add("Отчет о проблеме отправлен руководителю", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task AddComment()
+    {
+        if (string.IsNullOrWhiteSpace(newComment) || activeTask == null)
+            return;
+
+        try
+        {
+            // Логика добавления комментария к задаче
+            if (activeTask.Comments == null)
+                activeTask.Comments = new List<TaskCommentModel>();
+
+            activeTask.Comments.Add(new TaskCommentModel
+            {
+                Id = Guid.NewGuid(),
+                TaskId = activeTask.Id,
+                UserId = currentUser.Id, // Используем как обычный Guid
+                UserName = currentUser.FullName,
+                Comment = newComment,
+                CreatedAt = DateTime.Now
+            });
+
+            newComment = string.Empty;
+            Snackbar.Add("Комментарий добавлен", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при добавлении комментария: {ex.Message}", Severity.Error);
+        }
+    }
+}

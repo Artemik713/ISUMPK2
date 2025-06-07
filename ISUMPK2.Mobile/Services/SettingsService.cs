@@ -18,6 +18,8 @@ namespace ISUMPK2.Mobile.Services
         Task ClearUserName();
         Task<bool> GetOfflineMode();
         Task SetOfflineMode(bool enabled);
+        T GetSetting<T>(string key, T defaultValue);
+        void SetSetting<T>(string key, T value);
     }
 
     public class SettingsService : ISettingsService
@@ -77,7 +79,6 @@ namespace ISUMPK2.Mobile.Services
 
             return null;
         }
-
         public Task SetUserId(Guid userId)
         {
             _preferences.Set(UserIdKey, userId.ToString());
@@ -113,13 +114,79 @@ namespace ISUMPK2.Mobile.Services
             var offlineMode = _preferences.Get(OfflineModeKey, false);
             return Task.FromResult(offlineMode);
         }
-
-
-
         public Task SetOfflineMode(bool enabled)
         {
             _preferences.Set(OfflineModeKey, enabled);
             return Task.CompletedTask;
+        }
+        public T GetSetting<T>(string key, T defaultValue)
+        {
+            if (Preferences.ContainsKey(key))
+            {
+                // Определяем тип и получаем соответствующее значение
+                if (typeof(T) == typeof(bool))
+                {
+                    return (T)(object)Preferences.Get(key, (bool)(object)defaultValue);
+                }
+                else if (typeof(T) == typeof(string))
+                {
+                    return (T)(object)Preferences.Get(key, (string)(object)defaultValue);
+                }
+                else if (typeof(T) == typeof(int))
+                {
+                    return (T)(object)Preferences.Get(key, (int)(object)defaultValue);
+                }
+                else if (typeof(T) == typeof(double))
+                {
+                    return (T)(object)Preferences.Get(key, (double)(object)defaultValue);
+                }
+                else if (typeof(T) == typeof(float))
+                {
+                    return (T)(object)Preferences.Get(key, (float)(object)defaultValue);
+                }
+                else if (typeof(T) == typeof(long))
+                {
+                    return (T)(object)Preferences.Get(key, (long)(object)defaultValue);
+                }
+                else if (typeof(T) == typeof(DateTime))
+                {
+                    var ticks = Preferences.Get(key, ((DateTime)(object)defaultValue).Ticks);
+                    return (T)(object)new DateTime(ticks);
+                }
+            }
+
+            return defaultValue;
+        }
+        public void SetSetting<T>(string key, T value)
+        {
+            if (typeof(T) == typeof(bool))
+            {
+                Preferences.Set(key, (bool)(object)value);
+            }
+            else if (typeof(T) == typeof(string))
+            {
+                Preferences.Set(key, (string)(object)value);
+            }
+            else if (typeof(T) == typeof(int))
+            {
+                Preferences.Set(key, (int)(object)value);
+            }
+            else if (typeof(T) == typeof(double))
+            {
+                Preferences.Set(key, (double)(object)value);
+            }
+            else if (typeof(T) == typeof(float))
+            {
+                Preferences.Set(key, (float)(object)value);
+            }
+            else if (typeof(T) == typeof(long))
+            {
+                Preferences.Set(key, (long)(object)value);
+            }
+            else if (typeof(T) == typeof(DateTime))
+            {
+                Preferences.Set(key, ((DateTime)(object)value).Ticks);
+            }
         }
     }
 }

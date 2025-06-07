@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="bin\Debug\net9.0\ISUMPK2.Application.deps.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.3.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="9.0.4" />
@@ -19,6 +23,17 @@
 
   <ItemGroup>
     <Folder Include="Новая папка\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="bin\Debug\net9.0\ISUMPK2.Application.dll" />
+    <None Include="bin\Debug\net9.0\ISUMPK2.Application.pdb" />
+    <None Include="bin\Debug\net9.0\ISUMPK2.Client.dll" />
+    <None Include="bin\Debug\net9.0\ISUMPK2.Client.pdb" />
+    <None Include="bin\Debug\net9.0\ISUMPK2.Domain.dll" />
+    <None Include="bin\Debug\net9.0\ISUMPK2.Domain.pdb" />
+    <None Include="bin\Debug\net9.0\ISUMPK2.Infrastructure.dll" />
+    <None Include="bin\Debug\net9.0\ISUMPK2.Infrastructure.pdb" />
   </ItemGroup>
 
 </Project>

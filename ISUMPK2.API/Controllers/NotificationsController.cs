@@ -47,6 +47,21 @@ namespace ISUMPK2.API.Controllers
             }
         }
 
+        [HttpGet("read")]
+        public async Task<ActionResult<IEnumerable<NotificationDto>>> GetReadNotifications()
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var notifications = await _notificationService.GetReadNotificationsForUserAsync(userId);
+                return Ok(notifications);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting read notifications");
+                return StatusCode(500, "Ошибка при получении прочитанных уведомлений");
+            }
+        }
 
         [HttpGet("unread")]
         public async Task<ActionResult<IEnumerable<NotificationDto>>> GetUnreadNotifications()

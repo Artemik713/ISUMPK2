@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ISUMPK2.Application.DTOs;
+using Microsoft.Extensions.Logging;
 
 namespace ISUMPK2.Mobile.Services
 {
@@ -17,7 +18,8 @@ namespace ISUMPK2.Mobile.Services
         Task<TaskModel> GetTaskByIdAsync(Guid id);
         Task<TaskModel> UpdateTaskStatusAsync(Guid id, TaskStatusUpdateModel statusUpdate);
         Task<TaskCommentModel> AddCommentAsync(TaskCommentCreateModel comment);
-
+        Task<TaskModel> UpdateTaskAsync(TaskModel task);
+        Task DeleteTaskAsync(Guid id);
     }
 
     public class TaskService : ITaskService
@@ -26,14 +28,17 @@ namespace ISUMPK2.Mobile.Services
         private readonly IOfflineDataService _offlineDataService;
         private readonly ISettingsService _settingsService;
         private readonly IConnectivity _connectivity;
+        private readonly ILogger<TaskService> _logger;
 
         public TaskService(IApiService apiService, IOfflineDataService offlineDataService,
-                           ISettingsService settingsService, IConnectivity connectivity)
+                           ISettingsService settingsService, IConnectivity connectivity, ILogger<TaskService> logger)
         {
             _apiService = apiService;
             _offlineDataService = offlineDataService;
             _settingsService = settingsService;
             _connectivity = connectivity;
+            _logger = logger;
+
         }
 
         public async Task<List<TaskModel>> GetAllTasksAsync()
@@ -212,6 +217,55 @@ namespace ISUMPK2.Mobile.Services
                 throw;
             }
         }
+        public async Task<TaskModel> UpdateTaskAsync(TaskModel task)
+        {
+            try
+            {
+                // Преобразуем TaskModel в TaskUpdateDto для API
+                var taskUpdateDto = new TaskUpdateDto
+                {
+                    Title = task.Title,
+                    Description = task.Description,
+                    StatusId = task.StatusId,
+                    PriorityId = task.PriorityId,
+                    AssigneeId = task.AssigneeId,
+                    DueDate = task.DueDate,
+                    EstimatedHours = task.EstimatedHours,
+                    ProductId = task.ProductId,
+                    Quantity = task.Quantity
+                    // Добавьте другие необходимые поля
+                };
 
+                // Отправляем на сервер
+                var response = await _apiService.PutAsync<TaskDto>($"api/tasks/{task.Id}", taskUpdateDto);
+
+                // Обновляем локальные данные
+                await _offlineDataService.SaveTaskAsync(task);
+
+                return task;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Ошибка при обновлении задачи {task.Id}");
+                throw;
+            }
+        }
+
+        public async Task DeleteTaskAsync(Guid id)
+        {
+            try
+            {
+                // Отправляем запрос на удаление на сервер
+                await _apiService.DeleteAsync($"api/tasks/{id}");
+
+                // Удаляем локальные данные, если нужно
+                // Например: await _offlineDataService.DeleteTaskAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Ошибка при удалении задачи {id}");
+                throw;
+            }
+        }
     }
 }

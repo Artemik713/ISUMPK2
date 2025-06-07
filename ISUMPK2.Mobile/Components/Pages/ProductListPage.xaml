@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ISUMPK2.Mobile.ViewModels"
+             xmlns:models="clr-namespace:ISUMPK2.Mobile.Models"
+             x:Class="ISUMPK2.Mobile.Components.Pages.ProductListPage"
+             x:DataType="viewmodels:ProductListViewModel"
+             Title="{Binding Title}">
+
+	<Grid RowDefinitions="Auto,*" Padding="10">
+		<SearchBar Grid.Row="0"
+                  Placeholder="Поиск продукции"
+                  Text="{Binding SearchQuery}" />
+
+		<RefreshView Grid.Row="1"
+                    Command="{Binding RefreshCommand}"
+                    IsRefreshing="{Binding IsLoading}">
+			<CollectionView ItemsSource="{Binding Products}"
+                           EmptyView="Нет доступной продукции">
+				<CollectionView.ItemsLayout>
+					<GridItemsLayout Orientation="Vertical"
+                                    Span="2"
+                                    VerticalItemSpacing="10"
+                                    HorizontalItemSpacing="10" />
+				</CollectionView.ItemsLayout>
+				<CollectionView.ItemTemplate>
+					<DataTemplate x:DataType="models:ProductModel">
+						<Frame Padding="10" HasShadow="True" CornerRadius="5">
+							<Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="5">
+								<Label Grid.Row="0"
+                                      Text="{Binding Name}"
+                                      FontAttributes="Bold"
+                                      LineBreakMode="TailTruncation" />
+
+								<Label Grid.Row="1"
+                                      Text="{Binding Code, StringFormat='Код: {0}'}"
+                                      FontSize="12"
+                                      TextColor="Gray" />
+
+								<Label Grid.Row="2"
+                                      Text="{Binding Description}"
+                                      FontSize="14"
+                                      LineBreakMode="TailTruncation"
+                                      MaxLines="2" />
+
+								<Grid Grid.Row="3" ColumnDefinitions="*,*">
+									<Label Grid.Column="0"
+                                          Text="{Binding CurrentStock, StringFormat='Запас: {0}'}"
+                                          FontSize="14" />
+
+									<Label Grid.Column="1"
+                                          Text="{Binding Price, StringFormat='Цена: {0:C2}'}"
+                                          HorizontalOptions="End"
+                                          FontAttributes="Bold"
+                                          FontSize="14" />
+								</Grid>
+
+								<Grid.GestureRecognizers>
+									<TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:ProductListViewModel}}, Path=ViewProductCommand}"
+                                        CommandParameter="{Binding Id}" />
+								</Grid.GestureRecognizers>
+							</Grid>
+						</Frame>
+					</DataTemplate>
+				</CollectionView.ItemTemplate>
+			</CollectionView>
+		</RefreshView>
+	</Grid>
+</ContentPage>

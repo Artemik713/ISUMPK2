@@ -1,4 +1,4 @@
-﻿namespace ISUMPK.Mobile;
+﻿namespace ISUMPK2.Mobile;
 
 public partial class MainPage : ContentPage
 {
