@@ -1,0 +1,102 @@
+﻿@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Web.Extensions
+@using MudBlazor
+@inject MudBlazor.ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
+            Профиль сотрудника
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudContainer Style="max-height: 60vh; overflow-y: auto">
+            @if (UserData != null)
+            {
+                <div class="d-flex align-center mb-4">
+                    <MudAvatar Size="Size.Large" Color="Color.Primary" Class="mr-4">
+                        @(UserData.FirstName?.Length > 0 ? UserData.FirstName[0].ToString() : "?")
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.h6">@UserData.FirstName @UserData.LastName</MudText>
+                        <MudText Typo="Typo.body2">@(IsHeadOfDepartment ? "Руководитель цеха" : GetUserPosition())</MudText>
+                    </div>
+                </div>
+                
+                <MudDivider Class="mb-4" />
+                
+                <MudGrid>
+                    @if (!string.IsNullOrEmpty(UserData.Email))
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2">Email:</MudText>
+                            <MudText>@UserData.Email</MudText>
+                        </MudItem>
+                    }
+                    
+                    @if (!string.IsNullOrEmpty(UserData.PhoneNumber))
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2">Телефон:</MudText>
+                            <MudText>@UserData.PhoneNumber</MudText>
+                        </MudItem>
+                    }
+                    
+                    @if (!string.IsNullOrEmpty(UserData.DepartmentName))
+                    {
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle2">Подразделение:</MudText>
+                            <MudText>@UserData.DepartmentName</MudText>
+                        </MudItem>
+                    }
+                    
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.subtitle2">Должность:</MudText>
+                        <MudText>@GetUserPosition()</MudText>
+                    </MudItem>
+                </MudGrid>
+            }
+            else
+            {
+                <MudText>Информация о пользователе недоступна</MudText>
+            }
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">Закрыть</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    
+    [Parameter] public UserDto UserData { get; set; }
+    
+    [Parameter] public bool IsHeadOfDepartment { get; set; }
+    
+    private string GetUserPosition()
+    {
+        if (UserData.Roles != null && UserData.Roles.Any())
+        {
+            if (UserData.Roles.Contains("MetalShopManager"))
+                return "Начальник цеха металлообработки";
+            
+            if (UserData.Roles.Contains("PaintShopManager"))
+                return "Начальник цеха металлопокраски";
+            
+            if (UserData.Roles.Contains("Administrator"))
+                return "Администратор";
+            
+            if (UserData.Roles.Contains("Worker"))
+                return "Рабочий цеха";
+            
+            if (UserData.Roles.Contains("Storekeeper"))
+                return "Кладовщик";
+        }
+        
+        return "Сотрудник";
+    }
+    
+    private void Close() => MudDialog.Close();
+}

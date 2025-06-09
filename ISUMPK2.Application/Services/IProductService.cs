@@ -10,7 +10,7 @@ namespace ISUMPK2.Application.Services
     {
         Task<ProductTypeDto> GetProductTypeByIdAsync(Guid id);
         Task<IEnumerable<ProductTypeDto>> GetAllProductTypesAsync();
-        Task<ProductTypeDto> CreateProductTypeAsync(ProductTypeCreateDto productTypeDto);
+        Task<ProductTypeDto> CreateProductTypeAsync(ProductTypeCreateDto productType);
         Task<ProductTypeDto> UpdateProductTypeAsync(Guid id, ProductTypeCreateDto productTypeDto);
         Task DeleteProductTypeAsync(Guid id);
 

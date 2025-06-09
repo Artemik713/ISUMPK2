@@ -100,8 +100,8 @@
                     </div>
                 </ActivatorContent>
                 <ChildContent>
-                    <MudMenuItem Icon="@Icons.Material.Filled.Person">Профиль</MudMenuItem>
-                    <MudMenuItem Icon="@Icons.Material.Filled.Settings">Настройки</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Person" OnClick="@(() => NavigationManager.NavigateTo("/profile"))">Профиль</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Settings" OnClick="@(() => NavigationManager.NavigateTo("/account/settings"))">Настройки</MudMenuItem>
                     <MudDivider />
                     <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="LogoutClick">Выход</MudMenuItem>
                 </ChildContent>

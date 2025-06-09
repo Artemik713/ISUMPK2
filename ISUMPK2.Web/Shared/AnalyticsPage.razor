@@ -1,0 +1,562 @@
+﻿@page "/analytics"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using MudBlazor
+@using MudBlazor.Charts
+@using System.Globalization
+@inject IProductService ProductService
+@inject ITaskService TaskService
+@inject IMaterialService MaterialService
+@inject IDepartmentService DepartmentService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Аналитика - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <!-- Заголовок и фильтры -->
+    <MudPaper Elevation="0" Class="pa-4 mb-4">
+        <div class="d-flex justify-space-between align-center flex-wrap">
+            <div>
+                <MudText Typo="Typo.h4">Аналитика производства</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    Просмотр ключевых показателей и динамики производства
+                </MudText>
+            </div>
+            <div class="d-flex">
+                <MudDateRangePicker @bind-DateRange="dateRange" Label="Период" AutoClose="true" Class="mr-2">
+                    <PickerActions>
+                        <MudButton Class="mr-auto align-self-start" OnClick="@(() => dateRange = new DateRange(DateTime.Now.AddMonths(-1), DateTime.Now))">Предыдущий месяц</MudButton>
+                        <MudButton OnClick="@(() => dateRange = new DateRange(DateTime.Now.AddMonths(-3), DateTime.Now))">3 месяца</MudButton>
+                        <MudButton OnClick="@(() => dateRange = new DateRange(DateTime.Now.AddYears(-1), DateTime.Now))">Год</MudButton>
+                        <MudButton Color="Color.Primary" OnClick="LoadData">Применить</MudButton>
+                    </PickerActions>
+                </MudDateRangePicker>
+                <MudSelect T="Guid?" @bind-Value="selectedDepartmentId" Label="Цех" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem Value="@((Guid?)null)">Все цеха</MudSelectItem>
+                    @foreach (var department in departments)
+                    {
+                        <MudSelectItem Value="@department.Id">@department.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+        </div>
+    </MudPaper>
+
+    @if (isLoading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-7" />
+    }
+    else
+    {
+        <!-- Ключевые показатели -->
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-4 mud-height-full">
+                    <MudText Typo="Typo.subtitle1">Выпущено продукции</MudText>
+                    <div class="d-flex align-center mt-4">
+                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Color="Color.Primary" Size="Size.Large" Class="mr-2" />
+                        <div>
+                            <MudText Typo="Typo.h4">@totalProductionCount</MudText>
+                            <MudText Typo="Typo.caption">@GetComparisonText(totalProductionCount, previousProductionCount)</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-4 mud-height-full">
+                    <MudText Typo="Typo.subtitle1">Выполнено задач</MudText>
+                    <div class="d-flex align-center mt-4">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" Class="mr-2" />
+                        <div>
+                            <MudText Typo="Typo.h4">@completedTasksCount</MudText>
+                            <MudText Typo="Typo.caption">@GetComparisonText(completedTasksCount, previousCompletedTasksCount)</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-4 mud-height-full">
+                    <MudText Typo="Typo.subtitle1">Использовано материалов</MudText>
+                    <div class="d-flex align-center mt-4">
+                        <MudIcon Icon="@Icons.Material.Filled.Category" Color="Color.Info" Size="Size.Large" Class="mr-2" />
+                        <div>
+                            <MudText Typo="Typo.h4">@usedMaterialsCount</MudText>
+                            <MudText Typo="Typo.caption">@GetComparisonText(usedMaterialsCount, previousUsedMaterialsCount)</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-4 mud-height-full">
+                    <MudText Typo="Typo.subtitle1">Эффективность, %</MudText>
+                    <div class="d-flex align-center mt-4">
+                        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="@(efficiency >= previousEfficiency ? Color.Success : Color.Error)" Size="Size.Large" Class="mr-2" />
+                        <div>
+                            <MudText Typo="Typo.h4">@efficiency.ToString("F1")</MudText>
+                            <MudText Typo="Typo.caption">@GetComparisonText(efficiency, previousEfficiency, true)</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Графики и таблицы -->
+        <div class="mt-6">
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                <MudTabPanel Text="Производство по дням">
+                    <MudPaper Elevation="0">
+                        <MudChart ChartType="ChartType.Line" ChartSeries="@dailyProductionSeries" XAxisLabels="@dailyProductionLabels" Width="100%" Height="350px">
+                            <CustomGraphics>
+                                @if (dailyProductionSeries.Sum(s => s.Data.Sum()) == 0)
+                                {
+                                    <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                }
+                            </CustomGraphics>
+                        </MudChart>
+                    </MudPaper>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Производство по месяцам">
+                    <MudPaper Elevation="0">
+                        <MudChart ChartType="ChartType.Bar" ChartSeries="@monthlyProductionSeries" XAxisLabels="@monthlyProductionLabels" Width="100%" Height="350px">
+                            <CustomGraphics>
+                                @if (monthlyProductionSeries.Sum(s => s.Data.Sum()) == 0)
+                                {
+                                    <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                }
+                            </CustomGraphics>
+                        </MudChart>
+                    </MudPaper>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Анализ по типам продукции">
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4">
+                                <MudText Typo="Typo.h6" Class="mb-4">Распределение по типам продукции</MudText>
+                                <MudChart ChartType="ChartType.Pie" ChartSeries="@productTypeSeries" Width="100%" Height="300px">
+                                    <CustomGraphics>
+                                        @if (productTypeSeries.Sum(s => s.Data.Sum()) == 0)
+                                        {
+                                            <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                        }
+                                    </CustomGraphics>
+                                </MudChart>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4">
+                                <MudText Typo="Typo.h6" Class="mb-4">Топ продуктов по объёму производства</MudText>
+                                <MudSimpleTable Elevation="0" Hover="true" Dense="true">
+                                    <thead>
+                                        <tr>
+                                            <th>Продукт</th>
+                                            <th>Код</th>
+                                            <th>Количество</th>
+                                            <th>Доля, %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in topProducts)
+                                        {
+                                            <tr>
+                                                <td>@product.Name</td>
+                                                <td>@product.Code</td>
+                                                <td>@product.Quantity</td>
+                                                <td>@product.Percentage.ToString("F1")%</td>
+                                            </tr>
+                                        }
+                                        @if (topProducts.Count == 0)
+                                        {
+                                            <tr>
+                                                <td colspan="4" class="text-center">
+                                                    <MudText Color="Color.Secondary">Нет данных за указанный период</MudText>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Показатели задач">
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4 h-100">
+                                <MudText Typo="Typo.h6" Class="mb-4">Распределение задач по статусам</MudText>
+                                <MudChart ChartType="ChartType.Donut" ChartSeries="@taskStatusSeries" Width="100%" Height="300px">
+                                    <CustomGraphics>
+                                        @if (taskStatusSeries.Sum(s => s.Data.Sum()) == 0)
+                                        {
+                                            <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                        }
+                                    </CustomGraphics>
+                                </MudChart>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4 h-100">
+                                <MudText Typo="Typo.h6" Class="mb-4">Выполнение задач по отделам</MudText>
+                                <MudChart ChartType="ChartType.Bar" ChartSeries="@departmentTasksSeries" XAxisLabels="@departmentTasksLabels" Width="100%" Height="300px">
+                                    <CustomGraphics>
+                                        @if (departmentTasksSeries.Sum(s => s.Data.Sum()) == 0)
+                                        {
+                                            <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                        }
+                                    </CustomGraphics>
+                                </MudChart>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Прогнозы и тенденции">
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4 h-100">
+                                <MudText Typo="Typo.h6" Class="mb-4">Прогноз производства на ближайшие 3 месяца</MudText>
+                                <MudChart ChartType="ChartType.Line" ChartSeries="@forecastSeries" XAxisLabels="@forecastLabels" Width="100%" Height="300px" />
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4 h-100">
+                                <MudText Typo="Typo.h6" Class="mb-4">Расход материалов по месяцам</MudText>
+                                <MudChart ChartType="ChartType.Bar" ChartSeries="@materialUsageSeries" XAxisLabels="@materialUsageLabels" Width="100%" Height="300px" />
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+                
+                <MudTabPanel Text="Выгрузка отчетов">
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudCard>
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">Отчет о производительности по отделам</MudText>
+                                    </CardHeaderContent>
+                                    <CardHeaderActions>
+                                        <MudTooltip Text="Экспорт в Excel">
+                                            <MudIconButton Icon="@Icons.Material.Filled.FileDownload" Color="Color.Success" />
+                                        </MudTooltip>
+                                        <MudTooltip Text="Экспорт в PDF">
+                                            <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf" Color="Color.Error" />
+                                        </MudTooltip>
+                                    </CardHeaderActions>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudText>Подробный отчет о производительности по всем отделам за выбранный период.</MudText>
+                                </MudCardContent>
+                                <MudCardActions>
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary">Сформировать отчет</MudButton>
+                                </MudCardActions>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <MudItem xs="12" md="6">
+                            <MudCard>
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">Отчет о расходе материалов</MudText>
+                                    </CardHeaderContent>
+                                    <CardHeaderActions>
+                                        <MudTooltip Text="Экспорт в Excel">
+                                            <MudIconButton Icon="@Icons.Material.Filled.FileDownload" Color="Color.Success" />
+                                        </MudTooltip>
+                                        <MudTooltip Text="Экспорт в PDF">
+                                            <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf" Color="Color.Error" />
+                                        </MudTooltip>
+                                    </CardHeaderActions>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudText>Детальный отчет о расходе материалов по всем типам продукции.</MudText>
+                                </MudCardContent>
+                                <MudCardActions>
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary">Сформировать отчет</MudButton>
+                                </MudCardActions>
+                            </MudCard>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+            </MudTabs>
+        </div>
+    }
+</MudContainer>
+
+@code {
+    private bool isLoading = true;
+    private DateRange dateRange = new DateRange(DateTime.Now.AddMonths(-1), DateTime.Now);
+    private Guid? selectedDepartmentId = null;
+    private List<DepartmentModel> departments = new();
+
+    // Данные для карточек
+    private int totalProductionCount = 0;
+    private int previousProductionCount = 0;
+    private int completedTasksCount = 0;
+    private int previousCompletedTasksCount = 0;
+    private int usedMaterialsCount = 0;
+    private int previousUsedMaterialsCount = 0;
+    private double efficiency = 0;
+    private double previousEfficiency = 0;
+
+    // Данные для графиков
+    private List<ChartSeries> dailyProductionSeries = new();
+    private string[] dailyProductionLabels = Array.Empty<string>();
+
+    private List<ChartSeries> monthlyProductionSeries = new();
+    private string[] monthlyProductionLabels = Array.Empty<string>();
+
+    // Изменено: теперь используются ChartSeries для круговых диаграмм
+    private List<ChartSeries> productTypeSeries = new();
+    private List<ProductStatsModel> topProducts = new();
+
+    private List<ChartSeries> taskStatusSeries = new();
+    
+    private List<ChartSeries> departmentTasksSeries = new();
+    private string[] departmentTasksLabels = Array.Empty<string>();
+
+    private List<ChartSeries> forecastSeries = new();
+    private string[] forecastLabels = Array.Empty<string>();
+
+    private List<ChartSeries> materialUsageSeries = new();
+    private string[] materialUsageLabels = Array.Empty<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDepartments();
+        await LoadData();
+    }
+
+    private async Task LoadDepartments()
+    {
+        try
+        {
+            var deptDtos = await DepartmentService.GetAllDepartmentsAsync();
+            departments = deptDtos.Select(d => new DepartmentModel
+            {
+                Id = d.Id,
+                Name = d.Name
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке списка отделов: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        try
+        {
+            // Загрузка реальных данных здесь...
+            // В данном примере используются тестовые данные
+
+            // Данные для карточек
+            var random = new Random();
+            totalProductionCount = random.Next(1000, 5000);
+            previousProductionCount = random.Next(800, 4000);
+            completedTasksCount = random.Next(100, 500);
+            previousCompletedTasksCount = random.Next(80, 400);
+            usedMaterialsCount = random.Next(2000, 8000);
+            previousUsedMaterialsCount = random.Next(1800, 7000);
+            efficiency = random.Next(75, 95) + random.NextDouble();
+            previousEfficiency = random.Next(70, 90) + random.NextDouble();
+
+            await Task.Delay(500); // Симуляция загрузки
+
+            // Подготовка данных графиков
+            await PrepareChartData();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task PrepareChartData()
+    {
+        var random = new Random();
+
+        // Подготовка данных для графика производства по дням
+        var days = 14; // Две недели
+        dailyProductionLabels = Enumerable.Range(0, days)
+            .Select(i => DateTime.Now.AddDays(-days + i + 1).ToString("dd.MM"))
+            .ToArray();
+
+        dailyProductionSeries = new List<ChartSeries>
+        {
+            new ChartSeries
+            {
+                Name = "Металлообработка",
+                Data = Enumerable.Range(0, days).Select(_ => (double)random.Next(10, 100)).ToArray()
+            },
+            new ChartSeries
+            {
+                Name = "Покраска",
+                Data = Enumerable.Range(0, days).Select(_ => (double)random.Next(10, 80)).ToArray()
+            },
+            new ChartSeries
+            {
+                Name = "Сборка",
+                Data = Enumerable.Range(0, days).Select(_ => (double)random.Next(5, 50)).ToArray()
+            }
+        };
+
+        // Данные для графика производства по месяцам
+        var months = 6;
+        monthlyProductionLabels = Enumerable.Range(0, months)
+            .Select(i => DateTime.Now.AddMonths(-months + i + 1).ToString("MM.yyyy"))
+            .ToArray();
+
+        monthlyProductionSeries = new List<ChartSeries>
+        {
+            new ChartSeries
+            {
+                Name = "Металлообработка",
+                Data = Enumerable.Range(0, months).Select(_ => (double)random.Next(100, 800)).ToArray()
+            },
+            new ChartSeries
+            {
+                Name = "Покраска",
+                Data = Enumerable.Range(0, months).Select(_ => (double)random.Next(80, 600)).ToArray()
+            },
+            new ChartSeries
+            {
+                Name = "Сборка",
+                Data = Enumerable.Range(0, months).Select(_ => (double)random.Next(50, 400)).ToArray()
+            }
+        };
+
+        // Данные для диаграммы типов продукции (исправлено для Pie chart)
+        productTypeSeries = new List<ChartSeries>
+        {
+            new ChartSeries { Name = "Металлические детали", Data = new double[] { 42.3 } },
+            new ChartSeries { Name = "Окрашенные изделия", Data = new double[] { 28.7 } },
+            new ChartSeries { Name = "Сборные конструкции", Data = new double[] { 19.5 } },
+            new ChartSeries { Name = "Другое", Data = new double[] { 9.5 } }
+        };
+
+        // Топ продуктов
+        topProducts = new List<ProductStatsModel>
+        {
+            new ProductStatsModel { Name = "Корпус станка СТ-230", Code = "КС-230", Quantity = 420, Percentage = 15.8 },
+            new ProductStatsModel { Name = "Деталь крепежная Д-105", Code = "ДК-105", Quantity = 380, Percentage = 14.3 },
+            new ProductStatsModel { Name = "Каркас защитный КЗ-44", Code = "КЗ-44", Quantity = 310, Percentage = 11.7 },
+            new ProductStatsModel { Name = "Панель лицевая ПЛ-201", Code = "ПЛ-201", Quantity = 285, Percentage = 10.7 },
+            new ProductStatsModel { Name = "Кожух вентиляционный КВ-17", Code = "КВ-17", Quantity = 240, Percentage = 9.0 }
+        };
+
+        // Данные для диаграммы статусов задач (исправлено для Donut chart)
+        taskStatusSeries = new List<ChartSeries>
+        {
+            new ChartSeries { Name = "Выполнено", Data = new double[] { 35.0 } },
+            new ChartSeries { Name = "В работе", Data = new double[] { 25.0 } },
+            new ChartSeries { Name = "На проверке", Data = new double[] { 15.0 } },
+            new ChartSeries { Name = "Требует уточнения", Data = new double[] { 20.0 } },
+            new ChartSeries { Name = "Отклонено", Data = new double[] { 5.0 } }
+        };
+
+        // Данные для графика задач по отделам
+        departmentTasksLabels = new string[] { "Металлообработка", "Покраска", "Сборка", "Контроль качества", "Логистика" };
+        departmentTasksSeries = new List<ChartSeries>
+        {
+            new ChartSeries
+            {
+                Name = "Выполнено",
+                Data = new double[] { random.Next(50, 100), random.Next(40, 90), random.Next(30, 80), random.Next(20, 60), random.Next(10, 50) }
+            },
+            new ChartSeries
+            {
+                Name = "В работе",
+                Data = new double[] { random.Next(10, 30), random.Next(10, 25), random.Next(5, 20), random.Next(5, 15), random.Next(5, 10) }
+            },
+            new ChartSeries
+            {
+                Name = "Просрочено",
+                Data = new double[] { random.Next(0, 10), random.Next(0, 8), random.Next(0, 5), random.Next(0, 3), random.Next(0, 2) }
+            }
+        };
+
+        // Данные для прогноза производства на следующие 3 месяца
+        forecastLabels = new string[] {
+            DateTime.Now.AddMonths(0).ToString("MM.yyyy"),
+            DateTime.Now.AddMonths(1).ToString("MM.yyyy"),
+            DateTime.Now.AddMonths(2).ToString("MM.yyyy"),
+            DateTime.Now.AddMonths(3).ToString("MM.yyyy")
+        };
+
+        forecastSeries = new List<ChartSeries>
+        {
+            new ChartSeries
+            {
+                Name = "Фактический объём",
+                Data = new double[] { totalProductionCount, 0, 0, 0 }
+            },
+            new ChartSeries
+            {
+                Name = "Прогноз",
+                Data = new double[] {
+                    totalProductionCount,
+                    totalProductionCount * (1 + (random.NextDouble() * 0.1)),
+                    totalProductionCount * (1 + (random.NextDouble() * 0.15)),
+                    totalProductionCount * (1 + (random.NextDouble() * 0.2))
+                }
+            }
+        };
+
+        // Данные для расхода материалов
+        materialUsageLabels = monthlyProductionLabels;
+        materialUsageSeries = new List<ChartSeries>
+        {
+            new ChartSeries
+            {
+                Name = "Металл",
+                Data = Enumerable.Range(0, months).Select(_ => (double)random.Next(1000, 2500)).ToArray()
+            },
+            new ChartSeries
+            {
+                Name = "Краска",
+                Data = Enumerable.Range(0, months).Select(_ => (double)random.Next(300, 800)).ToArray()
+            },
+            new ChartSeries
+            {
+                Name = "Комплектующие",
+                Data = Enumerable.Range(0, months).Select(_ => (double)random.Next(500, 1200)).ToArray()
+            }
+        };
+
+        await Task.Delay(1); // Для async метода
+    }
+
+    private string GetComparisonText(double current, double previous, bool isPercent = false)
+    {
+        if (previous == 0)
+            return "Нет данных для сравнения";
+
+        var diff = current - previous;
+        var percentDiff = (diff / previous) * 100;
+        var icon = diff >= 0 ? "↑" : "↓";
+        var color = diff >= 0 ? "text-success" : "text-danger";
+
+        return $"<span class=\"{color}\">{icon} {Math.Abs(percentDiff):F1}%</span> {(isPercent ? "п.п." : "к предыдущему периоду")}";
+    }
+
+    public class ProductStatsModel
+    {
+        public string Name { get; set; }
+        public string Code { get; set; }
+        public int Quantity { get; set; }
+        public double Percentage { get; set; }
+    }
+}

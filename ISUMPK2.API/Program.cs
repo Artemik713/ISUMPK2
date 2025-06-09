@@ -22,6 +22,8 @@ var builder = WebApplication.CreateBuilder(args);
 // 1. Сервисы контроллеров
 builder.Services.AddControllers();
 
+
+builder.WebHost.UseStaticWebAssets();
 // 2. Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -67,10 +69,13 @@ builder.Services.AddSwaggerGen(c =>
 // 3. CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        policy => policy.AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader());
+    options.AddPolicy("AllowBlazorClient", builder =>
+    {
+        builder.WithOrigins("https://localhost:7062") // URL вашего Blazor приложения
+               .AllowAnyMethod()
+               .AllowAnyHeader()
+               .AllowCredentials();
+    });
 });
 
 // 4. Конфигурация базы данных
@@ -150,7 +155,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
-app.UseCors("AllowAll");
+app.UseCors("AllowBlazorClient");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

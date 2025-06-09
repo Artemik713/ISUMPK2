@@ -269,8 +269,66 @@ namespace ISUMPK2.Application.Services.Implementations
             if (task == null)
                 throw new ApplicationException($"Task with ID {id} not found.");
 
-            await _taskRepository.DeleteAsync(id);
-            await _taskRepository.SaveChangesAsync();
+            // Начинаем транзакцию для обеспечения целостности данных
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                // 1. Сначала удаляем все связанные уведомления
+                var notifications = await _context.Notifications
+                    .Where(n => n.TaskId == id)
+                    .ToListAsync();
+
+                if (notifications.Any())
+                {
+                    _context.Notifications.RemoveRange(notifications);
+                }
+
+                // 2. Удаляем комментарии задачи
+                var comments = await _context.TaskComments
+                    .Where(c => c.TaskId == id)
+                    .ToListAsync();
+
+                if (comments.Any())
+                {
+                    _context.TaskComments.RemoveRange(comments);
+                }
+
+                // 3. Удаляем транзакции материалов (если есть)
+                var materialTransactions = await _context.MaterialTransactions
+                    .Where(mt => mt.TaskId == id)
+                    .ToListAsync();
+
+                if (materialTransactions.Any())
+                {
+                    _context.MaterialTransactions.RemoveRange(materialTransactions);
+                }
+
+                // 4. Удаляем транзакции продуктов (если есть)
+                var productTransactions = await _context.ProductTransactions
+                    .Where(pt => pt.TaskId == id)
+                    .ToListAsync();
+
+                if (productTransactions.Any())
+                {
+                    _context.ProductTransactions.RemoveRange(productTransactions);
+                }
+
+                // 5. Наконец удаляем саму задачу
+                await _taskRepository.DeleteAsync(id);
+
+                // 6. Сохраняем все изменения
+                await _context.SaveChangesAsync();
+
+                // Подтверждаем транзакцию
+                await transaction.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                // Откатываем транзакцию в случае ошибки
+                await transaction.RollbackAsync();
+                throw new ApplicationException($"Error deleting task: {ex.Message}", ex);
+            }
         }
 
         public async Task<TaskCommentDto> AddCommentAsync(Guid userId, TaskCommentCreateDto commentDto)

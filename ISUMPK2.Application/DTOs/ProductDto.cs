@@ -24,12 +24,20 @@ namespace ISUMPK2.Application.DTOs
         public string Description { get; set; }
         public Guid ProductTypeId { get; set; }
         public string ProductTypeName { get; set; }
+        public Guid DepartmentId { get; set; }
+        public string DepartmentName { get; set; }
         public string UnitOfMeasure { get; set; }
         public decimal CurrentStock { get; set; }
         public decimal Price { get; set; }
         public List<ProductMaterialDto> Materials { get; set; } = new List<ProductMaterialDto>();
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public string ImageUrl { get; set; }
+        public decimal? Weight { get; set; }
+        public string? Dimensions { get; set; }
+        public string? Material { get; set; }
+        public string? TechnologyMap { get; set; }
+        public int? ProductionTime { get; set; }
     }
 
     public class ProductCreateDto
@@ -38,9 +46,16 @@ namespace ISUMPK2.Application.DTOs
         public string Name { get; set; }
         public string Description { get; set; }
         public Guid ProductTypeId { get; set; }
+        public Guid? DepartmentId { get; set; }  // добавлено
         public string UnitOfMeasure { get; set; }
         public decimal CurrentStock { get; set; }
         public decimal Price { get; set; }
+        public decimal? Weight { get; set; }  // добавлено
+        public string? Dimensions { get; set; }  // добавлено
+        public string? Material { get; set; }  // добавлено
+        public string? TechnologyMap { get; set; }  // добавлено
+        public int? ProductionTime { get; set; }  // добавлено
+        public string? ImageUrl { get; set; }  // добавлено
         public List<ProductMaterialCreateDto> Materials { get; set; } = new List<ProductMaterialCreateDto>();
     }
 
@@ -50,8 +65,15 @@ namespace ISUMPK2.Application.DTOs
         public string Name { get; set; }
         public string Description { get; set; }
         public Guid ProductTypeId { get; set; }
+        public Guid? DepartmentId { get; set; }  // добавлено
         public string UnitOfMeasure { get; set; }
         public decimal Price { get; set; }
+        public decimal? Weight { get; set; }  // добавлено
+        public string? Dimensions { get; set; }  // добавлено
+        public string? Material { get; set; }  // добавлено
+        public string? TechnologyMap { get; set; }  // добавлено
+        public int? ProductionTime { get; set; }  // добавлено
+        public string? ImageUrl { get; set; }  // добавлено
         public List<ProductMaterialCreateDto> Materials { get; set; } = new List<ProductMaterialCreateDto>();
     }
 

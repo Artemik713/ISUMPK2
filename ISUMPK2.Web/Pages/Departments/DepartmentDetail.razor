@@ -2,11 +2,11 @@
 @attribute [Authorize]
 @using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Dialogs
 @using ISUMPK2.Web.Models
 @using ISUMPK2.Web.Extensions
 @using MudBlazor
 @using Microsoft.AspNetCore.Components.Authorization
-@using System.Security.Claims
 @inject IDepartmentService DepartmentService
 @inject ITaskService TaskService
 @inject IProductService ProductService
@@ -16,7 +16,7 @@
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
 
-<PageTitle>@(department?.Name ?? "Загрузка...") - ИСУ ПМК</PageTitle>
+<PageTitle>@(department?.Name ?? "Загрузка...")</PageTitle>
 
 @if (isLoading)
 {
@@ -24,173 +24,174 @@
 }
 else if (isAccessDenied)
 {
-    <MudAlert Severity="Severity.Error" Class="mb-4">У вас нет доступа к данной странице</MudAlert>
-    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/"))" Variant="Variant.Filled" Color="Color.Primary" Class="mt-2">
-        Вернуться на главную
-    </MudButton>
+    <MudAlert Severity="Severity.Error">У вас нет доступа к данной странице</MudAlert>
+    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/"))" Variant="Variant.Text" Class="mt-2">Вернуться</MudButton>
 }
 else if (department == null)
 {
     <MudAlert Severity="Severity.Error">Цех не найден</MudAlert>
-    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/departments"))" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">
-        Вернуться к списку цехов
-    </MudButton>
+    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/departments"))" Variant="Variant.Text">К списку цехов</MudButton>
 }
 else
 {
-    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-        <MudPaper Elevation="3" Class="pa-4 department-header">
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-0">
+        <!-- Шапка цеха -->
+        <MudPaper Elevation="0" Class="pa-4 mb-4" Style="border-bottom: 1px solid var(--mud-palette-lines-default)">
             <div class="d-flex justify-space-between align-center">
                 <div>
-                    <MudText Typo="Typo.h3">@department.Name</MudText>
-                    <MudText Typo="Typo.subtitle1">@department.Description</MudText>
+                    <MudText Typo="Typo.h4">@department.Name</MudText>
+                    <MudText Typo="Typo.body1">@department.Description</MudText>
+                    @if (department.HeadId.HasValue && !string.IsNullOrEmpty(department.HeadName))
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Primary"
+                                   OnClick="@(() => ViewUserProfile(department.HeadId.Value))"
+                                   Class="pa-0 ml-n2">
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
+                                Руководитель: @department.HeadName
+                            </MudText>
+                        </MudButton>
+                    }
                 </div>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/departments"))" StartIcon="@Icons.Material.Filled.ArrowBack">
-                    К списку цехов
-                </MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                               OnClick="@(() => NavigationManager.NavigateTo("/departments"))" />
             </div>
+        </MudPaper>
 
-            @if (!string.IsNullOrEmpty(department.HeadName))
+        <!-- Задачи цеха -->
+        <MudPaper Elevation="0" Class="pa-3 mb-4" Style="border: 1px solid var(--mud-palette-lines-default)">
+            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Assignment" Class="mr-2" />
+                Активные задачи цеха
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="ml-auto"
+                               OnClick="LoadDepartmentData" />
+            </MudText>
+
+            @if (departmentTasks == null || !departmentTasks.Any())
             {
-                <MudText Class="mt-3"><strong>Руководитель:</strong> @department.HeadName</MudText>
+                <MudText Align="Align.Center" Class="my-4">В данном цехе нет активных задач</MudText>
+            }
+            else
+            {
+                <MudTable Items="@departmentTasks.Where(t => t.StatusId < 5)"
+                          Hover="true" Dense="true" Elevation="0" Class="mt-2">
+                    <HeaderContent>
+                        <MudTh>Название</MudTh>
+                        <MudTh>Статус</MudTh>
+                        <MudTh>Приоритет</MudTh>
+                        <MudTh>Исполнитель</MudTh>
+                        <MudTh>Срок</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Название">@context.Title</MudTd>
+                        <MudTd DataLabel="Статус">
+                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.StatusId)">
+                                @context.StatusName
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Приоритет">
+                            <MudChip T="string" Size="Size.Small" Color="@GetPriorityColor(context.PriorityId)">
+                                @context.PriorityName
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Исполнитель">
+                            @(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)
+                        </MudTd>
+                        <MudTd DataLabel="Срок">
+                            @(context.DueDate.HasValue? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")
+                            @if (context.IsOverdue)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error"
+                                         Size="Size.Small" Class="ml-1" />
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Visibility"
+                                           OnClick="@(() => NavigationManager.NavigateTo($"/tasks/{context.Id}"))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
             }
         </MudPaper>
 
-        <MudGrid Class="mt-4">
-            <!-- Задачи цеха -->
-            <MudItem xs="12">
-                <MudCard>
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.h6">Активные задачи цеха</MudText>
-                        </CardHeaderContent>
-                        <CardHeaderActions>
-                            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Default" OnClick="LoadDepartmentData" />
-                        </CardHeaderActions>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        @if (departmentTasks == null || !departmentTasks.Any())
-                        {
-                            <MudText>В данном цехе нет активных задач</MudText>
-                        }
-                        else
-                        {
-                            <MudTable Items="@departmentTasks.Where(t => t.StatusId < 5)" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
-                                <HeaderContent>
-                                    <MudTh>Название</MudTh>
-                                    <MudTh>Статус</MudTh>
-                                    <MudTh>Приоритет</MudTh>
-                                    <MudTh>Исполнитель</MudTh>
-                                    <MudTh>Срок выполнения</MudTh>
-                                    <MudTh>Действия</MudTh>
-                                </HeaderContent>
-                                <RowTemplate>
-                                    <MudTd DataLabel="Название">@context.Title</MudTd>
-                                    <MudTd DataLabel="Статус">
-                                        <MudChip T="string" Color="@GetStatusColor(context.StatusId)"
-                                                 Size="Size.Small">@context.StatusName</MudChip>
-                                    </MudTd>
-                                    <MudTd DataLabel="Приоритет">
-                                        <MudChip T="string" Color="@GetPriorityColor(context.PriorityId)"
-                                                 Size="Size.Small">@context.PriorityName</MudChip>
-                                    </MudTd>
-                                    <MudTd DataLabel="Исполнитель">@(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)</MudTd>
-                                    <MudTd DataLabel="Срок">
-                                        @(context.DueDate.HasValue? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")
-                                        @if (context.IsOverdue)
-                                        {
-                                            <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" />
-                                        }
-                                    </MudTd>
-                                    <MudTd>
-                                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
-                                                       OnClick="@(() => NavigationManager.NavigateTo($"/tasks/{context.Id}"))" />
-                                    </MudTd>
-                                </RowTemplate>
-                            </MudTable>
-                        }
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-
+        <MudGrid>
             <!-- Сотрудники цеха -->
-            <MudItem xs="12" md="6" Class="mt-4">
-                <MudCard>
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.h6">Сотрудники цеха</MudText>
-                        </CardHeaderContent>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        @if (departmentEmployees == null || !departmentEmployees.Any())
-                        {
-                            <MudText>Нет доступных данных о сотрудниках</MudText>
-                        }
-                        else
-                        {
-                            <MudList T="UserModel" Dense="true">
-                                @foreach (var employee in departmentEmployees)
-                                {
-                                    <MudListItem T="UserModel" Value="@employee">
-                                        <div class="d-flex align-center">
-                                            <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-3">
-                                                @(employee.FullName?.Length > 0 ? employee.FullName.Substring(0, 1) : "?")
-                                            </MudAvatar>
-                                            <div>
-                                                <MudText>@employee.FullName</MudText>
-                                                <MudText Typo="Typo.caption">Сотрудник цеха</MudText>
-                                            </div>
-                                        </div>
-                                    </MudListItem>
-                                }
-                            </MudList>
-                        }
-                    </MudCardContent>
-                </MudCard>
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="0" Class="pa-3 h-100" Style="border: 1px solid var(--mud-palette-lines-default)">
+                    <MudText Typo="Typo.h6" Class="mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Group" Class="mr-2" />
+                        Сотрудники цеха
+                    </MudText>
+                    @if (departmentEmployees == null || !departmentEmployees.Any())
+                    {
+                        <MudText Align="Align.Center" Class="my-4">Нет данных о сотрудниках</MudText>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var employee in departmentEmployees)
+                            {
+                                <MudPaper Elevation="0" Class="pa-3 d-flex align-center employee-card"
+                                          Style="border: 1px solid var(--mud-palette-lines-default); border-radius: 8px;"
+                                          @onclick="@(() => HandleEmployeeClick(employee))">
+                                    <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-3">
+                                        @(employee.FullName?.Length > 0 ? employee.FullName[0].ToString() : "?")
+                                    </MudAvatar>
+                                    <MudText>@employee.FullName</MudText>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+                </MudPaper>
             </MudItem>
 
             <!-- Продукция цеха -->
-            <MudItem xs="12" md="6" Class="mt-4">
-                <MudCard>
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.h6">Продукция цеха</MudText>
-                        </CardHeaderContent>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        @if (departmentProducts == null || !departmentProducts.Any())
-                        {
-                            <MudText>Нет доступных данных о продукции</MudText>
-                        }
-                        else
-                        {
-                            <MudTable Items="@departmentProducts" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
-                                <HeaderContent>
-                                    <MudTh>Код</MudTh>
-                                    <MudTh>Название</MudTh>
-                                    <MudTh>Тип</MudTh>
-                                </HeaderContent>
-                                <RowTemplate>
-                                    <MudTd DataLabel="Код">@context.Code</MudTd>
-                                    <MudTd DataLabel="Название">@context.Name</MudTd>
-                                    <MudTd DataLabel="Тип">@context.ProductTypeName</MudTd>
-                                </RowTemplate>
-                            </MudTable>
-                        }
-                    </MudCardContent>
-                </MudCard>
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="0" Class="pa-3 h-100" Style="border: 1px solid var(--mud-palette-lines-default)">
+                    <MudText Typo="Typo.h6" Class="mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Class="mr-2" />
+                        Продукция цеха
+                    </MudText>
+                    @if (departmentProducts == null || !departmentProducts.Any())
+                    {
+                        <MudText Align="Align.Center" Class="my-4">Нет данных о продукции</MudText>
+                    }
+                    else
+                    {
+                        <MudTable Items="@departmentProducts" Hover="true" Dense="true" Elevation="0">
+                            <HeaderContent>
+                                <MudTh>Код</MudTh>
+                                <MudTh>Название</MudTh>
+                                <MudTh>Тип</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Код">@context.Code</MudTd>
+                                <MudTd DataLabel="Название">
+                                    <MudLink Href="@($"/products/{context.Id}")">@context.Name</MudLink>
+                                </MudTd>
+                                <MudTd DataLabel="Тип">@context.ProductTypeName</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudPaper>
             </MudItem>
         </MudGrid>
     </MudContainer>
 }
 
 <style>
-    /* Заменяем фиолетовый цвет на более нейтральный синий */
-    .department-header {
-        background-color: var(--mud-palette-info-darken);
-        color: white;
+    .employee-card {
+        transition: all 0.2s ease;
+        cursor: pointer;
     }
+
+        .employee-card:hover {
+            box-shadow: var(--mud-elevation-2);
+            background-color: var(--mud-palette-background-grey);
+        }
 </style>
+
 @code {
     [Parameter]
     public Guid Id { get; set; }
@@ -214,6 +215,51 @@ else
         if (!isAccessDenied)
         {
             await LoadDepartmentData();
+        }
+    }
+
+    private void HandleEmployeeClick(UserModel employee)
+    {
+        // Безопасное приведение к Guid? и проверка
+        var employeeId = employee?.Id as Guid?;
+        if (employeeId.HasValue)
+        {
+            ViewUserProfile(employeeId.Value);
+        }
+    }
+
+    private void ViewUserProfile(Guid userId)
+    {
+        // В будущем здесь будет навигация на профиль пользователя
+        // NavigationManager.NavigateTo($"/users/{userId}");
+
+        // А пока можно вывести диалоговое окно с информацией
+        ShowUserInfoDialog(userId);
+    }
+
+    private async Task ShowUserInfoDialog(Guid userId)
+    {
+        try
+        {
+            var user = await UserService.GetUserByIdAsync(userId);
+            if (user != null)
+            {
+                var parameters = new DialogParameters
+            {
+                { "UserData", user },
+                { "IsHeadOfDepartment", department.HeadId.HasValue && department.HeadId.Value == userId }
+            };
+
+                await DialogService.ShowAsync<UserProfileDialog>("Профиль сотрудника", parameters);
+            }
+            else
+            {
+                Snackbar.Add("Информация о пользователе не найдена", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных пользователя: {ex.Message}", Severity.Error);
         }
     }
 
@@ -261,6 +307,7 @@ else
             }
         }
     }
+
     private Color GetStatusColor(int statusId)
     {
         return statusId switch

@@ -30,4 +30,10 @@
     <ProjectReference Include="..\ISUMPK2.Infrastructure\ISUMPK2.Infrastructure.csproj" />
   </ItemGroup>
 
+
+	<ItemGroup>
+	  <Folder Include="Pages\Новая папка\" />
+	  <Folder Include="wwwroot\images\products\" />
+	</ItemGroup>
+
 </Project>  
