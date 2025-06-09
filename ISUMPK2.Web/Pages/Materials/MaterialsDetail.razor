@@ -1,0 +1,288 @@
+﻿@page "/materials/{Id:guid}"
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Application.Constants
+@using MudBlazor
+@inject IMaterialService MaterialService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(isEditing ? "Редактирование материала" : "Просмотр материала") - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudGrid>
+        <MudItem xs="12">
+            <MudPaper Elevation="2" Class="pa-4">
+                @if (isLoading)
+                {
+                    <div class="d-flex justify-center my-4">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                    </div>
+                }
+                else if (material == null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-4">
+                        Материал не найден. Возможно, он был удален или у вас недостаточно прав для его просмотра.
+                    </MudAlert>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/materials"))">
+                        Вернуться к списку материалов
+                    </MudButton>
+                }
+                else if (isEditing)
+                {
+                    <MudText Typo="Typo.h4" Class="mb-4">Редактирование материала</MudText>
+                    <MudForm @ref="form" @bind-IsValid="@isValid">
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudTextField T="string" Label="Код" @bind-Value="updateDto.Code" Required="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField T="string" Label="Наименование" @bind-Value="updateDto.Name" Required="true" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField T="string" Label="Описание" @bind-Value="updateDto.Description" Lines="3" Required="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudSelect T="string" Label="Единица измерения" @bind-Value="updateDto.UnitOfMeasure" Required="true">
+                                    @foreach (var unit in UnitOfMeasure.AvailableUnits)
+                                    {
+                                        <MudSelectItem Value="@unit">@unit</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudNumericField T="decimal" Label="Минимальный запас" @bind-Value="updateDto.MinimumStock" Required="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudNumericField T="decimal" Label="Текущий запас" @bind-Value="updateDto.CurrentStock" Required="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudNumericField T="decimal" Label="Цена" @bind-Value="updateDto.Price" Required="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField T="string" Label="Производитель" @bind-Value="updateDto.Manufacturer" Required="true" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField T="string" Label="Артикул" @bind-Value="updateDto.PartNumber" Required="true" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField T="string" Label="Технические характеристики" @bind-Value="updateDto.Specifications" Lines="3" Required="false" />
+                            </MudItem>
+                        </MudGrid>
+                        
+                        <div class="d-flex justify-space-between mt-4">
+                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Cancel" OnClick="CancelEdit">
+                                Отмена
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" 
+                                      OnClick="SaveMaterial" Disabled="@(!isValid || isSaving)">
+                                @if (isSaving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Сохранение...</span>
+                                }
+                                else
+                                {
+                                    <span>Сохранить</span>
+                                }
+                            </MudButton>
+                        </div>
+                    </MudForm>
+                }
+                else
+                {
+                    <MudText Typo="Typo.h4" Class="mb-4">@material.Name</MudText>
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle1"><strong>Код:</strong> @material.Code</MudText>
+                            <MudText Typo="Typo.subtitle1"><strong>Категория:</strong> @material.CategoryName</MudText>
+                            <MudText Typo="Typo.subtitle1"><strong>Единица измерения:</strong> @material.UnitOfMeasure</MudText>
+                            <MudText Typo="Typo.subtitle1">
+                                <strong>Текущий запас:</strong> @material.CurrentStock @material.UnitOfMeasure
+                                @if (material.CurrentStock < material.MinimumStock)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" Class="ml-1" />
+                                    <MudText Typo="Typo.caption" Color="Color.Warning" Class="d-inline">Низкий запас</MudText>
+                                }
+                            </MudText>
+                            <MudText Typo="Typo.subtitle1"><strong>Минимальный запас:</strong> @material.MinimumStock @material.UnitOfMeasure</MudText>
+                            <MudText Typo="Typo.subtitle1"><strong>Цена:</strong> @material.Price.ToString("C2")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle1"><strong>Производитель:</strong> @material.Manufacturer</MudText>
+                            <MudText Typo="Typo.subtitle1"><strong>Артикул:</strong> @material.PartNumber</MudText>
+                            <MudText Typo="Typo.subtitle1"><strong>Дата создания:</strong> @material.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                            <MudText Typo="Typo.subtitle1"><strong>Дата обновления:</strong> @material.UpdatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1"><strong>Описание:</strong></MudText>
+                            <MudText>@material.Description</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1"><strong>Технические характеристики:</strong></MudText>
+                            <MudText>@material.Specifications</MudText>
+                        </MudItem>
+                    </MudGrid>
+                    
+                    <div class="d-flex justify-space-between mt-4">
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="NavigateToList">
+                            Вернуться к списку
+                        </MudButton>
+                        <div>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit" OnClick="EnableEditing" Class="mx-2">
+                                Редактировать
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.AddCircle" OnClick="OpenTransactionDialog" Class="mx-2">
+                                Добавить операцию
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteMaterial">
+                                Удалить
+                            </MudButton>
+                        </div>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private MaterialDto material;
+    private MaterialUpdateDto updateDto = new();
+    private bool isLoading = true;
+    private bool isEditing = false;
+    private bool isValid = true;
+    private bool isSaving = false;
+    private MudForm form;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMaterial();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Перезагружаем материал при изменении параметров (например, при возврате на страницу)
+        if (!isLoading && !isEditing)
+        {
+            await LoadMaterial();
+        }
+    }
+
+    private async Task LoadMaterial()
+    {
+        isLoading = true;
+        try
+        {
+            material = await MaterialService.GetMaterialByIdAsync(Id);
+            if (material == null)
+            {
+                Snackbar.Add("Материал не найден", Severity.Warning);
+                NavigationManager.NavigateTo("/materials");
+                return;
+            }
+            
+            // Инициализация DTO для редактирования
+            updateDto = new MaterialUpdateDto
+            {
+                Code = material.Code,
+                Name = material.Name,
+                Description = material.Description,
+                UnitOfMeasure = material.UnitOfMeasure,
+                MinimumStock = material.MinimumStock,
+                CurrentStock = material.CurrentStock,
+                Price = material.Price,
+                Manufacturer = material.Manufacturer,
+                PartNumber = material.PartNumber,
+                Specifications = material.Specifications
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке материала: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void NavigateToList()
+    {
+        NavigationManager.NavigateTo("/materials");
+    }
+
+    private void EnableEditing()
+    {
+        isEditing = true;
+    }
+
+    private void CancelEdit()
+    {
+        isEditing = false;
+        // Восстанавливаем данные из оригинального материала
+        updateDto = new MaterialUpdateDto
+        {
+            Code = material.Code,
+            Name = material.Name,
+            Description = material.Description,
+            UnitOfMeasure = material.UnitOfMeasure,
+            MinimumStock = material.MinimumStock,
+            CurrentStock = material.CurrentStock,
+            Price = material.Price,
+            Manufacturer = material.Manufacturer,
+            PartNumber = material.PartNumber,
+            Specifications = material.Specifications
+        };
+    }
+
+    private async Task SaveMaterial()
+    {
+        if (!isValid) return;
+
+        isSaving = true;
+        try
+        {
+            material = await MaterialService.UpdateMaterialAsync(Id, updateDto);
+            Snackbar.Add("Материал успешно обновлен", Severity.Success);
+            isEditing = false;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при обновлении материала: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void EditMaterial()
+    {
+        NavigationManager.NavigateTo($"/materials/edit/{Id}");
+    }
+
+    private async Task OpenTransactionDialog()
+    {
+        // Здесь нужно добавить логику открытия диалога добавления операции
+        // После успешного добавления операции вызываем обновление материала
+        await LoadMaterial();
+    }
+
+    private async Task DeleteMaterial()
+    {
+        try
+        {
+            await MaterialService.DeleteMaterialAsync(Id);
+            Snackbar.Add("Материал успешно удален", Severity.Success);
+            NavigateToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при удалении материала: {ex.Message}", Severity.Error);
+        }
+    }
+}

@@ -240,11 +240,12 @@
     private async Task AddTransaction(Guid id)
     {
         var parameters = new DialogParameters
-        {
-            { "MaterialId", id }
-        };
+    {
+        { "MaterialId", id },
+        // Добавляем параметр для указания, куда перенаправлять после операции
+        { "RedirectToView", true }
+    };
 
-        // Замените на подходящий класс диалога, если он существует или создайте необходимый класс
         var dialog = await DialogService.ShowAsync<MaterialTransactionDialog>("Добавление операции", parameters);
         var result = await dialog.Result;
 
@@ -252,6 +253,9 @@
         {
             await LoadMaterialsAsync();
             Snackbar.Add("Операция успешно добавлена", Severity.Success);
+
+            // Перенаправляем на страницу просмотра вместо редактирования
+            NavigationManager.NavigateTo($"/materials/{id}");
         }
     }
 }

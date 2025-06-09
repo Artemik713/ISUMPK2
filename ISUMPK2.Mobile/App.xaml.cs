@@ -1,16 +1,29 @@
-﻿using Microsoft.Maui.Controls;
+﻿using Microsoft.Maui;
+using Microsoft.Maui.Controls;
 
-namespace ISUMPK.Mobile;
-
-public partial class App : Application
+namespace ISUMPK2.Mobile
 {
-	public App()
-	{
-		InitializeComponent();
-	}
+    public partial class App : Microsoft.Maui.Controls.Application
+    {
+        public App()
+        {
+            InitializeComponent();
+            MainPage = new AppShell();
+        }
 
-	protected override Window CreateWindow(IActivationState? activationState)
-	{
-		return new Window(new AppShell());
-	}
+        protected override void OnStart()
+        {
+            base.OnStart();
+        }
+
+        protected override void OnSleep()
+        {
+            base.OnSleep();
+        }
+
+        protected override void OnResume()
+        {
+            base.OnResume();
+        }
+    }
 }

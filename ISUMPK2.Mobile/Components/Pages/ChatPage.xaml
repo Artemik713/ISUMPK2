@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ISUMPK2.Mobile.ViewModels"
+             xmlns:models="clr-namespace:ISUMPK2.Mobile.Models"
+             x:Class="ISUMPK2.Mobile.Components.Pages.ChatPage"
+             x:DataType="viewmodels:ChatViewModel"
+             Title="{Binding Title}">
+
+    <Grid RowDefinitions="*,Auto" Padding="10">
+        <!-- Сообщения чата -->
+        <RefreshView Grid.Row="0" 
+                    Command="{Binding RefreshCommand}" 
+                    IsRefreshing="{Binding IsLoading}">
+            <CollectionView ItemsSource="{Binding Messages}"
+                           EmptyView="Нет сообщений"
+                           FlowDirection="LeftToRight"
+                           ItemsUpdatingScrollMode="KeepLastItemInView">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:ChatMessageModel">
+                        <Grid Padding="5">
+                            <Frame Padding="10"
+                                  BackgroundColor="{Binding IsMine, Converter={StaticResource BoolToColorConverter}, ConverterParameter='#e1ffc7,#ffffff'}"
+                                  CornerRadius="10"
+                                  HorizontalOptions="{Binding IsMine, Converter={StaticResource BoolToLayoutOptionsConverter}, ConverterParameter='End,Start'}"
+                                  MaximumWidthRequest="300">
+                                <StackLayout Spacing="5">
+                                    <Label Text="{Binding SenderName}"
+                                          FontSize="12"
+                                          TextColor="Gray"
+                                          FontAttributes="Bold" />
+
+                                    <Label Text="{Binding Content}"
+                                          TextType="Text" />
+
+                                    <Label Text="{Binding SentAt, StringFormat='{0:HH:mm}'}"
+                                          FontSize="10"
+                                          TextColor="Gray"
+                                          HorizontalOptions="End" />
+                                </StackLayout>
+                            </Frame>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+
+        <!-- Ввод сообщения -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Padding="0,10,0,0">
+            <Frame Grid.Column="0" 
+                  Padding="15,0" 
+                  CornerRadius="20">
+                <Entry Placeholder="Сообщение..." 
+                      Text="{Binding NewMessage}" 
+                      ReturnType="Send"
+                      ReturnCommand="{Binding SendMessageCommand}" />
+            </Frame>
+
+            <Button Grid.Column="1"
+                   Text="➤"
+                   Command="{Binding SendMessageCommand}"
+                   IsEnabled="{Binding CanSendMessage}"
+                   WidthRequest="50"
+                   HeightRequest="50"
+                   CornerRadius="25"
+                   Margin="5,0,0,0" />
+        </Grid>
+    </Grid>
+</ContentPage>

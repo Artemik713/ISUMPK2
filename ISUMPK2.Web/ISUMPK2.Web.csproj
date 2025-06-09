@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Services\ClientMaterialService.cs" />
+    <Compile Remove="Pages\Materials\Materials.cs" />
     <Compile Remove="Services\IMaterialService.cs" />
     <Compile Remove="Services\INotificationService.cs" />
     <Compile Remove="Services\NotificationService.cs" />

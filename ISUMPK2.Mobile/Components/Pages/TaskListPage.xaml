@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ISUMPK2.Mobile.ViewModels"
+             xmlns:models="clr-namespace:ISUMPK2.Mobile.Models"
+             x:Class="ISUMPK2.Mobile.Components.Pages.TaskListPage"
+             x:DataType="viewmodels:TaskListViewModel"
+             Title="{Binding Title}">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <SearchBar Grid.Row="0" 
+                   Placeholder="Поиск задач" 
+                   Text="{Binding SearchQuery}" 
+                   Margin="10"/>
+
+        <RefreshView Grid.Row="1" 
+                     Command="{Binding RefreshCommand}" 
+                     IsRefreshing="{Binding IsLoading}">
+            <CollectionView ItemsSource="{Binding Tasks}"
+                            EmptyView="Нет доступных задач">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:TaskModel">
+                        <Frame Padding="10" Margin="5">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <VerticalStackLayout Grid.Column="0">
+                                    <Label Text="{Binding Title}" FontAttributes="Bold" />
+                                    <Label Text="{Binding Description}" MaxLines="2" />
+                                </VerticalStackLayout>
+                                <Button Grid.Column="1"
+                                        Text="Открыть"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:TaskListViewModel}}, Path=ViewTaskCommand}"
+                                        CommandParameter="{Binding Id}" />
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+
+        <Button Grid.Row="2"
+                Text="Создать задачу"
+                Command="{Binding CreateTaskCommand}"
+                Margin="10" />
+    </Grid>
+
+</ContentPage>

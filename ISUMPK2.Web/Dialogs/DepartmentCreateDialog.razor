@@ -10,14 +10,15 @@
         <MudForm @ref="form">
             <MudTextField @bind-Value="model.Name" Label="Название отдела"
                           Required="true" RequiredError="Название обязательно" />
-            
-            <MudTextField @bind-Value="model.Description" Label="Описание" 
+
+            <MudTextField @bind-Value="model.Description" Label="Описание"
                           Lines="3" Class="mt-3" />
-            
-            <MudSelect @bind-Value="model.HeadId" Label="Руководитель" Class="mt-3">
+
+            <MudSelect T="string" @bind-Value="selectedHeadId" Label="Руководитель" Class="mt-3">
+                <MudSelectItem T="string" Value="@string.Empty">Не выбран</MudSelectItem>
                 @foreach (var user in Users)
                 {
-                    <MudSelectItem Value="@user.Id">@($"{user.LastName} {user.FirstName}")</MudSelectItem>
+                    <MudSelectItem T="string" Value="@user.Id.ToString()">@($"{user.LastName} {user.FirstName}")</MudSelectItem>
                 }
             </MudSelect>
         </MudForm>
@@ -31,9 +32,12 @@
 @code {
     [CascadingParameter] MudDialogInstance MudDialog { get; set; }
     [Parameter] public IEnumerable<UserDto> Users { get; set; } = new List<UserDto>();
-    
+
     private MudForm form;
     private DepartmentCreateDto model = new DepartmentCreateDto();
+
+    // Используем простое поле для привязки к MudSelect
+    private string selectedHeadId = string.Empty;
 
     private void Cancel() => MudDialog.Cancel();
 
@@ -44,6 +48,16 @@
         {
             try
             {
+                // Преобразуем строковый ID в Guid перед отправкой
+                if (!string.IsNullOrEmpty(selectedHeadId))
+                {
+                    model.HeadId = Guid.Parse(selectedHeadId);
+                }
+                else
+                {
+                    model.HeadId = null;
+                }
+
                 await DepartmentService.CreateDepartmentAsync(model);
                 MudDialog.Close(DialogResult.Ok(true));
             }

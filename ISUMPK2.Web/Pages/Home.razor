@@ -1,106 +1,268 @@
 ﻿@page "/home"
 @using Microsoft.AspNetCore.Authorization
 @using MudBlazor
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Web.Services
 @attribute [Authorize]
 
 <PageTitle>УралТехПром - Главная страница</PageTitle>
 
-<MudContainer Class="mt-4">
-    <MudCard>
-        <MudCardHeader>
-            <CardHeaderContent>
-                <MudText Typo="Typo.h5">Добро пожаловать в информационную систему завода УралТехПром</MudText>
-            </CardHeaderContent>
-        </MudCardHeader>
-        <MudCardContent>
-            <MudText>Вы успешно авторизовались в системе управления производством металлоконструкций.</MudText>
+<MudContainer Class="mt-4" MaxWidth="MaxWidth.Large">
+    <!-- Приветствие с информационной картой -->
+    <MudPaper Elevation="0" Class="pa-6 mb-6 rounded-lg" Style="background-color: var(--mud-palette-background-grey);">
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudText Typo="Typo.h4" Class="mb-3">Добро пожаловать, @userName</MudText>
+                <MudText>
+                    Вы успешно авторизовались в системе управления производством металлоконструкций.
+                    Используйте панель быстрого доступа для навигации по ключевым модулям системы.
+                </MudText>
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-center justify-center">
+                <MudIcon Icon="@Icons.Material.Filled.Factory" Color="Color.Primary" Size="Size.Large" Style="width: 100px; height: 100px;" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
 
-            <MudDivider Class="my-4" />
+    <!-- Карточки быстрого доступа -->
+    <MudGrid>
+        <!-- Задачи -->
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4 dashboard-card" @onclick="@(() => NavigationManager.NavigateTo("/tasks"))">
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.h6">Задачи</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-3">Управление рабочими задачами</MudText>
+                        <MudChip T="string" Color="Color.Primary" Size="Size.Small">@taskCount задач в работе</MudChip>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.Assignment" Color="Color.Primary" />
+                </div>
+            </MudPaper>
+        </MudItem>
 
-            <MudText Typo="Typo.h6" Class="mb-3">Быстрый доступ</MudText>
+        <!-- Материалы -->
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4 dashboard-card" @onclick="@(() => NavigationManager.NavigateTo("/materials"))">
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.h6">Материалы</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-3">Учет и контроль запасов</MudText>
+                        <MudChip T="string" Color="@(lowStockCount > 0 ? Color.Error : Color.Success)" Size="Size.Small">
+                            @(lowStockCount > 0 ? $"{lowStockCount} требуют внимания" : "Запасы в норме")
+                        </MudChip>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.Inventory" Color="Color.Secondary" />
+                </div>
+            </MudPaper>
+        </MudItem>
 
-            <MudGrid>
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
-                        <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" Class="mb-2" />
-                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Управление задачами</MudText>
-                        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/tasks"))">Перейти</MudButton>
-                    </MudPaper>
-                </MudItem>
+        <!-- Продукция -->
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4 dashboard-card" @onclick="@(() => NavigationManager.NavigateTo("/products"))">
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.h6">Продукция</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-3">Каталог изделий</MudText>
+                        <MudChip T="string" Color="Color.Info" Size="Size.Small">@productCount наименований</MudChip>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Tertiary" />
+                </div>
+            </MudPaper>
+        </MudItem>
 
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
-                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
-                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Учет материалов</MudText>
-                        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="@(() => NavigationManager.NavigateTo("/materials"))">Перейти</MudButton>
-                    </MudPaper>
-                </MudItem>
+        <!-- Уведомления -->
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4 dashboard-card" @onclick="@(() => NavigationManager.NavigateTo("/notifications"))">
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.h6">Уведомления</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-3">Важные сообщения</MudText>
+                        <MudChip T="string" Color="@(notificationCount > 0 ? Color.Warning : Color.Success)" Size="Size.Small">
+                            @(notificationCount > 0 ? $"{notificationCount} непрочитанных" : "Нет непрочитанных")
+                        </MudChip>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.Notifications" Color="Color.Info" />
+                </div>
+            </MudPaper>
+        </MudItem>
 
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
-                        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Large" Color="Color.Tertiary" Class="mb-2" />
-                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Продукция</MudText>
-                        <MudButton Variant="Variant.Text" Color="Color.Tertiary" OnClick="@(() => NavigationManager.NavigateTo("/products"))">Перейти</MudButton>
-                    </MudPaper>
-                </MudItem>
+        <!-- Цеха -->
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4 dashboard-card" @onclick="@(() => NavigationManager.NavigateTo("/departments"))">
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.h6">Цеха</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-3">Информация по подразделениям</MudText>
+                        <MudChip T="string" Color="Color.Default" Size="Size.Small">@departmentCount подразделений</MudChip>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.Business" Color="Color.Success" />
+                </div>
+            </MudPaper>
+        </MudItem>
 
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
-                        <MudIcon Icon="@Icons.Material.Filled.Notifications" Size="Size.Large" Color="Color.Info" Class="mb-2" />
-                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Уведомления</MudText>
-                        <MudButton Variant="Variant.Text" Color="Color.Info" OnClick="@(() => NavigationManager.NavigateTo("/notifications"))">Перейти</MudButton>
-                    </MudPaper>
-                </MudItem>
+        <!-- Аналитика -->
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4 dashboard-card" @onclick="@(() => NavigationManager.NavigateTo("/analytics"))">
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.h6">Аналитика</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-3">Отчеты и статистика</MudText>
+                        <MudChip T="string" Color="Color.Dark" Size="Size.Small">Просмотр показателей</MudChip>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.BarChart" Color="Color.Warning" />
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2" Style="height: 150px;">
-                        <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Large" Color="Color.Success" Class="mb-2" />
-                        <MudText Typo="Typo.subtitle1" Align="Align.Center">Цеха</MudText>
-                        <MudButton Variant="Variant.Text" Color="Color.Success" OnClick="@(() => NavigationManager.NavigateTo("/departments"))">Перейти</MudButton>
-                    </MudPaper>
-                </MudItem>
-            </MudGrid>
+    <!-- Цеха с дополнительной информацией -->
+    <MudText Typo="Typo.h5" Class="mt-6 mb-4">Производственные подразделения</MudText>
 
-            <MudDivider Class="my-4" />
-
-            <MudText Typo="Typo.h6" Class="mb-3">Цеха</MudText>
-
-            <MudGrid>
-                <MudItem xs="12" sm="6">
-                    <MudPaper Class="pa-4 d-flex flex-column" Elevation="2" Style="height: 150px;">
-                        <MudText Typo="Typo.h6" Color="Color.Primary">Цех металлообработки</MudText>
-                        <MudText Typo="Typo.body2" Class="flex-grow-1">Производство металлических изделий и конструкций</MudText>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                                   OnClick="@(() => NavigateToFilteredDepartment("Цех металлообработки"))">
-                            Перейти
+    <MudGrid>
+        @foreach (var department in departments)
+        {
+            <MudItem xs="12" sm="6">
+                <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height: 100%;">
+                    <MudText Typo="Typo.h6" Color="Color.Primary">@department.Name</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2">@department.Description</MudText>
+                    @if (!string.IsNullOrEmpty(department.HeadName))
+                    {
+                        <MudText Typo="Typo.caption" Class="mb-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
+                            Руководитель: @department.HeadName
+                        </MudText>
+                    }
+                    <div class="d-flex justify-end mt-3">
+                        <MudButton Variant="Variant.Text" Color="Color.Primary"
+                                   OnClick="@(() => NavigationManager.NavigateTo($"/departments/{department.Id}"))">
+                            Подробнее
                         </MudButton>
-                    </MudPaper>
-                </MudItem>
-
-                <MudItem xs="12" sm="6">
-                    <MudPaper Class="pa-4 d-flex flex-column" Elevation="2" Style="height: 150px;">
-                        <MudText Typo="Typo.h6" Color="Color.Secondary">Малярный цех</MudText>
-                        <MudText Typo="Typo.body2" Class="flex-grow-1">Покраска и финишная обработка изделий</MudText>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
-                                   OnClick="@(() => NavigateToFilteredDepartment("Малярный"))">
-                            Перейти
-                        </MudButton>
-                    </MudPaper>
-                </MudItem>
-            </MudGrid>
-        </MudCardContent>
-    </MudCard>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
 </MudContainer>
+
+<style>
+    .dashboard-card {
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border-radius: 8px;
+    }
+
+        .dashboard-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--mud-elevation-5);
+        }
+</style>
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; }
+    [Inject] IDepartmentService DepartmentService { get; set; }
+    [Inject] ITaskService TaskService { get; set; }
+    [Inject] IMaterialService MaterialService { get; set; }
+    [Inject] IProductService ProductService { get; set; }
+    [Inject] INotificationService NotificationService { get; set; }
+    [Inject] IAuthService AuthService { get; set; }
 
-    private void NavigateToFilteredDepartment(string departmentName)
+    private string userName = "пользователь";
+    private int taskCount = 0;
+    private int lowStockCount = 0;
+    private int productCount = 0;
+    private int notificationCount = 0;
+    private int departmentCount = 0;
+    private List<DepartmentDto> departments = new List<DepartmentDto>();
+
+    protected override async Task OnInitializedAsync()
     {
-        // Если у вас есть возможность фильтрации по имени отдела
-        //NavigationManager.NavigateTo($"/departments?name={Uri.EscapeDataString(departmentName)}");
+        await LoadDashboardData();
+    }
 
-        // Или, если фильтрация по имени отсутствует, просто перейти к списку отделов
-        NavigationManager.NavigateTo("/departments");
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            // Загрузка данных пользователя
+            var userInfo = await AuthService.GetUserInfoAsync();
+            if (userInfo != null)
+            {
+                userName = !string.IsNullOrEmpty(userInfo.FirstName)
+                    ? userInfo.FirstName
+                    : userInfo.UserName;
+            }
+
+            // Загружаем отделы
+            departments = (await DepartmentService.GetAllDepartmentsAsync()).ToList();
+            departmentCount = departments.Count;
+
+            // Загрузка счетчиков для панели (используем существующие методы)
+            try
+            {
+                var tasks = await TaskService.GetAllTasksAsync(); // или другой подходящий метод
+                taskCount = tasks.Count(t => t.StatusId < 5); // Не завершенные задачи
+            }
+            catch
+            {
+                taskCount = 0; // Значение по умолчанию при ошибке
+            }
+
+            try
+            {
+                var materials = await MaterialService.GetAllMaterialsAsync(); // или другой подходящий метод
+                lowStockCount = materials.Count(m => m.CurrentStock < m.MinimumStock);
+            }
+            catch
+            {
+                lowStockCount = 0; // Значение по умолчанию при ошибке
+            }
+
+            try
+            {
+                var products = await ProductService.GetAllProductsAsync(); // или другой подходящий метод
+                productCount = products.Count();
+            }
+            catch
+            {
+                productCount = 0; // Значение по умолчанию при ошибке
+            }
+
+            try
+            {
+                var notifications = await NotificationService.GetUnreadNotificationsCountForUserAsync(userInfo.Id);
+                notificationCount = notifications;
+            }
+            catch
+            {
+                notificationCount = 0; // Значение по умолчанию при ошибке
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки данных дашборда: {ex.Message}");
+            // Можно добавить отображение Snackbar с сообщением об ошибке
+        }
+    }
+
+    private async Task NavigateToFilteredDepartment(string departmentName)
+    {
+        try
+        {
+            var department = departments.FirstOrDefault(d => d.Name == departmentName);
+            if (department != null)
+            {
+                NavigationManager.NavigateTo($"/departments/{department.Id}");
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/departments");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при навигации к цеху: {ex.Message}");
+            NavigationManager.NavigateTo("/departments");
+        }
     }
 }

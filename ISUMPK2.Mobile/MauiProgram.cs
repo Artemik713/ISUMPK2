@@ -10,7 +10,9 @@ using ITaskService = ISUMPK2.Mobile.Services.ITaskService;
 using TaskService = ISUMPK2.Mobile.Services.TaskService;
 using AuthService = ISUMPK2.Mobile.Services.AuthService;
 using Microsoft.Extensions.Logging;
-using ISUMPK.Mobile;
+using ISUMPK2.Mobile;
+using ISUMPK2.Mobile.ViewModels;
+using ISUMPK2.Mobile.Components.Pages;
 
 namespace ISUMPK2.Mobile
 {
@@ -46,11 +48,6 @@ namespace ISUMPK2.Mobile
             builder.Services.AddSingleton<IOfflineDataService, OfflineDataService>();
             builder.Services.AddSingleton<INavigationService, NavigationService>();
 
-            // ПРИМЕЧАНИЕ: Закомментируйте регистрацию отсутствующих ViewModel и View, 
-            // пока не создадите соответствующие классы
-
-            /* Раскомментируйте и используйте по мере создания соответствующих классов
-            // Регистрация ViewModels
             builder.Services.AddTransient<LoginViewModel>();
             builder.Services.AddTransient<DashboardViewModel>();
             builder.Services.AddTransient<TaskListViewModel>();
@@ -71,7 +68,6 @@ namespace ISUMPK2.Mobile
             builder.Services.AddTransient<NotificationListPage>();
             builder.Services.AddTransient<ChatPage>();
             builder.Services.AddTransient<ProfilePage>();
-            */
 
 #if DEBUG
             builder.Logging.AddDebug();

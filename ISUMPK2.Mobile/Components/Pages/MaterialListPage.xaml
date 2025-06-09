@@ -1,0 +1,63 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ISUMPK2.Mobile.ViewModels"
+             xmlns:models="clr-namespace:ISUMPK2.Mobile.Models"
+             x:Class="ISUMPK2.Mobile.Components.Pages.MaterialListPage"
+             x:DataType="viewmodels:MaterialListViewModel"
+             Title="{Binding Title}">
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="10">
+        <SearchBar Grid.Row="0" 
+                  Placeholder="Поиск материалов" 
+                  Text="{Binding SearchQuery}" />
+
+        <RefreshView Grid.Row="1" 
+                    Command="{Binding RefreshCommand}" 
+                    IsRefreshing="{Binding IsLoading}">
+            <CollectionView ItemsSource="{Binding Materials}"
+                           EmptyView="Нет доступных материалов">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:MaterialModel">
+                        <Frame Margin="2" Padding="10">
+                            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                                <Label Grid.Row="0" Grid.Column="0" 
+                                      Text="{Binding Name}" 
+                                      FontAttributes="Bold" />
+
+                                <Label Grid.Row="1" Grid.Column="0" 
+                                      Text="{Binding Description}" 
+                                      FontSize="14"
+                                      LineBreakMode="TailTruncation"
+                                      MaxLines="1" />
+
+                                <StackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" 
+                                           VerticalOptions="Center">
+                                    <Label Text="{Binding AvailableQuantity, StringFormat='В наличии: {0}'}" 
+                                          HorizontalOptions="End" 
+                                          FontSize="14" />
+                                    <Label Text="{Binding UnitOfMeasure}" 
+                                          HorizontalOptions="End" 
+                                          FontSize="12" 
+                                          TextColor="Gray" />
+                                </StackLayout>
+
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer 
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:MaterialListViewModel}}, Path=ViewMaterialCommand}"
+                                        CommandParameter="{Binding Id}" />
+                                </Grid.GestureRecognizers>
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+
+        <Button Grid.Row="2"
+               Text="Добавить материал"
+               Command="{Binding CreateMaterialCommand}"
+               HorizontalOptions="Center"
+               Margin="0,10,0,5" />
+    </Grid>
+</ContentPage>

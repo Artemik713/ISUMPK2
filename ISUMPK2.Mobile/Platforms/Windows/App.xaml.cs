@@ -1,23 +1,25 @@
-﻿using Microsoft.Maui; // Add this using directive for MauiWinUIApplication
+﻿using Microsoft.Maui;
 using Microsoft.Maui.Hosting;
-using Microsoft.Maui.Controls.Hosting;
-using ISUMPK2.Mobile;
+using Microsoft.UI.Xaml;
+
+// To learn more about WinUI, the WinUI project structure,
+// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace ISUMPK2.Mobile.WinUI
 {
     /// <summary>
     /// Provides application-specific behavior to supplement the default Application class.
     /// </summary>
-    public partial class App : MauiWinUIApplication // Correct base class for a Windows Maui app
+    public partial class App : MauiWinUIApplication
     {
         /// <summary>
-        /// Initializes the singleton application object.  This is the first line of authored code
-        /// executed, and as such is the logical equivalent of main() or WinMain().
+        /// Initializes the singleton application object.
         /// </summary>
         public App()
         {
             this.InitializeComponent();
         }
-        protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp(); // Reference MauiProgram directly
+
+        protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
     }
 }

@@ -2,17 +2,20 @@
 @using ISUMPK2.Application.DTOs
 <MudDialog>
     <DialogContent>
-        <MudText>@ContentText</MudText>
+        <MudText>@Message</MudText>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Отмена</MudButton>
-        <MudButton Color="Color.Error" OnClick="Submit">Удалить</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Подтвердить</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] MudDialogInstance MudDialog { get; set; }
-    [Parameter] public string ContentText { get; set; }
+
+    [Parameter] public string Title { get; set; }
+    [Parameter] public string Message { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
 
     void Submit() => MudDialog.Close(DialogResult.Ok(true));
     void Cancel() => MudDialog.Cancel();

@@ -1,0 +1,64 @@
+﻿@using ISUMPK2.Web.Models
+@using MudBlazor
+
+<div class="notification-list">
+    @foreach (var notification in Notifications)
+    {
+        <MudCard Elevation="0" Outlined="true" Class="@GetCardClass(notification)"
+                 @onclick="() => OnNotificationClick.InvokeAsync(notification)">
+            <MudCardContent Class="py-2 px-3">
+                <div class="d-flex justify-space-between align-center">
+                    <MudText Typo="Typo.subtitle1" Class="@(!notification.IsRead ? "font-weight-bold" : "")">
+                        @notification.Title
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@notification.CreatedAt.ToString("dd.MM HH:mm")</MudText>
+                </div>
+                <MudText Typo="Typo.body2" Style="margin-top: 4px;">@notification.Message</MudText>
+                @if (notification.TaskId.HasValue)
+                {
+                    <div class="d-flex mt-2">
+                        <MudChip Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Filled.Task" T="string">
+                            @notification.TaskTitle
+                        </MudChip>
+                    </div>
+                }
+            </MudCardContent>
+        </MudCard>
+    }
+</div>
+
+<style>
+    .notification-list {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .notification-card {
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border-left: 3px solid transparent;
+    }
+
+        .notification-card:hover {
+            background-color: var(--mud-palette-action-default-hover);
+            transform: translateX(2px);
+        }
+
+    .unread-card {
+        border-left-color: var(--mud-palette-primary);
+    }
+</style>
+
+@code {
+    [Parameter]
+    public List<NotificationModel> Notifications { get; set; } = new List<NotificationModel>();
+
+    [Parameter]
+    public EventCallback<NotificationModel> OnNotificationClick { get; set; }
+
+    private string GetCardClass(NotificationModel notification)
+    {
+        var baseClass = "mb-2 notification-card";
+        return notification.IsRead ? baseClass : $"{baseClass} unread-card";
+    }
+}

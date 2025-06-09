@@ -50,6 +50,11 @@ namespace ISUMPK2.Application.Services.Implementations
             return notifications.Select(MapNotificationToDto).OrderByDescending(n => n.CreatedAt);
         }
 
+        public async Task<IEnumerable<NotificationDto>> GetReadNotificationsForUserAsync(Guid userId)
+        {
+            var notifications = await _notificationRepository.GetReadNotificationsForUserAsync(userId);
+            return notifications.Select(MapNotificationToDto).OrderByDescending(n => n.CreatedAt);
+        }
 
         public async Task<IEnumerable<NotificationDto>> GetUnreadNotificationsForUserAsync(Guid userId)
         {
