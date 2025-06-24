@@ -14,7 +14,7 @@ using ISUMPK2.Application.Auth;
 using ISUMPK2.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using MudBlazor;
-using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Routing ;
 
 namespace ISUMPK2.Web
 {
