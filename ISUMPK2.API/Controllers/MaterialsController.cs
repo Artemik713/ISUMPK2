@@ -36,6 +36,19 @@ namespace ISUMPK2.API.Controllers
             return Ok(categories);
         }
 
+        [HttpPut("{id}/stock")]
+        public async Task<IActionResult> UpdateStock(Guid id, [FromQuery] decimal quantity, [FromQuery] bool isAddition)
+        {
+            try
+            {
+                await _materialService.UpdateStockAsync(id, quantity, isAddition);
+                return Ok();
+            }
+            catch (ApplicationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
         // Убедитесь, что этот метод существует в API контроллере
         [HttpPost("{materialId}/transactions")]
         [Authorize]

@@ -34,5 +34,6 @@ namespace ISUMPK2.Domain.Entities
         public ICollection<Notification> Notifications { get; set; }
         public ICollection<MaterialTransaction> MaterialTransactions { get; set; }
         public ICollection<ProductTransaction> ProductTransactions { get; set; }
+        public ICollection<TaskMaterial> TaskMaterials { get; set; } = new List<TaskMaterial>();
     }
 }

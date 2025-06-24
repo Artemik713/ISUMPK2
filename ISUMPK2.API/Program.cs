@@ -33,10 +33,9 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "ISUMPK2 API",
         Version = "v1",
-        Description = "API для системы завода",
+        Description = "API для системы завода.\nВ случае проблемы свяжитесь с: houtuy96@gmail.com",
         Contact = new OpenApiContact
         {
-            Name = "В случае проблемы свяжитесь с\t",
             Email = "houtuy96@gmail.com"
         }
     });
@@ -97,7 +96,7 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IMaterialCategoryRepository, MaterialCategoryRepository>();
 builder.Services.AddScoped<ISubTaskRepository, SubTaskRepository>();
 builder.Services.AddScoped<IWorkTaskRepository, WorkTaskRepository>();
-
+builder.Services.AddScoped<ITaskMaterialRepository, TaskMaterialRepository>();
 
 
 
@@ -107,6 +106,7 @@ builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<ISubTaskService, SubTaskService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<ISUMPK2.Application.Services.IMaterialService, MaterialService>();
+builder.Services.AddScoped<ITaskMaterialService, TaskMaterialService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ISUMPK2.Application.Services.INotificationService, ISUMPK2.Application.Services.Implementations.NotificationService>();
 

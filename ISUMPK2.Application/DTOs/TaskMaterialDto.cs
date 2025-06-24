@@ -12,9 +12,9 @@ namespace ISUMPK2.Application.DTOs
         public Guid Id { get; set; }
         public Guid TaskId { get; set; }
         public Guid MaterialId { get; set; }
-        public string MaterialName { get; set; }
-        public string MaterialCode { get; set; }
-        public string UnitOfMeasure { get; set; }
+        public string MaterialName { get; set; } = string.Empty;
+        public string MaterialCode { get; set; } = string.Empty;
+        public string UnitOfMeasure { get; set; } = string.Empty;
         public decimal Quantity { get; set; }
     }
 

@@ -128,6 +128,14 @@ namespace ISUMPK2.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<WorkTask> GetTaskWithMaterialsAsync(Guid taskId)
+        {
+            return await _context.WorkTasks
+                .Include(t => t.TaskMaterials)
+                    .ThenInclude(tm => tm.Material)
+                .FirstOrDefaultAsync(t => t.Id == taskId);
+        }
+
         public async Task<IEnumerable<Domain.Entities.WorkTask>> GetTasksForDashboardAsync(Guid userId)
         {
             // Получаем задачи, которые:

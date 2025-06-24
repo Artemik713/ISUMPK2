@@ -1,53 +1,52 @@
 ﻿@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
 @using ISUMPK2.Web.Services
 @using MudBlazor
+@using System.Net.Http.Json
 @inject IClientTaskMaterialService TaskMaterialService
-@inject IClientMaterialService MaterialService
+@inject IMaterialService MaterialService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject HttpClient HttpClient
 
-<MudCard Class="mt-4">
-    <MudCardHeader>
-        <MudText Typo="Typo.h6">Материалы для задачи</MudText>
-    </MudCardHeader>
-    <MudCardContent>
-        <MudTable Items="@taskMaterials" Hover="true" Loading="@loading" LoadingProgressColor="Color.Info">
-            <ToolBarContent>
-                <MudButton Variant="Variant.Filled" 
-                          Color="Color.Primary"
-                          StartIcon="@Icons.Material.Filled.Add" 
-                          OnClick="OpenAddMaterialDialog">
-                    Добавить материал
-                </MudButton>
-            </ToolBarContent>
-            <HeaderContent>
-                <MudTh>Название</MudTh>
-                <MudTh>Код</MudTh>
-                <MudTh>Ед. изм.</MudTh>
-                <MudTh>Количество</MudTh>
-                <MudTh></MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>@context.MaterialName</MudTd>
-                <MudTd>@context.MaterialCode</MudTd>
-                <MudTd>@context.UnitOfMeasure</MudTd>
-                <MudTd>@context.Quantity</MudTd>
-                <MudTd>
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" 
-                                  Size="Size.Small" 
-                                  OnClick="@(() => OpenEditDialog(context))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                                  Size="Size.Small"
-                                  Color="Color.Error"
-                                  OnClick="@(() => ConfirmDelete(context))" />
-                </MudTd>
-            </RowTemplate>
-            <NoRecordsContent>
-                <MudText>Нет материалов, связанных с этой задачей</MudText>
-            </NoRecordsContent>
-        </MudTable>
-    </MudCardContent>
-</MudCard>
+<MudDivider Class="my-4" />
+<div class="d-flex justify-space-between align-center mb-3">
+    <MudText Typo="Typo.h6">Материалы для задачи</MudText>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenAddMaterialDialog">
+        Добавить материал
+    </MudButton>
+</div>
+
+<MudTable Items="taskMaterials" Hover="true" Loading="loading" LoadingProgressColor="Color.Info">
+    <HeaderContent>
+        <MudTh>Название</MudTh>
+        <MudTh>Код</MudTh>
+        <MudTh>Ед. изм.</MudTh>
+        <MudTh>Количество</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.MaterialName</MudTd>
+        <MudTd>@context.MaterialCode</MudTd>
+        <MudTd>@context.UnitOfMeasure</MudTd>
+        <MudTd>@context.Quantity</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                           Size="Size.Small"
+                           OnClick="@(() => OpenEditDialog(context))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                           Size="Size.Small"
+                           Color="Color.Error"
+                           OnClick="@(() => ConfirmDelete(context))" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>Нет материалов, связанных с этой задачей</MudText>
+    </NoRecordsContent>
+</MudTable>
 
 <MudDialog @bind-IsVisible="dialogVisible" Options="dialogOptions">
     <TitleContent>
@@ -57,25 +56,25 @@
         <MudForm @ref="form" Model="editModel">
             @if (isNew)
             {
-                <MudSelect T="Guid" Label="Выберите материал" 
-                          @bind-Value="editModel.MaterialId"
-                          Required="true">
+                <MudSelect T="Guid" Label="Выберите материал"
+                           @bind-Value="editModel.MaterialId"
+                           Required="true">
                     @foreach (var material in availableMaterials)
                     {
                         <MudSelectItem Value="@material.Id">@material.Name (@material.Code)</MudSelectItem>
                     }
                 </MudSelect>
             }
-            <MudNumericField @bind-Value="editModel.Quantity" 
-                            Label="Количество" 
-                            Required="true"
-                            Min="0" />
+            <MudNumericField @bind-Value="editModel.Quantity"
+                             Label="Количество"
+                             Required="true"
+                             Min="0" />
         </MudForm>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="CloseDialog">Отмена</MudButton>
-        <MudButton Color="Color.Primary" 
-                  OnClick="SaveMaterial">
+        <MudButton Color="Color.Primary"
+                   OnClick="SaveMaterial">
             Сохранить
         </MudButton>
     </DialogActions>
@@ -114,12 +113,23 @@
         loading = true;
         try
         {
+            // Используем TaskMaterialService напрямую
             taskMaterials = (await TaskMaterialService.GetByTaskIdAsync(TaskId)).ToList();
-            availableMaterials = (await MaterialService.GetAllAsync()).ToList();
+            availableMaterials = (await MaterialService.GetAllMaterialsAsync()).ToList();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Ошибка при загрузке материалов: {ex.Message}", Severity.Error);
+            // Запасной вариант - прямой запрос через HttpClient
+            try
+            {
+                var response = await HttpClient.GetFromJsonAsync<List<TaskMaterialDto>>($"api/TaskMaterials/task/{TaskId}");
+                taskMaterials = response ?? new List<TaskMaterialDto>();
+            }
+            catch
+            {
+                taskMaterials = new List<TaskMaterialDto>();
+                Snackbar.Add($"Ошибка при загрузке материалов: {ex.Message}", Severity.Error);
+            }
         }
         finally
         {
@@ -176,9 +186,9 @@
     private async Task ConfirmDelete(TaskMaterialDto material)
     {
         bool confirmed = await DialogService.ShowMessageBox(
-            "Подтверждение", 
+            "Подтверждение",
             $"Удалить материал {material.MaterialName} из задачи?",
-            "Удалить", 
+            "Удалить",
             "Отмена"
         ) == true;
 

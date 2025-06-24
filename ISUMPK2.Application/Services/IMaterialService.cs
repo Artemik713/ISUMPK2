@@ -29,5 +29,7 @@ namespace ISUMPK2.Application.Services
         Task<MaterialCategoryDto> UpdateCategoryAsync(Guid id, MaterialCategoryDto categoryDto);
         Task DeleteCategoryAsync(Guid id);
         Task<IEnumerable<MaterialDto>> SearchMaterialsAsync(string searchTerm);
+        // Добавьте метод для обновления запасов
+        Task UpdateStockAsync(Guid materialId, decimal quantity, bool isAddition);
     }
 }

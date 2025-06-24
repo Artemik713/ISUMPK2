@@ -1,7 +1,9 @@
 ﻿@page "/tasks/add"
+@page "/tasks/add/product/{ProductId:guid}"
 @attribute [Authorize]
 @using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
+@using ISUMPK2.Application.Services.Implementations
 @using ISUMPK2.Web.Models
 @using ISUMPK2.Web.Extensions
 @using ISUMPK2.Web.Services;
@@ -13,6 +15,8 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject IAuthService AuthService
+@inject IProductService ProductService
+@inject IMaterialService MaterialService
 
 <PageTitle>Создание задачи - ИСУ ПМК</PageTitle>
 
@@ -136,20 +140,86 @@
                 }
             </MudButton>
         </MudCardActions>
+        <MudDivider Class="my-4" />
+        <div class="d-flex justify-space-between align-center mb-3">
+            <MudText Typo="Typo.h6">Материалы</MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       OnClick="AddMaterial" StartIcon="@Icons.Material.Filled.Add"
+                       Size="Size.Small">
+                Добавить материал
+            </MudButton>
+        </div>
+        @if (taskMaterials.Any())
+        {
+            <MudTable Items="@taskMaterials" Hover="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Материал</MudTh>
+                    <MudTh>Количество</MudTh>
+                    <MudTh>Ед. измерения</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudSelect T="Guid" @bind-Value="context.MaterialId" Label="Материал"
+                                   @onchange="@(() => UpdateMaterialInfo(context))">
+                            @foreach (var material in availableMaterials)
+                            {
+                                <MudSelectItem Value="@material.Id">@material.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="decimal" @bind-Value="context.Quantity" Min="0" />
+                    </MudTd>
+                    <MudTd>
+                        @context.UnitOfMeasure
+                    </MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                       OnClick="@(() => RemoveMaterial(context))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+        else
+        {
+            <MudText Color="Color.Secondary" Class="mb-3">
+                Нет добавленных материалов
+            </MudText>
+        }
     </MudCard>
 </MudContainer>
 
 @code {
+
     private MudForm? form;
     private bool isValid;
     private bool isProcessing;
 
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public Guid? ProductId { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Operation { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string ProductName { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public Guid? DepartmentId { get; set; }
+
     private TaskCreateModel newTask = new TaskCreateModel();
+
     private DateTime? dueDate;
     private List<UserModel> users = new List<UserModel>();
     private List<DepartmentModel> departments = new List<DepartmentModel>();
     private List<SubTaskCreateModel> subTasks = new List<SubTaskCreateModel>();
-
+    private List<TaskMaterialModel> taskMaterials = new List<TaskMaterialModel>();
+    private List<MaterialDto> availableMaterials = new List<MaterialDto>();
     private List<PriorityModel> priorities = new List<PriorityModel>
     {
         new PriorityModel { Id = 1, Name = "Низкий" },
@@ -165,6 +235,49 @@
             // Загружаем все необходимые данные
             await LoadUsersAndDepartments();
 
+            // Если открыли страницу из продукта, предзаполняем данные
+            if (ProductId.HasValue)
+            {
+                var product = await ProductService.GetProductByIdAsync(ProductId.Value);
+                if (product != null)
+                {
+                    // Заполняем название задачи с типом обработки и названием продукта
+                    newTask.Title = $"{Operation ?? "Производство"} {ProductName ?? product.Name}";
+                    newTask.Description = product.Description;
+                    newTask.DepartmentId = DepartmentId ?? product.DepartmentId;
+                    newTask.ProductId = ProductId;
+                    newTask.Quantity = 1; // По умолчанию 1 единица
+
+                    // Добавляем материалы продукта как материалы задачи
+                    if (product.Materials != null && product.Materials.Any())
+                    {
+                        foreach (var material in product.Materials)
+                        {
+                            taskMaterials.Add(new TaskMaterialModel
+                            {
+                                MaterialId = material.MaterialId,
+                                MaterialName = material.MaterialName,
+                                Quantity = material.Quantity,
+                                UnitOfMeasure = material.UnitOfMeasure
+                            });
+                        }
+                    }
+
+                    // Добавляем стандартные подзадачи для производства
+                    AddStandardSubTasks(product.ProductTypeName);
+                }
+            }
+
+            // Загружаем доступные материалы
+            try
+            {
+                availableMaterials = (await MaterialService.GetAllMaterialsAsync()).ToList();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Не удалось загрузить материалы: {ex.Message}", Severity.Error);
+            }
+
             // Получаем текущего пользователя для установки CreatorId
             var currentUser = await UserService.GetCurrentUserAsync();
             if (currentUser != null)
@@ -173,7 +286,7 @@
                 Console.WriteLine($"Loaded user: {currentUser.UserName}, CreatorId: {newTask.CreatorId}");
 
                 // Автоматически устанавливаем отдел текущего пользователя
-                if (currentUser.DepartmentId.HasValue)
+                if (currentUser.DepartmentId.HasValue && newTask.DepartmentId == null)
                 {
                     newTask.DepartmentId = currentUser.DepartmentId.Value;
                 }
@@ -187,6 +300,66 @@
         {
             Console.WriteLine($"Ошибка в OnInitializedAsync: {ex.Message}");
             Snackbar.Add($"Ошибка загрузки данных: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void UpdateMaterialInfo(TaskMaterialModel material)
+    {
+        var selectedMaterial = availableMaterials.FirstOrDefault(m => m.Id == material.MaterialId);
+        if (selectedMaterial != null)
+        {
+            material.MaterialName = selectedMaterial.Name;
+            material.MaterialCode = selectedMaterial.Code;
+            material.UnitOfMeasure = selectedMaterial.UnitOfMeasure ?? "шт.";
+        }
+    }
+
+    private void AddMaterial()
+    {
+        taskMaterials.Add(new TaskMaterialModel());
+        StateHasChanged();
+    }
+
+    private void RemoveMaterial(TaskMaterialModel material)
+    {
+        taskMaterials.Remove(material);
+        StateHasChanged();
+    }
+
+    private void AddStandardSubTasks(string productType)
+    {
+        // Добавляем стандартные подзадачи в зависимости от типа продукта
+        if (productType == "Ростверк")
+        {
+            subTasks.Add(new SubTaskCreateModel
+            {
+                Title = "Подготовка материалов",
+                Description = "Подготовить материалы для производства"
+            });
+            subTasks.Add(new SubTaskCreateModel
+            {
+                Title = "Сборка основы",
+                Description = "Выполнить сборку основы ростверка"
+            });
+            subTasks.Add(new SubTaskCreateModel
+            {
+                Title = "Покраска",
+                Description = "Выполнить покраску готового изделия"
+            });
+        }
+        else
+        {
+            // Для других типов продуктов - общие подзадачи
+            subTasks.Add(new SubTaskCreateModel
+            {
+                Title = "Подготовка материалов",
+                Description = "Подготовить материалы для производства"
+            });
+            subTasks.Add(new SubTaskCreateModel
+            {
+                Title = "Сборка изделия",
+                Description = "Выполнить сборку изделия"
+            });
         }
     }
 
@@ -264,7 +437,14 @@
                 PriorityId = newTask.PriorityId,
                 AssigneeId = newTask.AssigneeId,
                 DepartmentId = newTask.DepartmentId,
-                DueDate = newTask.DueDate
+                DueDate = newTask.DueDate,
+                ProductId = newTask.ProductId,
+                Quantity = newTask.Quantity,
+                Materials = taskMaterials.Select(m => new TaskMaterialCreateDto
+                {
+                    MaterialId = m.MaterialId,
+                    Quantity = m.Quantity
+                }).ToList()
             };
 
             try
@@ -288,6 +468,26 @@
                         };
 
                         await SubTaskService.CreateSubTaskAsync(subTaskDto);
+                    }
+                }
+
+                // Списание материалов со склада после создания задачи
+                if (createdTask != null && taskMaterials.Any())
+                {
+                    foreach (var material in taskMaterials)
+                    {
+                        try
+                        {
+                            await MaterialService.UpdateStockAsync(
+                                material.MaterialId,
+                                material.Quantity,
+                                false); // false означает вычитание
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Ошибка при списании материала {material.MaterialId}: {ex.Message}");
+                            // Продолжаем дальше даже при ошибке списания материалов
+                        }
                     }
                 }
 
@@ -316,6 +516,28 @@
         NavigationManager.NavigateTo("/tasks");
     }
 
+    
+
+    public class TaskMaterialModel
+    {
+        public Guid MaterialId { get; set; }
+        public string MaterialName { get; set; } = string.Empty;
+        public string MaterialCode { get; set; } = string.Empty;
+        public decimal Quantity { get; set; }
+        public string UnitOfMeasure { get; set; } = "шт.";
+
+        // Метод для обновления названия материала и единицы измерения
+        public void UpdateMaterialInfo(List<MaterialDto> materials)
+        {
+            var material = materials.FirstOrDefault(m => m.Id == MaterialId);
+            if (material != null)
+            {
+                MaterialName = material.Name;
+                UnitOfMeasure = material.UnitOfMeasure;
+            }
+        }
+    }
+
     // Модель для создания подзадач
     public class SubTaskCreateModel
     {
@@ -335,6 +557,8 @@
         public Guid CreatorId { get; set; }
         public Guid? DepartmentId { get; set; }
         public DateTime? DueDate { get; set; }
+        public Guid? ProductId { get; set; } // Добавлено
+        public decimal? Quantity { get; set; } // Добавлено
     }
 
     private class PriorityModel

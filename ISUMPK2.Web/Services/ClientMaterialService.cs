@@ -192,5 +192,28 @@ namespace ISUMPK2.Web.Services
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<MaterialDto>(_jsonOptions);
         }
+        public async Task UpdateStockAsync(Guid materialId, decimal quantity, bool isAddition)
+        {
+            try
+            {
+                // Формируем запрос на обновление остатков материала
+                var response = await _httpClient.PutAsync(
+                    $"api/materials/{materialId}/stock?quantity={quantity}&isAddition={isAddition}",
+                    null);
+
+                // Проверка на ошибки
+                if (!response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Ошибка при обновлении запасов: {response.StatusCode}, {content}");
+                    throw new Exception($"Ошибка при обновлении запасов материала: {response.StatusCode}, {content}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Исключение при обновлении запасов материала: {ex.Message}");
+                throw;
+            }
+        }
     }
 }

@@ -160,8 +160,9 @@
                     <!-- Создать задачу на производство -->
                     @if (canManageProducts)
                     {
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateProductionTask" FullWidth="true">
-                            Создать задачу на производство
+                        <MudButton FullWidth Color="Color.Primary" Variant="Variant.Filled"
+                                   OnClick="@CreateProductionTask">
+                            СОЗДАТЬ ЗАДАЧУ НА ПРОИЗВОДСТВО
                         </MudButton>
                     }
                 </MudPaper>
@@ -327,7 +328,18 @@
 
     private void CreateProductionTask()
     {
-        NavigationManager.NavigateTo($"/tasks/add?productId={Id}");
+        if (product != null)
+        {
+            string operation = "Производство";
+            if (product.ProductTypeName == "Ростверк")
+            {
+                operation = "Обработка ростверк";
+            }
+
+            // Используем UrlEncoder для правильного экранирования значений в URL
+            var productNameEncoded = Uri.EscapeDataString(product.Name);
+            NavigationManager.NavigateTo($"/tasks/add?productId={product.Id}&operation={operation}&productName={productNameEncoded}&departmentId={product.DepartmentId}");
+        }
     }
 
     public class ProductionHistoryItem

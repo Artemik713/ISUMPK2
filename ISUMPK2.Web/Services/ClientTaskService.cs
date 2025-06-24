@@ -154,5 +154,31 @@ namespace ISUMPK2.Web.Services
             await SetAuthorizationHeaderAsync();
             return await _httpClient.GetFromJsonAsync<IEnumerable<TaskCommentDto>>($"api/tasks/{taskId}/comments");
         }
+        public async Task<IEnumerable<TaskMaterialDto>> GetTaskMaterialsAsync(Guid taskId)
+        {
+            try
+            {
+                return await _httpClient.GetFromJsonAsync<IEnumerable<TaskMaterialDto>>($"api/TaskMaterials/task/{taskId}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting task materials: {ex.Message}");
+                return new List<TaskMaterialDto>();
+            }
+        }
+
+        public async Task UpdateTaskMaterialsAsync(Guid taskId, List<TaskMaterialCreateDto> materials)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync($"api/tasks/{taskId}/materials", materials);
+                response.EnsureSuccessStatusCode();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating task materials: {ex.Message}");
+                throw;
+            }
+        }
     }
 }

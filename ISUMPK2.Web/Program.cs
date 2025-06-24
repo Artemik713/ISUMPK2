@@ -69,6 +69,7 @@ namespace ISUMPK2.Web
             builder.Services.AddScoped<IThemeService, ThemeService>();
 
 
+
             // Уберите дублирующиеся регистрации MudServices
 
             // Регистрация сервисов приложения
@@ -86,6 +87,8 @@ namespace ISUMPK2.Web
             // Настройка SignalR для уведомлений
             builder.Services.AddSingleton<INotificationHubService, NotificationHubService>();
             builder.Services.AddSingleton<IChatHubService, ChatHubService>();
+            // Регистрация клиентских сервисов для работы с материалами задач
+            builder.Services.AddScoped<IClientTaskMaterialService, ClientTaskMaterialService>();
 
             await builder.Build().RunAsync();
         }

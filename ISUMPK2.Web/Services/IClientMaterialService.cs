@@ -13,5 +13,6 @@ namespace ISUMPK2.Web.Services
         Task<MaterialDto> CreateAsync(MaterialCreateDto createDto);
         Task<MaterialDto> UpdateAsync(Guid id, MaterialUpdateDto updateDto);
         Task DeleteAsync(Guid id);
+        Task<IEnumerable<MaterialDto>> GetAllMaterialsAsync();
     }
 }

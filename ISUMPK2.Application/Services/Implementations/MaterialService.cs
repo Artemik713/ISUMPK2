@@ -313,6 +313,40 @@ namespace ISUMPK2.Application.Services.Implementations
             return materials.Select(MapToDto);
         }
 
+        public async Task UpdateStockAsync(Guid materialId, decimal quantity, bool isAddition)
+        {
+            var material = await _materialRepository.GetByIdAsync(materialId);
+            if (material == null)
+            {
+                throw new ApplicationException($"Материал с ID {materialId} не найден");
+            }
+
+            if (isAddition)
+            {
+                material.CurrentStock += quantity;
+            }
+            else
+            {
+                if (material.CurrentStock < quantity)
+                {
+                    throw new ApplicationException($"Недостаточно материала '{material.Name}' на складе. В наличии: {material.CurrentStock} {material.UnitOfMeasure}");
+                }
+                material.CurrentStock -= quantity;
+            }
+
+            // Проверяем необходимость создания уведомления о низком запасе
+            if (material.CurrentStock <= material.MinimumStock)
+            {
+                // Если есть сервис уведомлений, вызываем его метод
+                if (_notificationService != null)
+                {
+                    await _notificationService.CreateLowStockNotificationAsync(materialId);
+                }
+            }
+
+            await _materialRepository.UpdateAsync(material);
+            await _materialRepository.SaveChangesAsync();
+        }
         public async Task<IEnumerable<MaterialDto>> SearchMaterialsAsync(string searchTerm)
         {
             if (string.IsNullOrWhiteSpace(searchTerm))

@@ -207,7 +207,61 @@ else
                     }
                 </MudPaper>
             </MudItem>
+            @if (task.ProductId.HasValue)
+            {
+                <MudCard Elevation="2" Class="mt-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Информация о продукте</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between">
+                            <div>
+                                <MudText><strong>Продукт:</strong> @task.ProductName</MudText>
+                                @if (task.Quantity.HasValue)
+                                {
+                                    <MudText><strong>Количество:</strong> @task.Quantity шт.</MudText>
+                                }
+                            </div>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                       Href="@($"/products/{task.ProductId}")">
+                                Открыть страницу продукта
+                            </MudButton>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            }
 
+            <!-- Добавьте секцию для отображения списка материалов -->
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Материалы</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (taskMaterials != null && taskMaterials.Any())
+                    {
+                        <MudTable Items="@taskMaterials" Hover="true" Dense="true">
+                            <HeaderContent>
+                                <MudTh>Материал</MudTh>
+                                <MudTh>Количество</MudTh>
+                                <MudTh>Ед. измерения</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>@context.MaterialName</MudTd>
+                                <MudTd>@context.Quantity</MudTd>
+                                <MudTd>@context.UnitOfMeasure</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info">Материалы не указаны</MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
             <!-- Комментарии -->
             <MudItem xs="12">
                 <MudPaper Elevation="0" Class="pa-4 border-solid border-1">
@@ -270,12 +324,38 @@ else
     private bool isLoading = true;
     private string newComment = "";
     private List<SubTaskModel> subTasks = new List<SubTaskModel>();
+    private List<TaskMaterialModel> taskMaterials = new List<TaskMaterialModel>();
 
     protected override async Task OnInitializedAsync()
     {
         // Получаем текущего пользователя и его роли
         await GetCurrentUserInfo();
         await LoadTaskAsync();
+        if (task != null && task.Id != Guid.Empty)
+        {
+            try
+            {
+                Console.WriteLine($"Загрузка материалов для задачи {task.Id}");
+                var materials = await TaskService.GetTaskMaterialsAsync(task.Id);
+                Console.WriteLine($"Получено материалов: {materials?.Count() ?? 0}");
+
+                taskMaterials = materials?.Select(m => new TaskMaterialModel
+                {
+                    MaterialId = m.MaterialId,
+                    MaterialName = m.MaterialName ?? "Неизвестный материал",
+                    Quantity = m.Quantity,
+                    UnitOfMeasure = m.UnitOfMeasure ?? "шт."
+                }).ToList() ?? new List<TaskMaterialModel>();
+
+                Console.WriteLine($"Преобразовано материалов: {taskMaterials.Count}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при загрузке материалов: {ex.Message}");
+                Snackbar.Add($"Не удалось загрузить материалы: {ex.Message}", Severity.Warning);
+                taskMaterials = new List<TaskMaterialModel>();
+            }
+        }
     }
 
     protected override async Task OnParametersSetAsync()

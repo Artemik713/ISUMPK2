@@ -21,7 +21,16 @@ namespace ISUMPK2.Web.Services
 
         public async Task<IEnumerable<TaskMaterialDto>> GetByTaskIdAsync(Guid taskId)
         {
-            return await _httpClient.GetFromJsonAsync<IEnumerable<TaskMaterialDto>>($"api/TaskMaterials/task/{taskId}");
+            try
+            {
+                // Вернуть исходный маршрут
+                return await _httpClient.GetFromJsonAsync<IEnumerable<TaskMaterialDto>>($"api/TaskMaterials/task/{taskId}", _jsonOptions);
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"Ошибка при запросе материалов задачи {taskId}: {ex.Message}");
+                return new List<TaskMaterialDto>();
+            }
         }
 
         public async Task<IEnumerable<TaskMaterialDto>> GetByMaterialIdAsync(Guid materialId)

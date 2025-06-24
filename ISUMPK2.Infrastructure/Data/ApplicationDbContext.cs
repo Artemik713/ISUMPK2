@@ -32,6 +32,7 @@ namespace ISUMPK2.Infrastructure.Data
             public DbSet<ChatMessage> ChatMessages { get; set; }
             public DbSet<MaterialCategory> MaterialCategories { get; set; }
             public DbSet<SubTask> SubTasks { get; set; }
+            public DbSet<TaskMaterial> TaskMaterials { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
                 base.OnModelCreating(modelBuilder);
@@ -213,6 +214,22 @@ namespace ISUMPK2.Infrastructure.Data
                 .HasOne(s => s.ParentTask)
                 .WithMany(t => t.SubTasks)
                 .HasForeignKey(s => s.ParentTaskId);
+            modelBuilder.Entity<TaskMaterial>()
+                .HasOne(tm => tm.WorkTask)
+                .WithMany(t => t.TaskMaterials)
+                .HasForeignKey(tm => tm.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<TaskMaterial>()
+                .HasOne(tm => tm.Material)
+                .WithMany()
+                .HasForeignKey(tm => tm.MaterialId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Настройка для десятичного поля
+            modelBuilder.Entity<TaskMaterial>()
+                .Property(tm => tm.Quantity)
+                .HasPrecision(18, 2);
         }
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
