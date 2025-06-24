@@ -81,6 +81,22 @@ namespace ISUMPK2.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<Product?> GetByIdWithDetailsAsync(Guid id)
+        {
+            return await _context.Products
+                .Include(p => p.ProductType)
+                .Include(p => p.Department)
+                .Include(p => p.ProductMaterials)
+                    .ThenInclude(pm => pm.Material)
+                .FirstOrDefaultAsync(p => p.Id == id);
+        }
+
+        public override async Task<IEnumerable<Product>> GetAllAsync()
+        {
+            return await _dbSet
+                .Include(p => p.ProductType)  // Добавляем включение связанных типов продуктов
+                .ToListAsync();
+        }
         public async Task<IEnumerable<ProductTransaction>> GetTransactionsByDateRangeAsync(DateTime startDate, DateTime endDate)
         {
             return await _context.Set<ProductTransaction>()
@@ -90,6 +106,22 @@ namespace ISUMPK2.Infrastructure.Repositories
                 .Include(t => t.Task)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
+        }
+
+        public async Task AddProductMaterialAsync(ProductMaterial productMaterial)
+        {
+            _context.ProductMaterials.Add(productMaterial);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task RemoveAllProductMaterialsAsync(Guid productId)
+        {
+            var materials = await _context.ProductMaterials
+                .Where(pm => pm.ProductId == productId)
+                .ToListAsync();
+
+            _context.ProductMaterials.RemoveRange(materials);
+            await _context.SaveChangesAsync();
         }
     }
 }

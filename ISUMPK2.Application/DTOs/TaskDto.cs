@@ -45,6 +45,7 @@ namespace ISUMPK2.Application.DTOs
         public decimal? EstimatedHours { get; set; }
         public Guid? ProductId { get; set; }
         public decimal? Quantity { get; set; }
+        public List<TaskMaterialCreateDto> Materials { get; set; } = new List<TaskMaterialCreateDto>();
     }
 
     public class TaskUpdateDto

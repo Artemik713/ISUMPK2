@@ -1,0 +1,41 @@
+﻿@namespace ISUMPK2.Web.Dialogs
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1">@Message</MudText>
+        <MudNumericField @bind-Value="value" Label="Количество" Min="0" Step="0.1m" Class="mt-3"
+                         Variant="Variant.Outlined" Immediate="true" Format="N2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(value <= 0)">Ок</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Message { get; set; } = "Введите значение:";
+    [Parameter] public string InputValue { get; set; } = "1";
+    
+    private decimal value = 1;
+
+    protected override void OnParametersSet()
+    {
+        if (decimal.TryParse(InputValue, out decimal val))
+        {
+            value = val;
+        }
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(value));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}

@@ -1,0 +1,55 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Если пользователь авторизован
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            // Получаем текущий путь
+            var currentUri = new Uri(NavigationManager.Uri);
+            var path = currentUri.LocalPath.ToLowerInvariant();
+
+            // Путь домашней страницы
+            string homePath = "/";
+
+            // Исключаемые пути (не перенаправлять)
+            if (!path.StartsWith("/account/") &&
+                !path.StartsWith("/logout") &&
+                !path.StartsWith("/login"))
+            {
+                // Определяем роль и соответствующий путь
+                if (user.IsInRole("Worker") && !user.IsInRole("Admin") && !user.IsInRole("Manager"))
+                {
+                    // Рабочий имеет доступ только к своей панели и своим задачам
+                    if (!path.StartsWith("/worker/") && !path.StartsWith("/tasks/"))
+                    {
+                        NavigationManager.NavigateTo("/worker/dashboard");
+                    }
+                }
+                else if (user.IsInRole("Manager") && !user.IsInRole("Admin"))
+                {
+                    // Менеджеры имеют доступ к своей панели и могут просматривать все задачи
+                    if (path == homePath)
+                    {
+                        NavigationManager.NavigateTo("/manager/dashboard");
+                    }
+                }
+                else if (user.IsInRole("Admin"))
+                {
+                    // Администраторы имеют доступ ко всем разделам системы
+                    if (path == homePath)
+                    {
+                        NavigationManager.NavigateTo("/admin/dashboard");
+                    }
+                }
+            }
+        }
+    }
+}

@@ -22,19 +22,21 @@ var builder = WebApplication.CreateBuilder(args);
 // 1. Сервисы контроллеров
 builder.Services.AddControllers();
 
+
+
 // 2. Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "ISUMPK2 API",
         Version = "v1",
-        Description = "API для системы ИСУМПК2",
+        Description = "API для системы завода.\nВ случае проблемы свяжитесь с: houtuy96@gmail.com",
         Contact = new OpenApiContact
         {
-            Name = "Ваша команда",
-            Email = "contact@example.com"
+            Email = "houtuy96@gmail.com"
         }
     });
 
@@ -67,10 +69,13 @@ builder.Services.AddSwaggerGen(c =>
 // 3. CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        policy => policy.AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader());
+    options.AddPolicy("AllowBlazorClient", builder =>
+    {
+        builder.WithOrigins("https://localhost:7062") // URL вашего Blazor приложения
+               .AllowAnyMethod()
+               .AllowAnyHeader()
+               .AllowCredentials();
+    });
 });
 
 // 4. Конфигурация базы данных
@@ -89,15 +94,19 @@ builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IMaterialCategoryRepository, MaterialCategoryRepository>();
-
+builder.Services.AddScoped<ISubTaskRepository, SubTaskRepository>();
+builder.Services.AddScoped<IWorkTaskRepository, WorkTaskRepository>();
+builder.Services.AddScoped<ITaskMaterialRepository, TaskMaterialRepository>();
 
 
 
 // 7. Регистрация служб приложения
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+builder.Services.AddScoped<ISubTaskService, SubTaskService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<ISUMPK2.Application.Services.IMaterialService, MaterialService>();
+builder.Services.AddScoped<ITaskMaterialService, TaskMaterialService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ISUMPK2.Application.Services.INotificationService, ISUMPK2.Application.Services.Implementations.NotificationService>();
 
@@ -147,7 +156,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
-app.UseCors("AllowAll");
+app.UseCors("AllowBlazorClient");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -1,0 +1,134 @@
+﻿@using MudBlazor
+@inject MudBlazor.IDialogService DialogService
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">О системе управления производством металлоконструкций</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudContainer Style="max-height: 60vh; overflow-y: auto">
+            <MudText Class="mb-4">
+                Информационная система управления производством металлоконструкций (ИСУ ПМК) – это комплексное программное
+                решение для автоматизации всех аспектов производственного процесса на предприятиях металлообрабатывающей отрасли.
+            </MudText>
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.h6" Class="mb-3">Ключевые возможности</MudText>
+
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="0" Class="mb-3">
+                        <MudCardHeader>
+                            <CardHeaderAvatar>
+                                <MudIcon Icon="@Icons.Material.Filled.Assignment" Color="Color.Primary" />
+                            </CardHeaderAvatar>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1"><b>Управление задачами</b></MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2">
+                                Создавайте задачи, назначайте исполнителей, отслеживайте прогресс
+                                выполнения и формируйте отчеты. Поддерживается разбивка задач на
+                                подзадачи и установка приоритетов.
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="0" Class="mb-3">
+                        <MudCardHeader>
+                            <CardHeaderAvatar>
+                                <MudIcon Icon="@Icons.Material.Filled.Inventory" Color="Color.Secondary" />
+                            </CardHeaderAvatar>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1"><b>Контроль материалов</b></MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2">
+                                Учет поступления, расхода и остатков материалов. Автоматические
+                                уведомления о критических запасах и инструменты прогнозирования потребностей.
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="0" Class="mb-3">
+                        <MudCardHeader>
+                            <CardHeaderAvatar>
+                                <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Tertiary" />
+                            </CardHeaderAvatar>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1"><b>Учет продукции</b></MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2">
+                                Полный цикл учета изготовляемой продукции от планирования до
+                                отгрузки заказчику. Контроль качества и управление запасами готовой продукции.
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="0" Class="mb-3">
+                        <MudCardHeader>
+                            <CardHeaderAvatar>
+                                <MudIcon Icon="@Icons.Material.Filled.BarChart" Color="Color.Warning" />
+                            </CardHeaderAvatar>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1"><b>Аналитика</b></MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2">
+                                Детальная статистика и аналитика по всем аспектам производственной
+                                деятельности. Формирование отчетов и визуализация ключевых показателей.
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.h6" Class="mb-3">Преимущества системы</MudText>
+
+            <MudList T="string" Clickable="false">
+                <MudListItem T="string" Text="Повышение эффективности — автоматизация рутинных задач и оптимизация процессов" Icon="@Icons.Material.Filled.Check" />
+                <MudListItem T="string" Text="Снижение затрат — сокращение простоев и оптимизация использования ресурсов" Icon="@Icons.Material.Filled.Check" />
+                <MudListItem T="string" Text="Прозрачность процессов — полный контроль над всеми этапами производства" Icon="@Icons.Material.Filled.Check" />
+                <MudListItem T="string" Text="Улучшение качества — контроль соответствия продукции стандартам и требованиям" Icon="@Icons.Material.Filled.Check" />
+                <MudListItem T="string" Text="Оперативность — быстрое реагирование на изменения в производственном процессе" Icon="@Icons.Material.Filled.Check" />
+            </MudList>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CloseDialog">Закрыть</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .benefits-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .benefit-item {
+        display: flex;
+        align-items: center;
+        padding: 8px 0;
+    }
+</style>
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private void CloseDialog()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

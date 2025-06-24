@@ -2,139 +2,386 @@
 @page "/tasks/my"
 @page "/tasks/overdue"
 @attribute [Authorize]
+@using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
 @using ISUMPK2.Web.Models
-@using ISUMPK2.Web.Services
-@using ISUMPK2.Web.Extensions
 @using ISUMPK2.Web.Dialogs
-@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Web.Extensions
 @using Microsoft.AspNetCore.Authorization
 @using MudBlazor
-@using ISUMPK2.Web.Dialogs
 @inject ITaskService TaskService
 @inject IUserService UserService
 @inject IDepartmentService DepartmentService
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 <PageTitle>Задачи - ИСУ ПМК</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <div class="d-flex justify-space-between align-center mb-4">
-        <MudText Typo="Typo.h4">@PageTitle</MudText>
-        
-        <div class="d-flex">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" 
-                      OnClick="@CreateTask" Class="mr-2">Создать задачу</MudButton>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" 
-                      OnClick="@LoadTasksAsync">Обновить</MudButton>
+    <MudPaper Elevation="0" Class="d-flex flex-column pa-6 rounded-lg">
+        <!-- Верхняя панель с заголовком и кнопками -->
+        <div class="d-flex justify-space-between align-center mb-6">
+            <div>
+                <MudText Typo="Typo.h4" Class="mb-1">@PageTitle</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @(filteredTasks.Count) @GetTaskCountSuffix(filteredTasks.Count)
+                </MudText>
+            </div>
+
+            <div class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="CreateTask"
+                           Class="px-4">
+                    Создать задачу
+                </MudButton>
+
+                <MudTooltip Text="Обновить">
+                    <MudIconButton Color="Color.Default"
+                                   Variant="Variant.Outlined"
+                                   Icon="@Icons.Material.Filled.Refresh"
+                                   OnClick="LoadTasksAsync" />
+                </MudTooltip>
+
+                <MudTooltip Text="@(isCardView ? "Табличный вид" : "Карточный вид")">
+                    <MudIconButton Color="Color.Default"
+                                   Variant="Variant.Outlined"
+                                   Icon="@(isCardView ? Icons.Material.Filled.ViewList : Icons.Material.Filled.ViewModule)"
+                                   OnClick="ToggleView" />
+                </MudTooltip>
+            </div>
         </div>
-    </div>
 
-    <MudPaper Class="pa-4 mb-4">
-        <MudGrid>
-            <MudItem xs="12" sm="6" md="3">
-                <MudSelect T="int?" Label="Статус" Value="selectedStatusId" ValueChanged="@((int? value) => FilterChanged("status", value))" Clearable="true">
-                    @foreach (var status in statuses)
+        <!-- Панель фильтров -->
+        <MudPaper Elevation="0" Class="pa-4 mb-6 rounded-lg" Style="background-color: var(--mud-palette-background-grey)">
+            <MudGrid>
+                <MudItem xs="12" md="3">
+                    <MudSelect T="int?"
+                               Value="selectedStatusId"
+                               ValueChanged="@((int? value) => OnStatusChanged(value))"
+                               Label="Статус"
+                               Variant="Variant.Outlined"
+                               Class="rounded-lg"
+                               FullWidth="true"
+                               Clearable="true"
+                               AdornmentIcon="@Icons.Material.Filled.FilterList"
+                               AdornmentColor="Color.Primary">
+                        @foreach (var status in statuses)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)status.Id)">
+                                @status.Name
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudSelect T="int?"
+                               Label="Приоритет"
+                               Value="selectedPriorityId"
+                               ValueChanged="@((int? value) => FilterChanged("priority", value))"
+                               Variant="Variant.Outlined"
+                               FullWidth="true"
+                               Clearable="true"
+                               AdornmentIcon="@Icons.Material.Filled.PriorityHigh"
+                               AdornmentColor="Color.Secondary">
+                        @foreach (var priority in priorities)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)priority.Id)">
+                                @priority.Name
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudSelect T="Guid?"
+                               Label="Исполнитель"
+                               Value="selectedAssigneeId"
+                               ValueChanged="@((Guid? value) => FilterChanged("assignee", value))"
+                               Variant="Variant.Outlined"
+                               FullWidth="true"
+                               Clearable="true"
+                               AdornmentIcon="@Icons.Material.Filled.Person"
+                               AdornmentColor="Color.Default">
+                        @foreach (var user in users)
+                        {
+                            <MudSelectItem T="Guid?" Value="@((Guid?)user.Id)">@user.FullName</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudSelect T="Guid?"
+                               Label="Отдел"
+                               Value="selectedDepartmentId"
+                               ValueChanged="@((Guid? value) => FilterChanged("department", value))"
+                               Variant="Variant.Outlined"
+                               FullWidth="true"
+                               Clearable="true"
+                               AdornmentIcon="@Icons.Material.Filled.Business"
+                               AdornmentColor="Color.Default">
+                        @foreach (var department in departments)
+                        {
+                            <MudSelectItem T="Guid?" Value="@((Guid?)department.Id)">@department.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            
+            <!-- Легенда статусов и приоритетов -->
+            <MudGrid Class="mt-2">
+                <MudItem xs="12" md="6">
+                    <div class="d-flex flex-wrap gap-2 align-center">
+                        <MudText Typo="Typo.caption" Class="mr-2">Статусы:</MudText>
+                        @foreach (var status in statuses)
+                        {
+                            <div class="d-flex align-center mr-4">
+                                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(status.Id)" Class="mr-1"></MudChip>
+                                <MudText Typo="Typo.caption">@status.Name</MudText>
+                            </div>
+                        }
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <div class="d-flex flex-wrap gap-2 align-center">
+                        <MudText Typo="Typo.caption" Class="mr-2">Приоритеты:</MudText>
+                        @foreach (var priority in priorities)
+                        {
+                            <div class="d-flex align-center mr-4">
+                                <MudChip T="string" Size="Size.Small" Color="@GetPriorityColor(priority.Id)" Class="mr-1"></MudChip>
+                                <MudText Typo="Typo.caption">@priority.Name</MudText>
+                            </div>
+                        }
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+        
+        @if (isCardView)
+        {
+            <!-- Карточный вид задач -->
+            @if (filteredTasks.Any())
+            {
+                <div class="task-grid">
+                    @foreach (var task in filteredTasks)
                     {
-                        <MudSelectItem Value="@((int?)status.Id)">@status.Name</MudSelectItem>
+                        <MudCard Elevation="2" Class="task-card">
+                            <MudCardHeader>
+                                <CardHeaderAvatar>
+                                    <MudAvatar Color="@GetPriorityColor(task.PriorityId)" Size="Size.Medium">
+                                        @(task.PriorityId == 4 ? "!" : task.PriorityId.ToString())
+                                    </MudAvatar>
+                                </CardHeaderAvatar>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.body1">
+                                        <MudLink Href="@($"/tasks/{task.Id}")" Underline="Underline.None">
+                                            @task.Title
+                                        </MudLink>
+                                    </MudText>
+                                    <MudText Typo="Typo.caption">Создана: @task.CreatedAt.ToString("dd.MM.yyyy")</MudText>
+                                </CardHeaderContent>
+                                <CardHeaderActions>
+                                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true" Direction="Direction.Left">
+                                        <MudMenuItem OnClick="@(() => ViewTask(task.Id))">Просмотр</MudMenuItem>
+                                        <MudMenuItem OnClick="@(() => EditTask(task.Id))">Изменить</MudMenuItem>
+                                        @if (task.StatusId == 1 || task.StatusId == 2 || task.StatusId == 3)
+                                        {
+                                            <MudMenuItem OnClick="@(() => UpdateTaskStatus(task.Id, 4))">
+                                                Отправить на проверку
+                                            </MudMenuItem>
+                                        }
+                                        @if (task.StatusId == 4)
+                                        {
+                                            <MudMenuItem OnClick="@(() => UpdateTaskStatus(task.Id, 5))">
+                                                Подтвердить выполнение
+                                            </MudMenuItem>
+                                            <MudMenuItem OnClick="@(() => UpdateTaskStatus(task.Id, 3))">
+                                                Вернуть на доработку
+                                            </MudMenuItem>
+                                        }
+                                    </MudMenu>
+                                </CardHeaderActions>
+                            </MudCardHeader>
+                            <MudCardContent Class="py-2">
+                                <div class="d-flex mb-2">
+                                    <MudChip T="string" Color="@GetStatusColor(task.StatusId)" Size="Size.Small">
+                                        @task.StatusName
+                                    </MudChip>
+                                    @if (task.Comments.Count > 0)
+                                    {
+                                        <MudChip T="string" Icon="@Icons.Material.Filled.Comment" Size="Size.Small" Class="ml-2">
+                                            @task.Comments.Count
+                                        </MudChip>
+                                    }
+                                </div>
+                                <MudText Typo="Typo.body2">
+                                    <strong>Исполнитель:</strong> @(string.IsNullOrEmpty(task.AssigneeName) ? "Не назначен" : task.AssigneeName)
+                                </MudText>
+                                @if (task.DueDate.HasValue)
+                                {
+                                    <div class="d-flex align-center mt-1">
+                                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-1" />
+                                        <MudText Typo="Typo.body2" Color="@(task.IsOverdue? Color.Error: Color.Default)">
+                                            @task.DueDate.Value.ToString("dd.MM.yyyy")
+                                            @if (task.IsOverdue)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" Class="ml-1" />
+                                            }
+                                        </MudText>
+                                    </div>
+                                }
+                            </MudCardContent>
+                        </MudCard>
                     }
-                </MudSelect>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="3">
-                <MudSelect T="int?" Label="Приоритет" Value="selectedPriorityId" ValueChanged="@((int? value) => FilterChanged("priority", value))" Clearable="true">
-                    @foreach (var priority in priorities)
-                    {
-                        <MudSelectItem Value="@((int?)priority.Id)">@priority.Name</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="3">
-                <MudSelect T="Guid?" Label="Исполнитель" Value="selectedAssigneeId" ValueChanged="@((Guid? value) => FilterChanged("assignee", value))" Clearable="true">
-                    @foreach (var user in users)
-                    {
-                        <MudSelectItem Value="@((Guid?)user.Id)">@user.FullName</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-
-            <MudItem xs="12" sm="6" md="3">
-                <MudSelect T="Guid?" Label="Отдел" Value="selectedDepartmentId" ValueChanged="@((Guid? value) => FilterChanged("department", value))" Clearable="true">
-                    @foreach (var department in departments)
-                    {
-                        <MudSelectItem Value="@((Guid?)department.Id)">@department.Name</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-
-        </MudGrid>
+                </div>
+            }
+            else
+            {
+                <MudPaper Elevation="0" Class="pa-16 d-flex flex-column align-center justify-center">
+                    <MudIcon Icon="@Icons.Material.Filled.AssignmentLate" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">Задачи не найдены</MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary" Class="mt-1">
+                        Попробуйте изменить параметры фильтрации
+                    </MudText>
+                </MudPaper>
+            }
+        }
+        else
+        {
+            <!-- Табличный вид задач -->
+            <MudTable Items="@filteredTasks"
+                      Hover="true"
+                      Breakpoint="Breakpoint.Sm"
+                      Loading="@isLoading"
+                      LoadingProgressColor="Color.Primary"
+                      Elevation="0"
+                      T="TaskModel"
+                      Dense="true"
+                      Striped="false"
+                      Class="rounded-lg"
+                      ServerData="ServerReload"
+                      @ref="table">
+                <HeaderContent>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.Title)">Название</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.StatusId)">Статус</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.PriorityId)">Приоритет</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.AssigneeName)">Исполнитель</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.DueDate)">Срок</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.CreatedAt)">Создана</MudTableSortLabel></MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Название">
+                        <div class="d-flex align-center">
+                            <MudLink Href="@($"/tasks/{context.Id}")">@context.Title</MudLink>
+                            @if (context.Comments.Count > 0)
+                            {
+                                <MudBadge Content="@context.Comments.Count" Color="Color.Info" Overlap="true" Class="ml-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Comment" Size="Size.Small" />
+                                </MudBadge>
+                            }
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="Статус">
+                        <MudChip T="string"
+                                 Color="@GetStatusColor(context.StatusId)"
+                                 Size="Size.Small"
+                                 Label="true"
+                                 Variant="Variant.Filled">
+                            @context.StatusName
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Приоритет">
+                        <MudChip T="string"
+                                 Color="@GetPriorityColor(context.PriorityId)"
+                                 Size="Size.Small"
+                                 Label="true"
+                                 Variant="Variant.Filled">
+                            @context.PriorityName
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Исполнитель">
+                        <div class="d-flex align-center">
+                            <MudAvatar Size="Size.Small" Class="mr-2">
+                                @(string.IsNullOrEmpty(context.AssigneeName) ? "?" : context.AssigneeName[0].ToString())
+                            </MudAvatar>
+                            <span>@(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)</span>
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="Срок">
+                        <div class="d-flex align-center">
+                            @if (context.DueDate.HasValue)
+                            {
+                                <MudText>@context.DueDate.Value.ToString("dd.MM.yyyy")</MudText>
+                                @if (context.IsOverdue)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" Class="ml-1" />
+                                }
+                            }
+                            else
+                            {
+                                <MudText>-</MudText>
+                            }
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="Создана">@context.CreatedAt.ToString("dd.MM.yyyy")</MudTd>
+                    <MudTd>
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true" Direction="Direction.Left">
+                            <MudMenuItem OnClick="@(() => ViewTask(context.Id))">Просмотр</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => EditTask(context.Id))">Изменить</MudMenuItem>
+                            @if (context.StatusId == 1 || context.StatusId == 2 || context.StatusId == 3)
+                            {
+                                <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 4))">Отправить на проверку</MudMenuItem>
+                            }
+                            @if (context.StatusId == 4)
+                            {
+                                <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 5))">Подтвердить выполнение</MudMenuItem>
+                                <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 3))">Вернуть на доработку</MudMenuItem>
+                            }
+                        </MudMenu>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <div class="d-flex flex-column align-center py-8">
+                        <MudIcon Icon="@Icons.Material.Filled.AssignmentLate" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                        <MudText Typo="Typo.h6" Align="Align.Center">Задачи не найдены</MudText>
+                        <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary" Class="mt-1">
+                            Попробуйте изменить параметры фильтрации
+                        </MudText>
+                    </div>
+                </NoRecordsContent>
+                <LoadingContent>
+                    <div class="d-flex justify-center my-4">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                    </div>
+                </LoadingContent>
+                <PagerContent>
+                    <MudTablePager HorizontalAlignment="HorizontalAlignment.Right" />
+                </PagerContent>
+            </MudTable>
+        }
     </MudPaper>
-
-    <MudTable Items="@filteredTasks" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@isLoading" 
-             LoadingProgressColor="Color.Primary" Elevation="0" T="TaskModel"
-             ServerData="ServerReload"
-             @ref="table">
-        <HeaderContent>
-            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.Title)">Название</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.StatusId)">Статус</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.PriorityId)">Приоритет</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.AssigneeName)">Исполнитель</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.DueDate)">Срок</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.CreatedAt)">Создана</MudTableSortLabel></MudTh>
-            <MudTh>Действия</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Название">
-                <MudLink Href="@($"/tasks/{context.Id}")">@context.Title</MudLink>
-                @if(context.Comments.Count > 0)
-                {
-                    <MudIcon Icon="@Icons.Material.Filled.Comment" Size="Size.Small" Class="ml-1" />
-                }
-            </MudTd>
-            <MudTd DataLabel="Статус">
-                <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), context.StatusBadgeColor, true))" Size="Size.Small">@context.StatusName</MudChip>
-            </MudTd>
-            <MudTd DataLabel="Приоритет">
-                <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), context.PriorityBadgeColor, true))" Size="Size.Small">@context.PriorityName</MudChip>
-            </MudTd>
-            <MudTd DataLabel="Исполнитель">@(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)</MudTd>
-            <MudTd DataLabel="Срок">
-                @(context.DueDate.HasValue ? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")
-                @if(context.IsOverdue)
-                {
-                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" Class="ml-1" />
-                }
-            </MudTd>
-            <MudTd DataLabel="Создана">@context.CreatedAt.ToString("dd.MM.yyyy")</MudTd>
-            <MudTd>
-                <MudMenu Icon="@Icons.Material.Filled.MoreVert">
-                    <MudMenuItem OnClick="@(() => ViewTask(context.Id))">Просмотр</MudMenuItem>
-                    <MudMenuItem OnClick="@(() => EditTask(context.Id))">Изменить</MudMenuItem>
-                    @if (context.StatusId == 1 || context.StatusId == 2 || context.StatusId == 3)
-                    {
-                        <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 4))">Отправить на проверку</MudMenuItem>
-                    }
-                    @if (context.StatusId == 4)
-                    {
-                        <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 5))">Подтвердить выполнение</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => UpdateTaskStatus(context.Id, 3))">Вернуть на доработку</MudMenuItem>
-                    }
-                </MudMenu>
-            </MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText>Задачи не найдены</MudText>
-        </NoRecordsContent>
-        <LoadingContent>
-            <MudText>Загрузка...</MudText>
-        </LoadingContent>
-        <PagerContent>
-            <MudTablePager />
-        </PagerContent>
-    </MudTable>
 </MudContainer>
+
+<style>
+    .task-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        grid-gap: 16px;
+    }
+    
+    .task-card {
+        transition: all 0.2s ease;
+    }
+    
+    .task-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--mud-elevation-4);
+    }
+</style>
 
 @code {
     [Parameter]
@@ -158,8 +405,9 @@
         NavigationManager.Uri.Contains("/tasks/overdue") ? "Просроченные задачи" : 
         "Задачи";
 
-    private MudTable<TaskModel> table;
+    private MudTable<TaskModel>? table;
     private bool isLoading = true;
+    private bool isCardView = false;
     private List<TaskModel> tasks = new List<TaskModel>();
     private List<TaskModel> filteredTasks = new List<TaskModel>();
     private List<UserModel> users = new List<UserModel>();
@@ -169,6 +417,47 @@
     private int? selectedPriorityId;
     private Guid? selectedAssigneeId;
     private Guid? selectedDepartmentId;
+
+    private void ToggleView()
+    {
+        isCardView = !isCardView;
+    }
+
+    private string GetTaskCountSuffix(int count)
+    {
+        if (count % 10 == 1 && count % 100 != 11)
+            return "задача";
+        if ((count % 10 >= 2 && count % 10 <= 4) &&
+            !(count % 100 >= 12 && count % 100 <= 14))
+            return "задачи";
+        return "задач";
+    }
+    
+    private Color GetStatusColor(int statusId)
+    {
+        return statusId switch
+        {
+            1 => Color.Default,  // Создана
+            2 => Color.Info,     // В работе
+            3 => Color.Warning,  // Требует уточнения
+            4 => Color.Primary,  // На проверке
+            5 => Color.Success,  // Выполнена
+            6 => Color.Error,    // Отклонена
+            _ => Color.Default
+        };
+    }
+
+    private Color GetPriorityColor(int priorityId)
+    {
+        return priorityId switch
+        {
+            1 => Color.Default,     // Низкий
+            2 => Color.Info,        // Средний
+            3 => Color.Warning,     // Высокий
+            4 => Color.Error,       // Критический
+            _ => Color.Default
+        };
+    }
 
     private List<StatusModel> statuses = new List<StatusModel>
     {
@@ -217,12 +506,10 @@
         }
     }
 
-    // В методе LoadFiltersDataAsync()
     private async Task LoadFiltersDataAsync()
     {
         try
         {
-            // Загрузка ВСЕХ пользователей вместо только текущего
             try
             {
                 users = (await UserService.GetAllUsersAsync())
@@ -255,9 +542,6 @@
             departments = new List<DepartmentModel>();
         }
     }
-
-
-
 
     private async Task LoadTasksAsync()
     {
@@ -323,7 +607,13 @@
         table?.ReloadServerData();
     }
 
-    private void FilterChanged(string filterType, object value)
+    private void OnStatusChanged(int? value)
+    {
+        selectedStatusId = value;
+        ApplyFilters();
+    }
+
+    private void FilterChanged(string filterType, object? value)
     {
         switch (filterType)
         {
@@ -346,7 +636,6 @@
 
     private async Task<TableData<TaskModel>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
-        // Проверка отмены операции
         if (cancellationToken.IsCancellationRequested)
             return new TableData<TaskModel>() { TotalItems = 0, Items = new List<TaskModel>() };
 
@@ -355,13 +644,27 @@
         // Сортировка
         if (!string.IsNullOrEmpty(state.SortLabel))
         {
-            Comparison<TaskModel> comparison = null;
+            Comparison<TaskModel>? comparison = null;
             switch (state.SortLabel)
             {
                 case "Title":
                     comparison = (a, b) => string.Compare(a.Title, b.Title, StringComparison.Ordinal);
                     break;
-                    // другие case
+                case "StatusId":
+                    comparison = (a, b) => a.StatusId.CompareTo(b.StatusId);
+                    break;
+                case "PriorityId":
+                    comparison = (a, b) => a.PriorityId.CompareTo(b.PriorityId);
+                    break;
+                case "AssigneeName":
+                    comparison = (a, b) => string.Compare(a.AssigneeName ?? "", b.AssigneeName ?? "", StringComparison.Ordinal);
+                    break;
+                case "DueDate":
+                    comparison = (a, b) => Nullable.Compare(a.DueDate, b.DueDate);
+                    break;
+                case "CreatedAt":
+                    comparison = (a, b) => a.CreatedAt.CompareTo(b.CreatedAt);
+                    break;
             }
 
             if (comparison != null)
@@ -419,10 +722,9 @@
         }
     }
 
-
     private class PriorityModel
     {
         public int Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
     }
 }

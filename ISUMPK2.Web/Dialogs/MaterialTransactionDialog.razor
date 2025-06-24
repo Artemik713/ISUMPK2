@@ -23,8 +23,8 @@
             }
 
             <MudSelect @bind-Value="transaction.TransactionType" Label="Тип операции" Required="true" Class="mb-4">
-                <MudSelectItem Value="@("incoming")">Приход</MudSelectItem>
-                <MudSelectItem Value="@("outgoing")">Расход</MudSelectItem>
+                <MudSelectItem Value="@("Приход")">Приход</MudSelectItem>
+                <MudSelectItem Value="@("Расход")">Расход</MudSelectItem>
             </MudSelect>
 
             <MudNumericField @bind-Value="transaction.Quantity" Label="Количество" Required="true"
@@ -38,11 +38,11 @@
 
             @if (showTaskSelect)
             {
-                <MudSelect @bind-Value="transaction.TaskId" Label="Связанная задача" Class="mb-4">
-                    <MudSelectItem Value="@((Guid?)null)">Нет</MudSelectItem>
+                <MudSelect T="string" @bind-Value="selectedTaskId" Label="Связанная задача" Class="mb-4">
+                    <MudSelectItem Value="@("00000000-0000-0000-0000-000000000000")">Нет</MudSelectItem>
                     @foreach (var task in tasks)
                     {
-                        <MudSelectItem Value="@(task.Id)">@task.Title</MudSelectItem>
+                        <MudSelectItem Value="@(task.Id.ToString())">@task.Title</MudSelectItem>
                     }
                 </MudSelect>
             }
@@ -67,17 +67,20 @@
 @code {
     [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
     [Parameter] public Guid MaterialId { get; set; }
+    [Parameter] public EventCallback OnTransactionAdded { get; set; }
+    [Parameter] public bool RedirectToView { get; set; } = true;
 
     private MaterialModel? material;
     private List<TaskModel> tasks = new List<TaskModel>();
     private bool isProcessing = false;
     private bool showTaskSelect = false;
+    private string selectedTaskId = "00000000-0000-0000-0000-000000000000";
 
     private MaterialTransactionCreateDto transaction = new MaterialTransactionCreateDto
-        {
-            TransactionType = "incoming",
-            Quantity = 0
-        };
+    {
+        TransactionType = "Приход", // Изменено с Receipt на Приход
+        Quantity = 0
+    };
 
     private bool IsValid => transaction.Quantity > 0 && !string.IsNullOrEmpty(transaction.TransactionType);
 
@@ -91,22 +94,19 @@
             var materialDto = await MaterialService.GetMaterialByIdAsync(MaterialId);
             material = materialDto.ToModel();
 
-            // Попробуем загрузить задачи, но обработаем исключение если метод не найден
+            // Загружаем задачи, если доступно
             try
             {
-                // Пропускаем загрузку задач, так как метод GetTasksAsync отсутствует
-                // Вместо этого можно использовать другие методы, если они есть в ITaskService
-                // Например, GetAllTasksAsync, GetTasksByStatusAsync и т.д.
-
-                // Если у вас есть такой метод:
-                // var tasksDto = await TaskService.GetAllTasksAsync();
-                // tasks = tasksDto.Select(t => t.ToModel()).ToList();
-                // showTaskSelect = tasks.Any();
+                var allTasks = await TaskService.GetAllTasksAsync();
+                if (allTasks != null)
+                {
+                    tasks = allTasks.Select(t => t.ToModel()).ToList();
+                    showTaskSelect = tasks.Any();
+                }
             }
-            catch
+            catch (Exception)
             {
-                // Если метод не существует или произошла другая ошибка,
-                // просто продолжаем без загрузки задач
+                // Если возникла ошибка при загрузке задач, игнорируем
                 showTaskSelect = false;
             }
         }
@@ -130,60 +130,61 @@
 
         try
         {
-            // Применяем транзакцию материала через обновление запаса
-            await UpdateMaterialStock(transaction);
-            MudDialog.Close(DialogResult.Ok(true));
+            // Проверяем достаточное количество при расходе
+            if (transaction.TransactionType == "Расход" && material != null)
+            {
+                if (material.CurrentStock < transaction.Quantity)
+                {
+                    throw new InvalidOperationException($"Недостаточно материала на складе. Доступно: {material.CurrentStock} {material.UnitOfMeasure}");
+                }
+                // Преобразуем русское название в английское для API
+                transaction.TransactionType = "Issue";
+            }
+            else if (transaction.TransactionType == "Приход")
+            {
+                // Преобразуем русское название в английское для API
+                transaction.TransactionType = "Receipt";
+            }
+
+            // Проверка и установка значений по умолчанию
+            if (string.IsNullOrEmpty(transaction.Notes))
+            {
+                transaction.Notes = "-"; // Устанавливаем дефолтное значение, если поле пустое
+            }
+
+            // Устанавливаем ID задачи из строкового представления
+            if (!string.IsNullOrEmpty(selectedTaskId) &&
+                selectedTaskId != "00000000-0000-0000-0000-000000000000" &&
+                Guid.TryParse(selectedTaskId, out Guid taskId))
+            {
+                transaction.TaskId = taskId;
+            }
+            else
+            {
+                transaction.TaskId = null;
+            }
+
+            // Добавляем транзакцию через сервис
+            await MaterialService.AddMaterialTransactionAsync(transaction);
+
+            // Уведомляем об успешном добавлении
+            Snackbar.Add("Операция успешно добавлена", Severity.Success);
+
+            // Вызываем событие для обновления родительского компонента
+            if (OnTransactionAdded.HasDelegate)
+            {
+                await OnTransactionAdded.InvokeAsync();
+            }
+
+            MudDialog.Close(DialogResult.Ok(new { MaterialId = MaterialId, RedirectToView = RedirectToView }));
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Ошибка при сохранении операции: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
             isProcessing = false;
         }
     }
-
-    // Метод для обработки транзакции материала путем обновления его запаса
-    private async Task UpdateMaterialStock(MaterialTransactionCreateDto transaction)
-    {
-        if (material == null) return;
-
-        // Получаем текущий материал
-        var materialDto = await MaterialService.GetMaterialByIdAsync(transaction.MaterialId);
-
-        // Вычисляем новое количество запаса
-        decimal newStock = materialDto.CurrentStock;
-        if (transaction.TransactionType == "incoming")
-        {
-            newStock += transaction.Quantity;
-        }
-        else if (transaction.TransactionType == "outgoing")
-        {
-            newStock -= transaction.Quantity;
-            // Проверка на отрицательный запас
-            if (newStock < 0)
-            {
-                throw new InvalidOperationException("Недостаточно запаса материала для списания");
-            }
-        }
-
-        // Создаем объект для обновления с новым запасом
-        var updateDto = new MaterialUpdateDto
-            {
-                Code = materialDto.Code,
-                Name = materialDto.Name,
-                Description = materialDto.Description,
-                UnitOfMeasure = materialDto.UnitOfMeasure,
-                MinimumStock = materialDto.MinimumStock,
-                Price = materialDto.Price,
-            // Добавляем новое свойство CurrentStock, если оно существует в MaterialUpdateDto
-            // Если нет, то нужно будет добавить его в класс MaterialUpdateDto
-            // CurrentStock = newStock
-            };
-
-        // Если CurrentStock нет в MaterialUpdateDto, тогда нужно добавить его:
-        // Или использовать другой способ обновления запаса, если он есть в вашем API
-
-        // Обновляем материал
-        await MaterialService.UpdateMaterialAsync(transaction.MaterialId, updateDto);
-    }
 }
-

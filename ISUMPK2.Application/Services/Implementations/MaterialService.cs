@@ -14,15 +14,18 @@ namespace ISUMPK2.Application.Services.Implementations
         private readonly IMaterialRepository _materialRepository;
         private readonly INotificationService _notificationService;
         private readonly IMaterialCategoryRepository _materialCategoryRepository;
+        private readonly IUserService _userService;
 
         public MaterialService(
             IMaterialRepository materialRepository,
             INotificationService notificationService,
-            IMaterialCategoryRepository materialCategoryRepository)
+            IMaterialCategoryRepository materialCategoryRepository,
+            IUserService userService)
         {
             _materialRepository = materialRepository;
             _notificationService = notificationService;
             _materialCategoryRepository = materialCategoryRepository;
+            _userService = userService;
         }
 
 
@@ -33,10 +36,24 @@ namespace ISUMPK2.Application.Services.Implementations
         }
         public async Task<MaterialTransactionDto> AddMaterialTransactionAsync(MaterialTransactionCreateDto transactionDto)
         {
-            // Так как этот метод похож на AddTransactionAsync, мы можем использовать его,
-            // передавая системный userId для транзакций, созданных системой
-            var systemUserId = Guid.Parse("YOUR_SYSTEM_USER_ID"); // Замените на реальный системный ID
-            return await AddTransactionAsync(systemUserId, transactionDto);
+            if (transactionDto == null)
+                throw new ArgumentNullException(nameof(transactionDto));
+
+            if (transactionDto.MaterialId == Guid.Empty)
+                throw new ArgumentException("MaterialId is required", nameof(transactionDto));
+
+            if (string.IsNullOrWhiteSpace(transactionDto.TransactionType))
+                throw new ArgumentException("TransactionType is required", nameof(transactionDto));
+
+            if (transactionDto.Quantity <= 0)
+                throw new ArgumentException("Quantity must be greater than zero", nameof(transactionDto));
+
+            // Получаем текущего пользователя
+            var currentUser = await _userService.GetCurrentUserAsync();
+            if (currentUser == null)
+                throw new InvalidOperationException("Невозможно получить информацию о текущем пользователе");
+
+            return await AddTransactionAsync(currentUser.Id, transactionDto);
         }
 
         public async Task<IEnumerable<MaterialDto>> GetAllMaterialsAsync()
@@ -84,10 +101,12 @@ namespace ISUMPK2.Application.Services.Implementations
             if (material == null)
                 return null;
 
+            material.Code = materialDto.Code;
             material.Name = materialDto.Name;
             material.Description = materialDto.Description;
             material.UnitOfMeasure = materialDto.UnitOfMeasure;
             material.MinimumStock = materialDto.MinimumStock;
+            material.CurrentStock = materialDto.CurrentStock;
             material.Price = materialDto.Price;
             material.UpdatedAt = DateTime.UtcNow;
 
@@ -110,20 +129,29 @@ namespace ISUMPK2.Application.Services.Implementations
 
         public async Task<MaterialTransactionDto> AddTransactionAsync(Guid userId, MaterialTransactionCreateDto transactionDto)
         {
+            // Если UserId не передан или используется дефолтный, замените его на системного пользователя
+            if (userId == Guid.Empty)
+            {
+                userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+            }
+
+            // Проверка и установка значений по умолчанию
+            if (string.IsNullOrEmpty(transactionDto.Notes))
+            {
+                transactionDto.Notes = "-";  // Если примечания не заполнены, используем дефолтное значение
+            }
+
             // Проверка достаточного количества материала при выдаче
             if (transactionDto.TransactionType == "Issue" &&
                 !await _materialRepository.HasSufficientStockAsync(transactionDto.MaterialId, transactionDto.Quantity))
             {
-                throw new InvalidOperationException("Insufficient material stock");
+                throw new InvalidOperationException("Недостаточное количество материала на складе");
             }
-
-            // Обновление остатка материала
-            bool isAddition = transactionDto.TransactionType == "Receipt";
-            await _materialRepository.UpdateStockAsync(transactionDto.MaterialId, transactionDto.Quantity, isAddition);
 
             // Создание записи транзакции
             var transaction = new MaterialTransaction
             {
+                Id = Guid.NewGuid(),
                 MaterialId = transactionDto.MaterialId,
                 Quantity = transactionDto.Quantity,
                 TransactionType = transactionDto.TransactionType,
@@ -134,14 +162,32 @@ namespace ISUMPK2.Application.Services.Implementations
                 UpdatedAt = DateTime.UtcNow
             };
 
-            // Проверка, не ниже ли уровень запаса минимального
-            var material = await _materialRepository.GetByIdAsync(transactionDto.MaterialId);
-            if (material.CurrentStock <= material.MinimumStock)
+            try
             {
-                await _notificationService.CreateLowStockNotificationAsync(material.Id);
-            }
+                // Обновление остатка материала
+                bool isAddition = transactionDto.TransactionType == "Receipt";
+                await _materialRepository.UpdateStockAsync(transactionDto.MaterialId, transactionDto.Quantity, isAddition);
 
-            return MapToDto(transaction);
+                // Добавление записи транзакции
+                await _materialRepository.AddTransactionAsync(transaction);
+
+                // Сохранение всех изменений
+                await _materialRepository.SaveChangesAsync();
+
+                // Проверка, не ниже ли уровень запаса минимального
+                var material = await _materialRepository.GetByIdAsync(transactionDto.MaterialId);
+                if (material != null && material.CurrentStock <= material.MinimumStock)
+                {
+                    await _notificationService.CreateLowStockNotificationAsync(material.Id);
+                }
+
+                return MapToDto(transaction);
+            }
+            catch (Exception ex)
+            {
+                // Обработайте специфические исключения базы данных
+                throw new InvalidOperationException($"Не удалось обработать транзакцию: {ex.Message}", ex);
+            }
         }
 
         public async Task<IEnumerable<MaterialTransactionDto>> GetTransactionsByMaterialAsync(Guid materialId)
@@ -267,6 +313,40 @@ namespace ISUMPK2.Application.Services.Implementations
             return materials.Select(MapToDto);
         }
 
+        public async Task UpdateStockAsync(Guid materialId, decimal quantity, bool isAddition)
+        {
+            var material = await _materialRepository.GetByIdAsync(materialId);
+            if (material == null)
+            {
+                throw new ApplicationException($"Материал с ID {materialId} не найден");
+            }
+
+            if (isAddition)
+            {
+                material.CurrentStock += quantity;
+            }
+            else
+            {
+                if (material.CurrentStock < quantity)
+                {
+                    throw new ApplicationException($"Недостаточно материала '{material.Name}' на складе. В наличии: {material.CurrentStock} {material.UnitOfMeasure}");
+                }
+                material.CurrentStock -= quantity;
+            }
+
+            // Проверяем необходимость создания уведомления о низком запасе
+            if (material.CurrentStock <= material.MinimumStock)
+            {
+                // Если есть сервис уведомлений, вызываем его метод
+                if (_notificationService != null)
+                {
+                    await _notificationService.CreateLowStockNotificationAsync(materialId);
+                }
+            }
+
+            await _materialRepository.UpdateAsync(material);
+            await _materialRepository.SaveChangesAsync();
+        }
         public async Task<IEnumerable<MaterialDto>> SearchMaterialsAsync(string searchTerm)
         {
             if (string.IsNullOrWhiteSpace(searchTerm))

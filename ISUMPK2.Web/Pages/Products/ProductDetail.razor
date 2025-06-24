@@ -1,0 +1,352 @@
+﻿@page "/products/{id:guid}"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using MudBlazor
+@inject IProductService ProductService
+@inject IDepartmentService DepartmentService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<PageTitle>Детали продукта - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+    @if (isLoading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (product == null)
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">Продукт не найден.</MudAlert>
+        <MudButton OnClick="@(() => NavigationManager.NavigateTo("/products"))">Вернуться к каталогу</MudButton>
+    }
+    else
+    {
+        <MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 my-4"></MudBreadcrumbs>
+
+        <MudGrid>
+            <!-- Изображение продукта -->
+            <MudItem xs="12" md="5" lg="4">
+                <MudPaper Elevation="2" Class="pa-2" Style="height: 400px;">
+                    <MudImage Src="@GetProductImage(product)" Alt="@product.Name" 
+                        ObjectFit="ObjectFit.Contain" Style="width: 100%; height: 100%;" />
+                </MudPaper>
+                <MudPaper Class="pa-4 mt-4" Elevation="0">
+                    <MudText Typo="Typo.h6">Технические характеристики</MudText>
+                    <MudDivider Class="my-2" />
+                    <MudStack>
+                        <MudPaper Elevation="0" Class="d-flex justify-space-between pa-2">
+                            <MudText Typo="Typo.body2">Вес:</MudText>
+                            <MudText Typo="Typo.body2">@(product.Weight ?? 0) кг</MudText>
+                        </MudPaper>
+                        <MudPaper Elevation="0" Class="d-flex justify-space-between pa-2">
+                            <MudText Typo="Typo.body2">Габариты:</MudText>
+                            <MudText Typo="Typo.body2">@(product.Dimensions ?? "Не указано")</MudText>
+                        </MudPaper>
+                        <MudPaper Elevation="0" Class="d-flex justify-space-between pa-2">
+                            <MudText Typo="Typo.body2">Материал:</MudText>
+                            <MudText Typo="Typo.body2">@(product.Material ?? "Не указано")</MudText>
+                        </MudPaper>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Информация о продукте -->
+            <MudItem xs="12" md="7" lg="8">
+                <MudPaper Elevation="0" Class="pa-4">
+                    <div class="d-flex justify-space-between align-center">
+                        <div>
+                            <MudChip T="string" Color="Color.Primary" Size="Size.Small">@product.Code</MudChip>
+                            <MudText Typo="Typo.h4" Class="mt-2">@product.Name</MudText>
+                            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">@product.ProductTypeName</MudText>
+                        </div>
+                        <div>
+                            @if (canManageProducts)
+                            {
+                                <MudTooltip Text="Редактировать">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="EditProduct" />
+                                </MudTooltip>
+                                <MudTooltip Text="Удалить">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="ConfirmDelete" />
+                                </MudTooltip>
+                            }
+                        </div>
+                    </div>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.body1"><strong>Цена:</strong> @product.Price.ToString("C0")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.body1">
+                                <strong>Статус:</strong>
+                                <MudChip T="string" Color="@GetStockColor(product)" Size="Size.Small" Class="ml-2">
+                                    @(product.CurrentStock > 0 ? "В наличии" : "Отсутствует")
+                                </MudChip>
+                            </MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.body1"><strong>Количество на складе:</strong> @product.CurrentStock @product.UnitOfMeasure</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.body1"><strong>Цех-производитель:</strong> @product.DepartmentName</MudText>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudText Typo="Typo.h6">Описание</MudText>
+                    <MudPaper Elevation="0" Class="pa-2 mt-2">
+                        <MudText Typo="Typo.body1">@(product.Description ?? "Описание отсутствует")</MudText>
+                    </MudPaper>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true">
+                        <MudTabPanel Text="Производство">
+                            <MudStack>
+                                <MudText Typo="Typo.body2"><strong>Технологическая карта:</strong> @(product.TechnologyMap ?? "Не указана")</MudText>
+                                <MudText Typo="Typo.body2"><strong>Время производства:</strong> @(product.ProductionTime ?? 0) часов</MudText>
+                                <MudText Typo="Typo.body2"><strong>Дата создания:</strong> @product.CreatedAt.ToString("dd.MM.yyyy")</MudText>
+                                <MudText Typo="Typo.body2"><strong>Последнее обновление:</strong> @product.UpdatedAt.ToString("dd.MM.yyyy")</MudText>
+                            </MudStack>
+                        </MudTabPanel>
+                        <MudTabPanel Text="Материалы">
+                            <MudList T="string" Dense="true" DisablePadding="true">
+                                @if (product.Materials != null && product.Materials.Any())
+                                {
+                                    @foreach (var material in product.Materials)
+                                    {
+                                        <MudListItem T="string" Icon="@Icons.Material.Filled.Category">
+                                            @material.MaterialName - @material.Quantity @material.UnitOfMeasure
+                                        </MudListItem>
+                                    }
+                                }
+                                else
+                                {
+                                    <MudText Color="Color.Secondary">Нет данных о материалах</MudText>
+                                }
+                            </MudList>
+                        </MudTabPanel>
+                        <MudTabPanel Text="История производства">
+                            <MudTable Items="@productionHistory" Hover="true" Dense="true" Striped="false">
+                                <HeaderContent>
+                                    <MudTh>Дата</MudTh>
+                                    <MudTh>Количество</MudTh>
+                                    <MudTh>Задача</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Дата">@context.Date.ToString("dd.MM.yyyy")</MudTd>
+                                    <MudTd DataLabel="Количество">@context.Quantity</MudTd>
+                                    <MudTd DataLabel="Задача">
+                                        <MudLink Href="@($"/tasks/{context.TaskId}")">@context.TaskName</MudLink>
+                                    </MudTd>
+                                </RowTemplate>
+                                <NoRecordsContent>
+                                    <MudText Color="Color.Secondary">История производства отсутствует</MudText>
+                                </NoRecordsContent>
+                            </MudTable>
+                        </MudTabPanel>
+                    </MudTabs>
+
+                    <MudDivider Class="my-4" />
+
+                    <!-- Создать задачу на производство -->
+                    @if (canManageProducts)
+                    {
+                        <MudButton FullWidth Color="Color.Primary" Variant="Variant.Filled"
+                                   OnClick="@CreateProductionTask">
+                            СОЗДАТЬ ЗАДАЧУ НА ПРОИЗВОДСТВО
+                        </MudButton>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    
+    private ProductModel? product;
+    private bool isLoading = true;
+    private bool canManageProducts = true; // Настроить согласно логике авторизации
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    // Примерные данные для тестирования интерфейса
+    private List<ProductionHistoryItem> productionHistory = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductAsync();
+        SetupBreadcrumbs();
+        
+        // Заполняем тестовыми данными
+        productionHistory = new List<ProductionHistoryItem>
+        {
+            new() { Date = DateTime.Now.AddDays(-30), Quantity = 15, TaskId = Guid.NewGuid(), TaskName = "Производство партии" },
+            new() { Date = DateTime.Now.AddDays(-15), Quantity = 10, TaskId = Guid.NewGuid(), TaskName = "Плановый выпуск" },
+            new() { Date = DateTime.Now.AddDays(-3), Quantity = 5, TaskId = Guid.NewGuid(), TaskName = "Срочный заказ" },
+        };
+    }
+
+    private async Task LoadProductAsync()
+        {
+            isLoading = true;
+
+            try
+            {
+                // Заменяем вызов метода GetProductByIdAsync на GetByIdWithDetailsAsync
+                var productDto = await ProductService.GetByIdWithDetailsAsync(Id);
+        
+                Console.WriteLine($"Загружен продукт: {productDto?.Name}");
+                Console.WriteLine($"Цех: {productDto?.DepartmentName ?? "Не указан"}");
+                Console.WriteLine($"Материалов: {productDto?.Materials?.Count ?? 0}");
+        
+                if (productDto?.Materials != null)
+                {
+                    foreach (var material in productDto.Materials)
+                    {
+                        Console.WriteLine($"Материал: {material.MaterialName}, Количество: {material.Quantity} {material.UnitOfMeasure}");
+                    }
+                }
+        
+                if (productDto != null)
+                {
+                    product = new ProductModel
+                    {
+                        Id = productDto.Id,
+                        Code = productDto.Code,
+                        Name = productDto.Name,
+                        Description = productDto.Description ?? "",
+                        ProductTypeId = productDto.ProductTypeId,
+                        ProductTypeName = productDto.ProductTypeName ?? "Без категории",
+                        Price = productDto.Price,
+                        CurrentStock = productDto.CurrentStock,
+                        UnitOfMeasure = productDto.UnitOfMeasure ?? "шт.",
+                        ImageUrl = productDto.ImageUrl,
+                        DepartmentId = productDto.DepartmentId,
+                        DepartmentName = productDto.DepartmentName ?? "Не указан",
+                        Weight = productDto.Weight.HasValue ? (double?)productDto.Weight.Value : null,
+                        Dimensions = productDto.Dimensions,
+                        Material = productDto.Material,
+                        TechnologyMap = productDto.TechnologyMap,
+                        ProductionTime = productDto.ProductionTime,
+                        CreatedAt = productDto.CreatedAt,
+                        UpdatedAt = productDto.UpdatedAt,
+                        Materials = productDto.Materials?.Select(m => new ProductMaterialModel
+                        {
+                            MaterialId = m.MaterialId,
+                            MaterialName = m.MaterialName,
+                            Quantity = m.Quantity,
+                            UnitOfMeasure = m.UnitOfMeasure
+                        }).ToList() ?? new List<ProductMaterialModel>()
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка при загрузке продукта: {ex.Message}", Severity.Error);
+                Console.WriteLine($"Исключение при загрузке продукта: {ex.Message}");
+            }
+            finally
+            {
+                isLoading = false;
+            }
+        }
+
+    private void SetupBreadcrumbs()
+    {
+        _breadcrumbs = new List<BreadcrumbItem>
+        {
+            new("Главная", "/"),
+            new("Каталог продукции", "/products"),
+            new(product?.Name ?? "Загрузка...", null, true)
+        };
+    }
+
+    private string GetProductImage(ProductModel product)
+    {
+        if (!string.IsNullOrEmpty(product.ImageUrl))
+            return product.ImageUrl;
+        
+        // Заглушка по умолчанию в зависимости от категории
+        switch (product.ProductTypeName?.ToLower())
+        {
+            case "металлические конструкции":
+                return "/images/products/metal-structure-default.jpg";
+            case "детали для станков":
+                return "/images/products/machine-parts-default.jpg";
+            case "покрасочные изделия":
+                return "/images/products/painted-products-default.jpg";
+            default:
+                return "/images/products/default-product.jpg";
+        }
+    }
+
+    private Color GetStockColor(ProductModel product)
+    {
+        if (product.CurrentStock <= 0)
+            return Color.Error;
+        if (product.CurrentStock <= 10)
+            return Color.Warning;
+        return Color.Success;
+    }
+
+    private void EditProduct()
+    {
+        NavigationManager.NavigateTo($"/products/edit/{Id}");
+    }
+
+    private async Task ConfirmDelete()
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Удаление продукта",
+            "Вы уверены, что хотите удалить этот продукт? Это действие нельзя будет отменить.",
+            yesText: "Удалить", cancelText: "Отмена");
+        
+        if (result == true)
+        {
+            try
+            {
+                await ProductService.DeleteProductAsync(Id);
+                Snackbar.Add("Продукт успешно удален", Severity.Success);
+                NavigationManager.NavigateTo("/products");
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка при удалении продукта: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private void CreateProductionTask()
+    {
+        if (product != null)
+        {
+            string operation = "Производство";
+            if (product.ProductTypeName == "Ростверк")
+            {
+                operation = "Обработка ростверк";
+            }
+
+            // Используем UrlEncoder для правильного экранирования значений в URL
+            var productNameEncoded = Uri.EscapeDataString(product.Name);
+            NavigationManager.NavigateTo($"/tasks/add?productId={product.Id}&operation={operation}&productName={productNameEncoded}&departmentId={product.DepartmentId}");
+        }
+    }
+
+    public class ProductionHistoryItem
+    {
+        public DateTime Date { get; set; }
+        public int Quantity { get; set; }
+        public Guid TaskId { get; set; }
+        public string TaskName { get; set; } = string.Empty;
+    }
+}

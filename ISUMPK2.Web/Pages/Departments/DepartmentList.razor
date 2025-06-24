@@ -37,14 +37,16 @@
                     <MudTh>Действия</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="Название">@context.Name</MudTd>
+                    <MudTd DataLabel="Название">
+                        <MudLink Href="@($"/departments/{context.Id}")">@context.Name</MudLink>
+                    </MudTd>
                     <MudTd DataLabel="Описание">@context.Description</MudTd>
                     <MudTd DataLabel="Руководитель">@context.HeadName</MudTd>
                     <MudTd>
-                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" 
-                            OnClick="@(() => OpenEditDialog(context))" />
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" 
-                            OnClick="@(() => OpenDeleteDialog(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       OnClick="@(() => OpenEditDialog(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => OpenDeleteDialog(context))" />
                     </MudTd>
                 </RowTemplate>
             </MudTable>

@@ -1,14 +1,18 @@
 ﻿@page "/materials/metal-construction"
 @page "/materials/create"
-@attribute [Authorize(Roles = "Administrator,GeneralDirector,Storekeeper")]
+@attribute [Authorize(Roles = "Administrator,GeneralDirector,Storekeeper,MetalShopManager")]
 @using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
 @using ISUMPK2.Web.Dialogs
+@using ISUMPK2.Application.Constants
 @using MudBlazor
+@using System.Security.Claims
+@inject IDialogService DialogService
 @inject IMaterialService MaterialService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Материалы для металлоконструкций - ИСУ ПМК</PageTitle>
 
@@ -26,7 +30,7 @@
                         <MudTextField T="string" Label="Наименование" @bind-Value="newMaterial.Name" Required="true" />
                     </MudItem>
                     <MudItem xs="12">
-                        <MudTextField T="string" Label="Описание" @bind-Value="newMaterial.Description" Lines="3" />
+                        <MudTextField T="string" Label="Описание" @bind-Value="newMaterial.Description" Lines="3" Required="true" />
                     </MudItem>
                     <MudItem xs="12" md="6">
                         <MudSelect T="string" Label="Тип материала" @bind-Value="selectedType" Required="true">
@@ -44,7 +48,12 @@
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="12" md="6">
-                        <MudTextField T="string" Label="Единица измерения" @bind-Value="newMaterial.UnitOfMeasure" Required="true" />
+                        <MudSelect T="string" Label="Единица измерения" @bind-Value="newMaterial.UnitOfMeasure" Required="true">
+                            @foreach (var unit in UnitOfMeasure.AvailableUnits)
+                            {
+                                <MudSelectItem Value="@unit">@unit</MudSelectItem>
+                            }
+                        </MudSelect>
                     </MudItem>
                     <MudItem xs="12" md="4">
                         <MudNumericField T="decimal" Label="Минимальный запас" @bind-Value="newMaterial.MinimumStock" Required="true" />
@@ -53,13 +62,15 @@
                         <MudNumericField T="decimal" Label="Цена" @bind-Value="newMaterial.Price" Required="true" />
                     </MudItem>
                     <MudItem xs="12" md="4">
-                        <MudTextField T="string" Label="Производитель" @bind-Value="newMaterial.Manufacturer" />
+                        <MudTextField T="string" Label="Производитель" @bind-Value="newMaterial.Manufacturer" Required="true" />
                     </MudItem>
+
                     <MudItem xs="12" md="6">
-                        <MudTextField T="string" Label="Номер детали/артикул" @bind-Value="newMaterial.PartNumber" />
+                        <MudTextField T="string" Label="Номер детали/артикул" @bind-Value="newMaterial.PartNumber" Required="true" />
                     </MudItem>
+
                     <MudItem xs="12" md="6">
-                        <MudTextField T="string" Label="Технические характеристики" @bind-Value="newMaterial.Specifications" Lines="3" />
+                        <MudTextField T="string" Label="Технические характеристики" @bind-Value="newMaterial.Specifications" Lines="3" Required="true" />
                     </MudItem>
                 </MudGrid>
 
@@ -164,6 +175,18 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Выведем в консоль информацию о ролях
+        Console.WriteLine($"User identity name: {user.Identity?.Name}");
+        Console.WriteLine($"Is authenticated: {user.Identity?.IsAuthenticated}");
+        Console.WriteLine("User claims:");
+        foreach (var claim in user.Claims)
+        {
+            Console.WriteLine($"{claim.Type} = {claim.Value}");
+        }
+
         await LoadMaterialsAsync();
     }
 
@@ -218,19 +241,47 @@
         isProcessing = true;
         try
         {
-            // Добавляем выбранный тип материала в категорию
-            newMaterial.CategoryId = await GetOrCreateCategoryId(selectedType);
+            // Проверяем ВСЕ обязательные поля (включая поля, которые требует сервер)
+            if (string.IsNullOrWhiteSpace(newMaterial.Code) ||
+                string.IsNullOrWhiteSpace(newMaterial.Name) ||
+                string.IsNullOrWhiteSpace(newMaterial.UnitOfMeasure) ||
+                string.IsNullOrWhiteSpace(newMaterial.Description) ||
+                string.IsNullOrWhiteSpace(newMaterial.Manufacturer) ||
+                string.IsNullOrWhiteSpace(newMaterial.PartNumber) ||
+                string.IsNullOrWhiteSpace(newMaterial.Specifications))
+            {
+                Snackbar.Add("Пожалуйста, заполните все обязательные поля (код, наименование, описание, единица измерения, производитель, артикул, технические характеристики)", Severity.Error);
+                isProcessing = false;
+                return;
+            }
 
-            await MaterialService.CreateMaterialAsync(newMaterial);
-            Snackbar.Add("Материал успешно добавлен", Severity.Success);
+            // Получаем все категории
+            var categories = await MaterialService.GetAllCategoriesAsync();
 
-            // Очищаем форму
-            newMaterial = new MaterialCreateDto();
-            selectedType = string.Empty;
-            await form.ResetAsync();
+            // Ищем категорию с именем, соответствующим выбранному типу
+            var category = categories.FirstOrDefault(c => c.Name == selectedType) ??
+                           categories.FirstOrDefault(); // Если не найдена, берем первую категорию
 
-            // Обновляем список материалов
-            await LoadMaterialsAsync();
+            if (category != null)
+            {
+                newMaterial.CategoryId = category.Id;
+                Console.WriteLine($"Используем категорию: {category.Name} (ID: {category.Id})");
+
+                await MaterialService.CreateMaterialAsync(newMaterial);
+                Snackbar.Add("Материал успешно добавлен", Severity.Success);
+
+                // Очищаем форму
+                newMaterial = new MaterialCreateDto();
+                selectedType = string.Empty;
+                await form.ResetAsync();
+
+                // Обновляем список материалов
+                await LoadMaterialsAsync();
+            }
+            else
+            {
+                Snackbar.Add("Не удалось найти категорию для материала", Severity.Error);
+            }
         }
         catch (Exception ex)
         {
@@ -244,28 +295,42 @@
 
     private async Task<Guid> GetOrCreateCategoryId(string categoryName)
     {
-        // Ищем категорию по имени
-        var categories = await MaterialService.GetAllCategoriesAsync();
-        var existingCategory = categories.FirstOrDefault(c => c.Name == categoryName);
+        try
+        {
+            // Ищем категорию по имени
+            Console.WriteLine($"Поиск категории: {categoryName}");
+            var categories = await MaterialService.GetAllCategoriesAsync();
+            var existingCategory = categories.FirstOrDefault(c => c.Name == categoryName);
 
-        if (existingCategory != null)
-            return existingCategory.Id;
+            if (existingCategory != null)
+            {
+                Console.WriteLine($"Категория найдена: {existingCategory.Id}");
+                return existingCategory.Id;
+            }
 
-        // Если категория не найдена, создаем новую
-        var newCategory = new MaterialCategoryDto
+            // Если категория не найдена, создаем новую
+            var newCategory = new MaterialCategoryDto
             {
                 Name = categoryName,
                 Description = $"Категория материалов: {categoryName}"
             };
 
-        var createdCategory = await MaterialService.CreateCategoryAsync(newCategory);
-        return createdCategory.Id;
+            Console.WriteLine("Создание новой категории");
+            var createdCategory = await MaterialService.CreateCategoryAsync(newCategory);
+            Console.WriteLine($"Категория создана: {createdCategory.Id}");
+            return createdCategory.Id;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка в GetOrCreateCategoryId: {ex.Message}");
+            throw;
+        }
     }
 
 
     private void EditMaterial(Guid id)
     {
-        NavigationManager.NavigateTo($"/materials/edit/{id}");
+        NavigationManager.NavigateTo($"/materials/{id}");
     }
 
     private async Task DeleteMaterial(Guid id)
@@ -294,4 +359,5 @@
             }
         }
     }
+
 }

@@ -44,8 +44,17 @@ namespace ISUMPK2.Web.Repositories
 
         public virtual async Task UpdateAsync(T entity)
         {
-            var response = await HttpClient.PutAsJsonAsync(ApiEndpoint, entity);
+            // Получаем ID из свойства сущности
+            var idProperty = typeof(T).GetProperty("Id");
+            var entityId = idProperty?.GetValue(entity);
+
+            // Формируем URL с ID
+            var url = $"{ApiEndpoint}/{entityId}";
+
+            // Отправляем запрос
+            var response = await HttpClient.PutAsJsonAsync(url, entity);
             response.EnsureSuccessStatusCode();
+
         }
 
         public virtual async Task DeleteAsync(Guid id)

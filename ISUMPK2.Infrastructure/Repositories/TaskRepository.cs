@@ -128,6 +128,14 @@ namespace ISUMPK2.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<WorkTask> GetTaskWithMaterialsAsync(Guid taskId)
+        {
+            return await _context.WorkTasks
+                .Include(t => t.TaskMaterials)
+                    .ThenInclude(tm => tm.Material)
+                .FirstOrDefaultAsync(t => t.Id == taskId);
+        }
+
         public async Task<IEnumerable<Domain.Entities.WorkTask>> GetTasksForDashboardAsync(Guid userId)
         {
             // Получаем задачи, которые:
@@ -188,7 +196,11 @@ namespace ISUMPK2.Infrastructure.Repositories
                 .Include(t => t.Department)
                 .Include(t => t.Product)
                 .Include(t => t.Comments)
-                .ThenInclude(c => c.User)
+                   .ThenInclude(c => c.User)
+                .Include(t => t.SubTasks)
+                    .ThenInclude(s => s.Assignee)
+                .Include(t => t.SubTasks)
+                    .ThenInclude(s => s.Status)
                 .FirstOrDefaultAsync(t => t.Id == id);
         }
     }

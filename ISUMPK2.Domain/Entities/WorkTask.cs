@@ -28,9 +28,12 @@ namespace ISUMPK2.Domain.Entities
         public User Assignee { get; set; }
         public Department Department { get; set; }
         public Product Product { get; set; }
+        // Добавьте коллекцию подзадач в класс WorkTask
+        public ICollection<SubTask> SubTasks { get; set; } = new List<SubTask>();
         public ICollection<TaskComment> Comments { get; set; }
         public ICollection<Notification> Notifications { get; set; }
         public ICollection<MaterialTransaction> MaterialTransactions { get; set; }
         public ICollection<ProductTransaction> ProductTransactions { get; set; }
+        public ICollection<TaskMaterial> TaskMaterials { get; set; } = new List<TaskMaterial>();
     }
 }

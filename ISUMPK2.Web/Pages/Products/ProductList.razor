@@ -1,134 +1,246 @@
 ﻿@page "/products"
 @attribute [Authorize]
+@using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
 @using ISUMPK2.Web.Models
-@using ISUMPK2.Web.Dialogs
-@using ISUMPK2.Web.Extensions
-@using Microsoft.AspNetCore.Authorization
 @using MudBlazor
 @inject IProductService ProductService
 @inject NavigationManager NavigationManager
-@inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
-<PageTitle>Продукция - ИСУ ПМК</PageTitle>
+<PageTitle>Каталог продукции - ИСУ ПМК</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <div class="d-flex justify-space-between align-center mb-4">
-        <MudText Typo="Typo.h4">Продукция</MudText>
-        
-        <div class="d-flex">
-            <AuthorizeView Roles="Administrator,GeneralDirector,Storekeeper">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" 
-                          OnClick="@CreateProduct" Class="mr-2">Добавить продукцию</MudButton>
-            </AuthorizeView>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" 
-                      OnClick="@LoadProductsAsync">Обновить</MudButton>
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+    <MudPaper Elevation="0" Class="d-flex justify-space-between align-center flex-wrap pa-4 gap-4">
+        <div>
+            <MudText Typo="Typo.h4">Каталог продукции</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">Изделия и продукты, выпускаемые предприятием</MudText>
         </div>
-    </div>
-
-    <MudPaper Class="pa-4 mb-4">
+        <div class="d-flex gap-2">
+            @if (canManageProducts)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="@(() => NavigationManager.NavigateTo("/products/add"))">
+                    Добавить продукцию
+                </MudButton>
+            }
+            <MudTooltip Text="Обновить">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Variant="Variant.Outlined" OnClick="LoadProductsAsync" />
+            </MudTooltip>
+        </div>
+    </MudPaper>
+    
+    <!-- Фильтры -->
+    <MudPaper Elevation="0" Class="py-3 px-4 my-3">
         <MudGrid>
-            <MudItem xs="12" sm="6" md="3">
-                <MudTextField @bind-Value="searchString" Label="Поиск" Adornment="Adornment.Start" 
-                             AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" 
-                             Class="mt-0" Immediate="true" OnKeyDown="@OnSearchKeyDown" />
+            <MudItem xs="12" sm="6" md="4" lg="3">
+                <MudAutocomplete T="string" Label="Тип продукции" @bind-Value="selectedCategory" 
+                                 SearchFunc="@SearchCategories" ResetValueOnEmptyText="true" 
+                                 CoerceText="true" AdornmentIcon="@Icons.Material.Filled.Category"
+                                 AdornmentColor="Color.Primary" Immediate="true"
+                                 Dense="true" OnClearButtonClick="@(() => FilterChanged())"/>
             </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudSelect T="Guid?" Label="Тип продукции" @bind-Value="selectedProductTypeId" Clearable="true">
-                    @foreach (var productType in productTypes)
-                    {
-                        <MudSelectItem Value="@productType.Id">@productType.Name</MudSelectItem>
-                    }
-                </MudSelect>
+            <MudItem xs="12" sm="6" md="4" lg="3">
+                <MudTextField @bind-Value="searchText" Label="Поиск" Adornment="Adornment.End" 
+                             AdornmentIcon="@Icons.Material.Filled.Search" AdornmentColor="Color.Primary"
+                             OnAdornmentClick="FilterChanged" OnKeyDown="HandleKeyDown" 
+                             Immediate="true" Dense="true" />
+            </MudItem>
+            <MudItem xs="12" sm="12" md="4" lg="6" Class="d-flex justify-end align-center">
+                <MudChip Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small" 
+                        Class="ml-auto" Style="min-width: auto;" T="string">
+                    Найдено @filteredProducts.Count позиций
+                </MudChip>
+                <MudIconButton Icon="@(isGridView ? Icons.Material.Filled.ViewList : Icons.Material.Filled.ViewModule)" 
+                              OnClick="ToggleView" Color="Color.Primary" Size="Size.Small" Class="ml-2" />
             </MudItem>
         </MudGrid>
     </MudPaper>
 
-    <MudTable Items="@filteredProducts" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@isLoading" 
-             LoadingProgressColor="Color.Primary" Elevation="0" T="ProductModel"
-             ServerData="ServerReload"
-             @ref="table">
-        <HeaderContent>
-            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.Code)">Код</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.Name)">Наименование</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.CurrentStock)">Текущий запас</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.UnitOfMeasure)">Ед. изм.</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel T="ProductModel" SortBy="@(x => (object)x.Price)">Цена</MudTableSortLabel></MudTh>
-            <MudTh>Действия</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Код">@context.Code</MudTd>
-            <MudTd DataLabel="Наименование">
-                <MudLink Href="@($"/products/{context.Id}")">@context.Name</MudLink>
-            </MudTd>
-            <MudTd DataLabel="Тип">@context.ProductTypeName</MudTd>
-            <MudTd DataLabel="Запас">@context.CurrentStock @context.UnitOfMeasure</MudTd>
-            <MudTd DataLabel="Ед. изм.">@context.UnitOfMeasure</MudTd>
-            <MudTd DataLabel="Цена">@context.Price.ToString("C2")</MudTd>
-            <MudTd>
-                <MudMenu Icon="@Icons.Material.Filled.MoreVert">
-                    <AuthorizeView Roles="Administrator,GeneralDirector,Storekeeper">
-                        <ChildContent Context="auth">
-                            <MudMenuItem OnClick="@(() => EditProduct(context.Id))">Изменить</MudMenuItem>
-                            <MudMenuItem OnClick="@(() => AddTransaction(context.Id))">Добавить операцию</MudMenuItem>
-                        </ChildContent>
-                    </AuthorizeView>
-                </MudMenu>
-            </MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText>Продукция не найдена</MudText>
-        </NoRecordsContent>
-        <LoadingContent>
-            <MudText>Загрузка...</MudText>
-        </LoadingContent>
-        <PagerContent>
-            <MudTablePager />
-        </PagerContent>
-    </MudTable>
+    @if (isLoading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (filteredProducts.Count == 0)
+    {
+        <MudPaper Class="d-flex flex-column align-center pa-8 rounded-lg" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Outlined.Category" Color="Color.Secondary" Size="Size.Large" Class="mb-4" />
+            <MudText Typo="Typo.h6" Align="Align.Center">Продукция не найдена</MudText>
+            <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary mt-1">
+                Попробуйте изменить параметры поиска или добавьте новую продукцию
+            </MudText>
+            @if (canManageProducts)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/products/add"))" Class="mt-4">
+                    Добавить продукцию
+                </MudButton>
+            }
+        </MudPaper>
+    }
+    else
+    {
+        @if (isGridView)
+        {
+            <MudGrid>
+                @foreach (var product in filteredProducts)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="3">
+                        <MudCard Elevation="2" Class="h-100 product-card" @onclick="() => ViewProductDetails(product.Id)">
+                            <MudCardMedia Image="@GetProductImage(product)" Style="height: 200px; background-size: contain;" />
+                            <MudCardContent>
+                                <div class="d-flex justify-space-between align-start">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle1" Class="mud-primary-text"><strong>@product.Code</strong></MudText>
+                                        <MudText Typo="Typo.body1" Class="mt-1 product-title">@product.Name</MudText>
+                                    </div>
+                                    <MudChip Color="Color.Secondary" Size="Size.Small" Label="true" T="string">@product.UnitOfMeasure</MudChip>
+                                </div>
+                                <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary truncate-description">@product.Description</MudText>
+                                <div class="d-flex justify-space-between align-center mt-2">
+                                    <MudText Typo="Typo.body2"><strong>Запас:</strong> @product.CurrentStock</MudText>
+                                    <MudChip T="string" Color="@GetStockColor(product)" Size="Size.Small">
+                                        @(product.CurrentStock > 0 ? "В наличии" : "Отсутствует")
+                                    </MudChip>
+                                </div>
+                                <div class="d-flex justify-space-between align-center mt-2">
+                                    <MudText Typo="Typo.caption">
+                                        <strong>Категория:</strong> @product.ProductTypeName
+                                    </MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 500;">
+                                        @product.Price.ToString("C0")
+                                    </MudText>
+                                </div>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+        else
+        {
+            <MudPaper>
+                <MudTable Items="@filteredProducts" Hover="true" Bordered="false" Striped="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Фото</MudTh>
+                        <MudTh>Код</MudTh>
+                        <MudTh>Наименование</MudTh>
+                        <MudTh>Категория</MudTh>
+                        <MudTh>Запас</MudTh>
+                        <MudTh>Ед. изм.</MudTh>
+                        <MudTh>Цена</MudTh>
+                        <MudTh>Действия</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudAvatar Square="true" Size="Size.Medium" Image="@GetProductImage(context)" Style="min-width: 60px; height: 60px;" />
+                        </MudTd>
+                        <MudTd>@context.Code</MudTd>
+                        <MudTd>@context.Name</MudTd>
+                        <MudTd>@context.ProductTypeName</MudTd>
+                        <MudTd>
+                            <div class="d-flex align-center">
+                                <span>@context.CurrentStock</span>
+                                <MudChip T="string" Color="@GetStockColor(context)" Size="Size.Small" Class="ml-2">
+                                    @(context.CurrentStock > 0 ? "В наличии" : "Отсутствует")
+                                </MudChip>
+                            </div>
+                        </MudTd>
+                        <MudTd>@context.UnitOfMeasure</MudTd>
+                        <MudTd>@context.Price.ToString("C0")</MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" OnClick="() => ViewProductDetails(context.Id)" />
+                            @if (canManageProducts)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => EditProduct(context.Id)" />
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+    }
 </MudContainer>
 
+<style>
+    .product-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+    }
+
+    .product-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--mud-elevation-5);
+    }
+
+    .product-title {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        height: 3em;
+    }
+
+    .truncate-description {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+
 @code {
-    private MudTable<ProductModel>? table;
     private bool isLoading = true;
-    private List<ProductModel> products = new List<ProductModel>();
-    private List<ProductModel> filteredProducts = new List<ProductModel>();
-    private List<ProductTypeModel> productTypes = new List<ProductTypeModel>();
-    private string searchString = "";
-    private Guid? selectedProductTypeId;
+    private bool canManageProducts = true; 
+    private bool isGridView = true;
+    private string searchText = "";
+    private string selectedCategory = "";
+    private List<ProductModel> products = new();
+    private List<ProductModel> filteredProducts = new();
+    private List<string> categories = new();
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadProductTypesAsync();
         await LoadProductsAsync();
-    }
-
-    private async Task LoadProductTypesAsync()
-    {
-        try
-        {
-            var productTypesDto = await ProductService.GetAllProductTypesAsync();
-            productTypes = productTypesDto.Select(dto => dto.ToModel()).ToList();
-        }
-        catch (Exception ex)
-        {
-            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить типы продукции: {ex.Message}");
-        }
     }
 
     private async Task LoadProductsAsync()
     {
         isLoading = true;
+
         try
         {
+            // Загрузка продукции и категорий
             var productsDto = await ProductService.GetAllProductsAsync();
-            products = productsDto.Select(dto => dto.ToModel()).ToList();
-            ApplyFilters();
+            foreach (var p in productsDto)
+            {
+                Console.WriteLine($"Продукт: {p.Name}, TypeId: {p.ProductTypeId}, TypeName: {p.ProductTypeName}");
+            }
+            products = productsDto.Select(p => new ProductModel
+            {
+                Id = p.Id,
+                Code = p.Code,
+                Name = p.Name,
+                Description = p.Description ?? "",
+                ProductTypeId = p.ProductTypeId,
+                ProductTypeName = p.ProductTypeName ?? "Без категории",
+                Price = p.Price,
+                CurrentStock = p.CurrentStock,
+                UnitOfMeasure = p.UnitOfMeasure ?? "шт.",
+                ImageUrl = p.ImageUrl
+            }).ToList();
+            categories = products.Select(p => p.ProductTypeName).Distinct().OrderBy(c => c).ToList();
+
+            // Применяем фильтры
+            FilterProducts();
         }
         catch (Exception ex)
         {
-            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить продукцию: {ex.Message}");
+            Snackbar.Add($"Ошибка при загрузке продукции: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -136,98 +248,51 @@
         }
     }
 
-    private void ApplyFilters()
+    private void FilterProducts()
     {
         filteredProducts = products;
 
-        if (!string.IsNullOrWhiteSpace(searchString))
+        // Фильтр по категории
+        if (!string.IsNullOrEmpty(selectedCategory))
         {
+            filteredProducts = filteredProducts.Where(p => p.ProductTypeName == selectedCategory).ToList();
+        }
+
+        // Фильтр по поисковому запросу
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            var search = searchText.ToLower();
             filteredProducts = filteredProducts.Where(p => 
-                p.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase) || 
-                p.Code.Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
-                p.Description.Contains(searchString, StringComparison.OrdinalIgnoreCase)).ToList();
+                p.Name.ToLower().Contains(search) || 
+                p.Code.ToLower().Contains(search) || 
+                p.Description.ToLower().Contains(search)
+            ).ToList();
         }
-
-        if (selectedProductTypeId.HasValue)
-        {
-            filteredProducts = filteredProducts.Where(p => p.ProductTypeId == selectedProductTypeId.Value).ToList();
-        }
-
-        table?.ReloadServerData();
     }
 
-    private void FilterChanged(Guid? value)
+    private void FilterChanged()
     {
-        selectedProductTypeId = value;
-        ApplyFilters();
+        FilterProducts();
     }
 
-    private async Task<TableData<ProductModel>> ServerReload(TableState state,CancellationToken cancellationtoken)
+    private async Task<IEnumerable<string>> SearchCategories(string value, CancellationToken cancellationToken)
     {
-        var sortedProducts = filteredProducts;
-        await Task.CompletedTask;
-        // Сортировка
-        if (!string.IsNullOrEmpty(state.SortLabel))
-        {
-            Comparison<ProductModel> comparison = default;
-            switch (state.SortLabel)
-            {
-                case "Code":
-                    comparison = (a, b) => string.Compare(a.Code, b.Code, StringComparison.Ordinal);
-                    break;
-                case "Name":
-                    comparison = (a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal);
-                    break;
-                case "ProductTypeName":
-                    comparison = (a, b) => string.Compare(a.ProductTypeName, b.ProductTypeName, StringComparison.Ordinal);
-                    break;
-                case "CurrentStock":
-                    comparison = (a, b) => a.CurrentStock.CompareTo(b.CurrentStock);
-                    break;
-                case "UnitOfMeasure":
-                    comparison = (a, b) => string.Compare(a.UnitOfMeasure, b.UnitOfMeasure, StringComparison.Ordinal);
-                    break;
-                case "Price":
-                    comparison = (a, b) => a.Price.CompareTo(b.Price);
-                    break;
-            }
+        // Если строка пуста, возвращаем все категории
+        await Task.Delay(1, cancellationToken); // Добавляем для асинхронной сигнатуры
 
-            if (comparison != null)
-            {
-                if (state.SortDirection == SortDirection.Descending)
-                {
-                    sortedProducts = sortedProducts.OrderByDescending(x => x, Comparer<ProductModel>.Create(comparison)).ToList();
-                }
-                else
-                {
-                    sortedProducts = sortedProducts.OrderBy(x => x, Comparer<ProductModel>.Create(comparison)).ToList();
-                }
-            }
-        }
+        if (string.IsNullOrEmpty(value))
+            return categories;
 
-        // Пагинация
-        var pagedProducts = sortedProducts
-            .Skip(state.Page * state.PageSize)
-            .Take(state.PageSize)
-            .ToList();
-
-        return new TableData<ProductModel> { TotalItems = sortedProducts.Count, Items = pagedProducts };
+        return categories.Where(c => c.Contains(value, StringComparison.OrdinalIgnoreCase));
     }
 
-    private void OnSearchKeyDown(KeyboardEventArgs args)
+    private void HandleKeyDown(KeyboardEventArgs args)
     {
         if (args.Key == "Enter")
-        {
-            ApplyFilters();
-        }
+            FilterChanged();
     }
 
-    private void CreateProduct()
-    {
-        NavigationManager.NavigateTo("/products/create");
-    }
-
-    private void ViewProduct(Guid id)
+    private void ViewProductDetails(Guid id)
     {
         NavigationManager.NavigateTo($"/products/{id}");
     }
@@ -237,20 +302,26 @@
         NavigationManager.NavigateTo($"/products/edit/{id}");
     }
 
-    private async Task AddTransaction(Guid id)
+    private void ToggleView()
     {
-        var parameters = new DialogParameters
-        {
-            { "ProductId", id }
-        };
+        isGridView = !isGridView;
+    }
 
-        var dialog = await DialogService.ShowAsync<ProductTransationDialog>("Добавление операции", parameters);
-        var result = await dialog.Result;
+    private Color GetStockColor(ProductModel product)
+    {
+        if (product.CurrentStock <= 0)
+            return Color.Error;
+        if (product.CurrentStock <= 10)
+            return Color.Warning;
+        return Color.Success;
+    }
 
-        if (result!=null && !result.Canceled)
-        {
-            await LoadProductsAsync();
-            Snackbar.Add("Операция успешно добавлена", Severity.Success);
-        }
+    private string GetProductImage(ProductModel product)
+    {
+        if (!string.IsNullOrEmpty(product.ImageUrl))
+            return product.ImageUrl;
+
+        // Используем встроенный data URL вместо запроса к файлу
+        return "data:image/png;base64,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";
     }
 }

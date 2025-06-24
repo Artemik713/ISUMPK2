@@ -4,13 +4,18 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Services\ClientMaterialService.cs" />
+    <Compile Remove="Pages\Materials\Materials.cs" />
     <Compile Remove="Services\IMaterialService.cs" />
     <Compile Remove="Services\INotificationService.cs" />
     <Compile Remove="Services\NotificationService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="Pages\About.razor" />
   </ItemGroup>
 
 	<ItemGroup>
@@ -29,5 +34,12 @@
     <ProjectReference Include="..\ISUMPK2.Application\ISUMPK2.Application.csproj" />
     <ProjectReference Include="..\ISUMPK2.Infrastructure\ISUMPK2.Infrastructure.csproj" />
   </ItemGroup>
+
+
+	<ItemGroup>
+	  <Folder Include="Pages\Новая папка\" />
+	  <Folder Include="wwwroot\images\products\" />
+	  <Folder Include="wwwroot\Новая папка\" />
+	</ItemGroup>
 
 </Project>  

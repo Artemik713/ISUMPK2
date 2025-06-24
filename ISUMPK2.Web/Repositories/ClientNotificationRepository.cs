@@ -18,36 +18,49 @@ namespace ISUMPK2.Web.Repositories
 
         public async Task<IEnumerable<Notification>> GetNotificationsForUserAsync(Guid userId)
         {
-            return await HttpClient.GetFromJsonAsync<IEnumerable<Notification>>($"{ApiEndpoint}/user/{userId}");
+            // Изменено: больше не передаём userId в URL
+            return await HttpClient.GetFromJsonAsync<IEnumerable<Notification>>($"{ApiEndpoint}/user");
+        }
+
+        public async Task<IEnumerable<Notification>> GetReadNotificationsForUserAsync(Guid userId)
+        {
+            // Вызываем соответствующий API endpoint
+            return await HttpClient.GetFromJsonAsync<IEnumerable<Notification>>($"{ApiEndpoint}/read");
         }
 
         public async Task<IEnumerable<Notification>> GetUnreadNotificationsForUserAsync(Guid userId)
         {
-            return await HttpClient.GetFromJsonAsync<IEnumerable<Notification>>($"{ApiEndpoint}/user/{userId}/unread");
+            // Изменено: больше не передаём userId в URL
+            return await HttpClient.GetFromJsonAsync<IEnumerable<Notification>>($"{ApiEndpoint}/unread");
         }
 
         public async Task MarkAsReadAsync(Guid notificationId)
         {
-            await HttpClient.PutAsync($"{ApiEndpoint}/{notificationId}/read", null);
+            // Правильный URL, соответствующий API контроллеру
+            await HttpClient.PostAsync($"{ApiEndpoint}/{notificationId}/mark-as-read", null);
         }
 
         public async Task MarkAllAsReadForUserAsync(Guid userId)
         {
-            await HttpClient.PutAsync($"{ApiEndpoint}/user/{userId}/mark-all-read", null);
+            // Изменено: больше не передаём userId в URL
+            await HttpClient.PostAsync($"{ApiEndpoint}/mark-all-as-read", null);
         }
 
         public async Task<int> GetUnreadCountForUserAsync(Guid userId)
         {
-            return await HttpClient.GetFromJsonAsync<int>($"{ApiEndpoint}/user/{userId}/unread/count");
+            // Изменено: больше не передаём userId в URL
+            return await HttpClient.GetFromJsonAsync<int>($"{ApiEndpoint}/count-unread");
         }
 
         public async Task<int> GetUnreadNotificationsCountForUserAsync(Guid userId)
         {
-            return await HttpClient.GetFromJsonAsync<int>($"{ApiEndpoint}/user/{userId}/unread/count");
+            // Изменено: больше не передаём userId в URL
+            return await HttpClient.GetFromJsonAsync<int>($"{ApiEndpoint}/count-unread");
         }
 
         public async Task CreateLowStockNotificationAsync(Guid materialId)
         {
+            // Этот метод требует уточнения - нужно проверить, есть ли такой эндпоинт в API
             await HttpClient.PostAsync($"{ApiEndpoint}/lowstock/{materialId}", null);
         }
     }

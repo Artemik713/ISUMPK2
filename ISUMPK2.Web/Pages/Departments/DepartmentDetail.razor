@@ -1,0 +1,421 @@
+﻿@page "/departments/{id:guid}"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Dialogs
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Extensions
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IDepartmentService DepartmentService
+@inject ITaskService TaskService
+@inject IProductService ProductService
+@inject IUserService UserService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>@(department?.Name ?? "Загрузка...")</PageTitle>
+
+@if (isLoading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (isAccessDenied)
+{
+    <MudAlert Severity="Severity.Error">У вас нет доступа к данной странице</MudAlert>
+    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/"))" Variant="Variant.Text" Class="mt-2">Вернуться</MudButton>
+}
+else if (department == null)
+{
+    <MudAlert Severity="Severity.Error">Цех не найден</MudAlert>
+    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/departments"))" Variant="Variant.Text">К списку цехов</MudButton>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-0">
+        <!-- Шапка цеха -->
+        <MudPaper Elevation="0" Class="pa-4 mb-4" Style="border-bottom: 1px solid var(--mud-palette-lines-default)">
+            <div class="d-flex justify-space-between align-center">
+                <div>
+                    <MudText Typo="Typo.h4">@department.Name</MudText>
+                    <MudText Typo="Typo.body1">@department.Description</MudText>
+                    @if (department.HeadId.HasValue && !string.IsNullOrEmpty(department.HeadName))
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Primary"
+                                   OnClick="@(() => ViewUserProfile(department.HeadId.Value))"
+                                   Class="pa-0 ml-n2">
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
+                                Руководитель: @department.HeadName
+                            </MudText>
+                        </MudButton>
+                    }
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                               OnClick="@(() => NavigationManager.NavigateTo("/departments"))" />
+            </div>
+        </MudPaper>
+
+        <!-- Задачи цеха -->
+        <MudPaper Elevation="0" Class="pa-3 mb-4" Style="border: 1px solid var(--mud-palette-lines-default)">
+            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Assignment" Class="mr-2" />
+                Активные задачи цеха
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="ml-auto"
+                               OnClick="LoadDepartmentData" />
+            </MudText>
+
+            @if (departmentTasks == null || !departmentTasks.Any())
+            {
+                <MudText Align="Align.Center" Class="my-4">В данном цехе нет активных задач</MudText>
+            }
+            else
+            {
+                <MudTable Items="@departmentTasks.Where(t => t.StatusId < 5)"
+                          Hover="true" Dense="true" Elevation="0" Class="mt-2">
+                    <HeaderContent>
+                        <MudTh>Название</MudTh>
+                        <MudTh>Статус</MudTh>
+                        <MudTh>Приоритет</MudTh>
+                        <MudTh>Исполнитель</MudTh>
+                        <MudTh>Срок</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Название">@context.Title</MudTd>
+                        <MudTd DataLabel="Статус">
+                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.StatusId)">
+                                @context.StatusName
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Приоритет">
+                            <MudChip T="string" Size="Size.Small" Color="@GetPriorityColor(context.PriorityId)">
+                                @context.PriorityName
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Исполнитель">
+                            @(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)
+                        </MudTd>
+                        <MudTd DataLabel="Срок">
+                            @(context.DueDate.HasValue? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")
+                            @if (context.IsOverdue)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error"
+                                         Size="Size.Small" Class="ml-1" />
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Visibility"
+                                           OnClick="@(() => NavigationManager.NavigateTo($"/tasks/{context.Id}"))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+
+        <MudGrid>
+            <!-- Сотрудники цеха -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="0" Class="pa-3 h-100" Style="border: 1px solid var(--mud-palette-lines-default)">
+                    <MudText Typo="Typo.h6" Class="mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Group" Class="mr-2" />
+                        Сотрудники цеха
+                    </MudText>
+                    @if (departmentEmployees == null || !departmentEmployees.Any())
+                    {
+                        <MudText Align="Align.Center" Class="my-4">Нет данных о сотрудниках</MudText>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var employee in departmentEmployees)
+                            {
+                                <MudPaper Elevation="0" Class="pa-3 d-flex align-center employee-card"
+                                          Style="border: 1px solid var(--mud-palette-lines-default); border-radius: 8px;"
+                                          @onclick="@(() => HandleEmployeeClick(employee))">
+                                    <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-3">
+                                        @(employee.FullName?.Length > 0 ? employee.FullName[0].ToString() : "?")
+                                    </MudAvatar>
+                                    <MudText>@employee.FullName</MudText>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <!-- Продукция цеха -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="0" Class="pa-3 h-100" Style="border: 1px solid var(--mud-palette-lines-default)">
+                    <MudText Typo="Typo.h6" Class="mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Class="mr-2" />
+                        Продукция цеха
+                    </MudText>
+                    @if (departmentProducts == null || !departmentProducts.Any())
+                    {
+                        <MudText Align="Align.Center" Class="my-4">Нет данных о продукции</MudText>
+                    }
+                    else
+                    {
+                        <MudTable Items="@departmentProducts" Hover="true" Dense="true" Elevation="0">
+                            <HeaderContent>
+                                <MudTh>Код</MudTh>
+                                <MudTh>Название</MudTh>
+                                <MudTh>Тип</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Код">@context.Code</MudTd>
+                                <MudTd DataLabel="Название">
+                                    <MudLink Href="@($"/products/{context.Id}")">@context.Name</MudLink>
+                                </MudTd>
+                                <MudTd DataLabel="Тип">@context.ProductTypeName</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+}
+
+<style>
+    .employee-card {
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+        .employee-card:hover {
+            box-shadow: var(--mud-elevation-2);
+            background-color: var(--mud-palette-background-grey);
+        }
+</style>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private DepartmentModel department;
+    private List<TaskModel> departmentTasks = new();
+    private List<ProductModel> departmentProducts = new();
+    private List<UserModel> departmentEmployees = new();
+    private bool isLoading = true;
+    private bool isAccessDenied = false;
+    private Guid? currentUserDepartmentId;
+    private bool isAdminOrManager = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckUserAccess();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!isAccessDenied)
+        {
+            await LoadDepartmentData();
+        }
+    }
+
+    private void HandleEmployeeClick(UserModel employee)
+    {
+        // Безопасное приведение к Guid? и проверка
+        var employeeId = employee?.Id as Guid?;
+        if (employeeId.HasValue)
+        {
+            ViewUserProfile(employeeId.Value);
+        }
+    }
+
+    private void ViewUserProfile(Guid userId)
+    {
+        // В будущем здесь будет навигация на профиль пользователя
+        // NavigationManager.NavigateTo($"/users/{userId}");
+
+        // А пока можно вывести диалоговое окно с информацией
+        ShowUserInfoDialog(userId);
+    }
+
+    private async Task ShowUserInfoDialog(Guid userId)
+    {
+        try
+        {
+            var user = await UserService.GetUserByIdAsync(userId);
+            if (user != null)
+            {
+                var parameters = new DialogParameters
+            {
+                { "UserData", user },
+                { "IsHeadOfDepartment", department.HeadId.HasValue && department.HeadId.Value == userId }
+            };
+
+                await DialogService.ShowAsync<UserProfileDialog>("Профиль сотрудника", parameters);
+            }
+            else
+            {
+                Snackbar.Add("Информация о пользователе не найдена", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных пользователя: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CheckUserAccess()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Проверка на админа или менеджера
+        isAdminOrManager = user.IsInRole("Admin") || user.IsInRole("Manager");
+
+        if (!isAdminOrManager)
+        {
+            try
+            {
+                // Получаем данные текущего пользователя по имени пользователя
+                var userName = user.Identity?.Name;
+                if (!string.IsNullOrEmpty(userName))
+                {
+                    // Используем существующий метод GetUsersByFilterAsync с фильтрацией по имени пользователя
+                    var users = await UserService.GetUsersByFilterAsync($"userName eq '{userName}'");
+                    var currentUser = users.FirstOrDefault();
+
+                    if (currentUser != null)
+                    {
+                        currentUserDepartmentId = currentUser.DepartmentId;
+
+                        // Если пользователь пытается просмотреть не свой цех
+                        if (currentUserDepartmentId.HasValue && currentUserDepartmentId.Value != Id)
+                        {
+                            isAccessDenied = true;
+
+                            // Перенаправляем на страницу его цеха
+                            if (currentUserDepartmentId.HasValue)
+                            {
+                                NavigationManager.NavigateTo($"/departments/{currentUserDepartmentId.Value}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка проверки прав доступа: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private Color GetStatusColor(int statusId)
+    {
+        return statusId switch
+        {
+            1 => Color.Default,  // Создана
+            2 => Color.Info,     // В работе
+            3 => Color.Warning,  // Требует уточнения
+            4 => Color.Primary,  // На проверке
+            5 => Color.Success,  // Выполнена
+            6 => Color.Error,    // Отклонена
+            _ => Color.Default
+        };
+    }
+
+    private Color GetPriorityColor(int priorityId)
+    {
+        return priorityId switch
+        {
+            1 => Color.Default,     // Низкий
+            2 => Color.Info,        // Средний
+            3 => Color.Warning,     // Высокий
+            4 => Color.Error,       // Критический
+            _ => Color.Default
+        };
+    }
+    private async Task LoadDepartmentData()
+    {
+        isLoading = true;
+
+        try
+        {
+            // Проверка авторизации перед загрузкой данных
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState?.User?.Identity?.IsAuthenticated != true)
+            {
+                // Если пользователь не авторизован, перенаправляем на страницу входа
+                NavigationManager.NavigateTo("/account/login?returnUrl=" +
+                    Uri.EscapeDataString(NavigationManager.Uri), true);
+                return;
+            }
+
+            // Загрузка данных отдела
+            var departmentDto = await DepartmentService.GetDepartmentByIdAsync(Id);
+            if (departmentDto != null)
+            {
+                department = new DepartmentModel
+                {
+                    Id = departmentDto.Id,
+                    Name = departmentDto.Name,
+                    Description = departmentDto.Description,
+                    HeadId = departmentDto.HeadId,
+                    HeadName = departmentDto.HeadName
+                };
+
+                // Загрузка связанных данных с обработкой возможных ошибок авторизации
+                try
+                {
+                    var tasksDto = await TaskService.GetTasksAsync(Id);
+                    departmentTasks = tasksDto.Select(t => t.ToModel()).ToList();
+                }
+                catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    Snackbar.Add("Недостаточно прав для просмотра задач цеха", Severity.Warning);
+                    departmentTasks = new List<TaskModel>();
+                }
+
+                try
+                {
+                    var productsDto = await ProductService.GetProductsAsync($"departmentId eq {Id}");
+                    departmentProducts = productsDto.Select(p => p.ToModel()).ToList();
+                }
+                catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    Snackbar.Add("Недостаточно прав для просмотра продукции цеха", Severity.Warning);
+                    departmentProducts = new List<ProductModel>();
+                }
+
+                try
+                {
+                    var employeesDto = await UserService.GetUsersByFilterAsync($"departmentId eq {Id}");
+                    departmentEmployees = employeesDto.Select(e => e.ToModel()).ToList();
+                }
+                catch (Exception ex) when (ex.Message.Contains("401") || ex.Message.Contains("403")
+                    || ex.Message.Contains("Unauthorized") || ex.Message.Contains("Forbidden"))
+                {
+                    departmentEmployees = new List<UserModel>();
+                    Snackbar.Add("Недостаточно прав для просмотра сотрудников цеха", Severity.Warning);
+                }
+            }
+            else
+            {
+                Snackbar.Add("Цех не найден или у вас нет доступа к нему", Severity.Warning);
+            }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // Обработка ошибки авторизации
+            Snackbar.Add("Сессия истекла или недостаточно прав. Пожалуйста, войдите снова", Severity.Error);
+            NavigationManager.NavigateTo("/account/login?returnUrl=" +
+                Uri.EscapeDataString(NavigationManager.Uri), true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных цеха: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:viewmodels="clr-namespace:ISUPMK.Mobile.ViewModels"
-             xmlns:models="clr-namespace:ISUPMK.Mobile.Models"
-             x:Class="ISUPMK.Mobile.Views.DashboardPage"
+             xmlns:viewmodels="clr-namespace:ISUMPK2.Mobile.ViewModels"
+             xmlns:models="clr-namespace:ISUMPK2.Mobile.Models"
+             x:Class="ISUMPK2.Mobile.Components.Pages.DashboardPage"
              x:DataType="viewmodels:DashboardViewModel"
              Title="{Binding Title}">
 

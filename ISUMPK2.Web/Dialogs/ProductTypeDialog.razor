@@ -1,0 +1,52 @@
+﻿@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="productType.Name" Label="Наименование" Required="true" />
+        <MudTextField @bind-Value="productType.Description" Label="Описание" Class="mt-3" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Сохранить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private ProductTypeCreateDto productType = new();
+
+    [Inject] IProductService ProductService { get; set; }
+    [Inject] ISnackbar Snackbar { get; set; }
+
+    private async Task Submit()
+    {
+        try
+        {
+            // Создаем тип продукта и получаем ответ
+            var createdType = await ProductService.CreateProductTypeAsync(productType);
+
+            // Проверяем, что получили корректный объект с Id
+            if (createdType != null && createdType.Id != Guid.Empty)
+            {
+                Console.WriteLine($"Создан тип продукта: {createdType.Name}, ID: {createdType.Id}");
+                MudDialog.Close(DialogResult.Ok(createdType));
+                Snackbar.Add("Тип продукта создан успешно", Severity.Success);
+            }
+            else
+            {
+                Console.WriteLine("Сервер вернул null или объект с пустым Id");
+                Snackbar.Add("Не удалось создать тип продукта", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Исключение при создании типа продукта: {ex.Message}");
+            Snackbar.Add($"Ошибка при создании: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

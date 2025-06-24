@@ -1,0 +1,91 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ISUMPK2.Mobile.ViewModels"
+             xmlns:models="clr-namespace:ISUMPK2.Mobile.Models"
+             x:Class="ISUMPK2.Mobile.Components.Pages.TaskDetailPage"
+             x:DataType="viewmodels:TaskDetailViewModel"
+             Title="{Binding Task.Title}">
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="20">
+        <!-- Заголовок и статус -->
+        <StackLayout Grid.Row="0" Orientation="Vertical" Spacing="10">
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" HorizontalOptions="Center" />
+
+            <!-- Информация о задаче -->
+            <Frame BorderColor="{StaticResource Primary}" Padding="15" IsVisible="{Binding Task, Converter={StaticResource NotNullConverter}}">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*">
+                    <!-- Статус -->
+                    <Label Text="Статус:" Grid.Row="0" Grid.Column="0" FontAttributes="Bold" />
+                    <Label Text="{Binding Task.StatusName}" Grid.Row="0" Grid.Column="1" />
+
+                    <!-- Приоритет -->
+                    <Label Text="Приоритет:" Grid.Row="1" Grid.Column="0" FontAttributes="Bold" />
+                    <Label Text="{Binding Task.PriorityName}" Grid.Row="1" Grid.Column="1" />
+
+                    <!-- Исполнитель -->
+                    <Label Text="Исполнитель:" Grid.Row="2" Grid.Column="0" FontAttributes="Bold" />
+                    <Label Text="{Binding Task.AssigneeName}" Grid.Row="2" Grid.Column="1" />
+
+                    <!-- Срок -->
+                    <Label Text="Срок:" Grid.Row="3" Grid.Column="0" FontAttributes="Bold" />
+                    <HorizontalStackLayout Grid.Row="3" Grid.Column="1" Spacing="5">
+                        <Label Text="{Binding Task.DueDate, StringFormat='{0:dd.MM.yyyy}'}" />
+                        <Label Text="(просрочено)" TextColor="Red" IsVisible="{Binding Task.IsOverdue}" />
+                    </HorizontalStackLayout>
+                </Grid>
+            </Frame>
+        </StackLayout>
+
+        <!-- Описание задачи -->
+        <ScrollView Grid.Row="1" IsVisible="{Binding Task, Converter={StaticResource NotNullConverter}}">
+            <StackLayout Spacing="15">
+                <Label Text="Описание:" FontAttributes="Bold" FontSize="16" />
+                <Frame BorderColor="LightGray" Padding="15">
+                    <Label Text="{Binding Task.Description}" />
+                </Frame>
+
+                <!-- Данные о продукте -->
+                <StackLayout IsVisible="{Binding Task.ProductId, Converter={StaticResource NotNullConverter}}">
+                    <Label Text="Продукт:" FontAttributes="Bold" FontSize="16" />
+                    <Frame BorderColor="LightGray" Padding="15">
+                        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*">
+                            <Label Text="Название:" Grid.Row="0" Grid.Column="0" FontAttributes="Bold" />
+                            <Label Text="{Binding Task.ProductName}" Grid.Row="0" Grid.Column="1" />
+
+                            <Label Text="Количество:" Grid.Row="1" Grid.Column="0" FontAttributes="Bold" />
+                            <Label Text="{Binding Task.Quantity}" Grid.Row="1" Grid.Column="1" />
+                        </Grid>
+                    </Frame>
+                </StackLayout>
+
+                <!-- Комментарии -->
+                <Label Text="Комментарии:" FontAttributes="Bold" FontSize="16" />
+                <CollectionView ItemsSource="{Binding Task.Comments}" EmptyView="Нет комментариев">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:TaskCommentModel">
+                            <Frame BorderColor="LightGray" Margin="0,5" Padding="10">
+                                <StackLayout Spacing="5">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <Label Text="{Binding UserName}" FontAttributes="Bold" Grid.Column="0" />
+                                        <Label Text="{Binding CreatedAt, StringFormat='{0:dd.MM.yyyy HH:mm}'}" Grid.Column="1" FontSize="12" TextColor="Gray" />
+                                    </Grid>
+                                    <Label Text="{Binding Comment}" />
+                                </StackLayout>
+                            </Frame>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </StackLayout>
+        </ScrollView>
+
+        <!-- Кнопки действий -->
+        <HorizontalStackLayout Grid.Row="2" Spacing="10" HorizontalOptions="Center">
+            <Button Text="Изменить" Command="{Binding EditTaskCommand}" IsVisible="{Binding IsEditing, Converter={StaticResource InverseBoolConverter}}" />
+            <Button Text="Удалить" Command="{Binding DeleteTaskCommand}" IsVisible="{Binding IsEditing, Converter={StaticResource InverseBoolConverter}}" BackgroundColor="Red" />
+            <Button Text="Сохранить" Command="{Binding SaveTaskCommand}" IsVisible="{Binding IsEditing}" />
+            <Button Text="Отмена" Command="{Binding CancelEditCommand}" IsVisible="{Binding IsEditing}" />
+        </HorizontalStackLayout>
+    </Grid>
+
+</ContentPage>

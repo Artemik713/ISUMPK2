@@ -2,6 +2,7 @@
 using ISUMPK2.Application.Services;
 using ISUMPK2.Domain.Entities;
 using ISUMPK2.Domain.Repositories;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,15 +15,18 @@ namespace ISUMPK2.Application.Services.Implementations
         private readonly IProductRepository _productRepository;
         private readonly IMaterialRepository _materialRepository;
         private readonly IRepository<ProductType> _productTypeRepository;
+        private readonly IRepository<Department> _departmentRepository;
 
         public ProductService(
             IProductRepository productRepository,
             IMaterialRepository materialRepository,
-            IRepository<ProductType> productTypeRepository)
+            IRepository<ProductType> productTypeRepository,
+            IRepository<Department> departmentRepository)
         {
             _productRepository = productRepository;
             _materialRepository = materialRepository;
             _productTypeRepository = productTypeRepository;
+            _departmentRepository = departmentRepository;
         }
 
         #region Методы для работы с продуктами
@@ -47,6 +51,10 @@ namespace ISUMPK2.Application.Services.Implementations
 
         public async Task<ProductDto> CreateProductAsync(ProductCreateDto productDto)
         {
+            // Добавьте логирование
+            Console.WriteLine($"Received product data: DepartmentId: {productDto.DepartmentId}, " +
+                             $"Weight: {productDto.Weight}, Material: {productDto.Material}");
+
             var product = new Product
             {
                 Code = productDto.Code,
@@ -54,17 +62,32 @@ namespace ISUMPK2.Application.Services.Implementations
                 Description = productDto.Description,
                 ProductTypeId = productDto.ProductTypeId,
                 UnitOfMeasure = productDto.UnitOfMeasure,
-                CurrentStock = 0,
+                CurrentStock = productDto.CurrentStock,
                 Price = productDto.Price,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                DepartmentId = productDto.DepartmentId,
+                Weight = productDto.Weight,
+                Dimensions = productDto.Dimensions,
+                Material = productDto.Material,
+                ProductionTime = productDto.ProductionTime,
+                TechnologyMap = productDto.TechnologyMap,
+                ImageUrl = productDto.ImageUrl,
             };
 
             await _productRepository.AddAsync(product);
             await _productRepository.SaveChangesAsync();
 
-            return MapToDto(product);
+            // Используем существующий метод репозитория вместо локального метода
+            var createdProduct = await _productRepository.GetByIdWithDetailsAsync(product.Id);
+
+            // Проверка сохраненных значений
+            Console.WriteLine($"Saved product: ID: {product.Id}, DepartmentId: {product.DepartmentId}, " +
+                            $"Weight: {product.Weight}, Material: {product.Material}");
+
+            return MapToDto(createdProduct ?? product);
         }
+
 
         public async Task<ProductDto> UpdateProductAsync(Guid id, ProductUpdateDto productDto)
         {
@@ -226,6 +249,48 @@ namespace ISUMPK2.Application.Services.Implementations
             };
         }
 
+        public async Task<ProductDto> GetByIdWithDetailsAsync(Guid id)
+        {
+            try
+            {
+                // Получаем продукт с деталями через репозиторий
+                var product = await _productRepository.GetByIdWithDetailsAsync(id);
+
+                if (product == null)
+                    return null;
+
+                // Создаем DTO и заполняем всю информацию
+                var dto = MapToDto(product);
+
+                // Логирование для диагностики
+                Console.WriteLine($"Загружен продукт: ID={product.Id}, " +
+                                 $"DepartmentId={product.DepartmentId}, " +
+                                 $"Department={product.Department?.Name ?? "null"}, " +
+                                 $"ProductType={product.ProductType?.Name ?? "null"}, " +
+                                 $"Materials Count: {product.ProductMaterials?.Count ?? 0}");
+
+                // Если материалов нет в основных данных, загрузим их отдельно
+                if ((dto.Materials == null || !dto.Materials.Any()) && product.ProductMaterials != null)
+                {
+                    dto.Materials = product.ProductMaterials.Select(pm => new ProductMaterialDto
+                    {
+                        ProductId = pm.ProductId,
+                        MaterialId = pm.MaterialId,
+                        MaterialName = pm.Material?.Name,
+                        MaterialCode = pm.Material?.Code,
+                        Quantity = pm.Quantity,
+                        UnitOfMeasure = pm.Material?.UnitOfMeasure
+                    }).ToList();
+                }
+
+                return dto;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка в GetByIdWithDetailsAsync: {ex.Message}");
+                throw;
+            }
+        }
         public async Task<IEnumerable<ProductTransactionDto>> GetTransactionsByProductAsync(Guid productId)
         {
             var transactions = await _productRepository.GetTransactionsByProductAsync(productId);
@@ -244,6 +309,8 @@ namespace ISUMPK2.Application.Services.Implementations
 
         private ProductDto MapToDto(Product product)
         {
+            if (product == null) return null;
+
             return new ProductDto
             {
                 Id = product.Id,
@@ -251,12 +318,21 @@ namespace ISUMPK2.Application.Services.Implementations
                 Name = product.Name,
                 Description = product.Description,
                 ProductTypeId = product.ProductTypeId,
-                ProductTypeName = product.ProductType?.Name,
+                ProductTypeName = product.ProductType?.Name ?? "Без категории",
+                DepartmentId = product.DepartmentId ?? Guid.Empty,
+                DepartmentName = product.Department?.Name,
                 UnitOfMeasure = product.UnitOfMeasure,
                 CurrentStock = product.CurrentStock,
                 Price = product.Price,
+                Weight = product.Weight,
+                Dimensions = product.Dimensions,
+                Material = product.Material,
+                TechnologyMap = product.TechnologyMap,
+                ProductionTime = product.ProductionTime,
+                ImageUrl = product.ImageUrl,
                 CreatedAt = product.CreatedAt,
-                UpdatedAt = product.UpdatedAt
+                UpdatedAt = product.UpdatedAt,
+                Materials = product.ProductMaterials?.Select(MapToDto).ToList() ?? new List<ProductMaterialDto>()
             };
         }
 
@@ -301,6 +377,27 @@ namespace ISUMPK2.Application.Services.Implementations
             };
         }
 
+        public async Task UpdateProductMaterialsAsync(Guid productId, List<ProductMaterialCreateDto> materials)
+        {
+            // Удаляем существующие связи
+            await _productRepository.RemoveAllProductMaterialsAsync(productId);
+
+            // Добавляем новые связи
+            foreach (var material in materials)
+            {
+                await _productRepository.AddProductMaterialAsync(new ProductMaterial
+                {
+                    ProductId = productId,
+                    MaterialId = material.MaterialId,
+                    Quantity = material.Quantity
+                });
+            }
+
+            await _productRepository.SaveChangesAsync();
+            Console.WriteLine($"Сохранено материалов: {materials.Count}");
+        }
         #endregion
+
+
     }
 }

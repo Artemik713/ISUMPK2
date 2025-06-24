@@ -14,7 +14,7 @@ using ISUMPK2.Application.Auth;
 using ISUMPK2.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using MudBlazor;
-using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Routing ;
 
 namespace ISUMPK2.Web
 {
@@ -26,7 +26,7 @@ namespace ISUMPK2.Web
             var builder = WebAssemblyHostBuilder.CreateDefault(args);
             builder.RootComponents.Add<Web.App>("#app");
             builder.RootComponents.Add<HeadOutlet>("head::after");
-            
+
             // Настройка HTTP клиента
             builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["API_URL"] ?? "https://localhost:7110") });
 
@@ -65,6 +65,8 @@ namespace ISUMPK2.Web
             builder.Services.AddScoped<IProductRepository, ClientProductRepository>();
             builder.Services.AddScoped(typeof(IRepository<>), typeof(ClientRepository<>));
             builder.Services.AddScoped<IMaterialCategoryRepository, ClientMaterialCategoryRepository>();
+            builder.Services.AddScoped<AuthTokenService>();
+            builder.Services.AddScoped<IThemeService, ThemeService>();
 
 
 
@@ -73,7 +75,9 @@ namespace ISUMPK2.Web
             // Регистрация сервисов приложения
             builder.Services.AddScoped<ITaskService, ClientTaskService>();
             builder.Services.AddScoped<IUserService, ClientUserService>();
-            builder.Services.AddScoped<IMaterialService, MaterialService>();
+            builder.Services.AddScoped<ISubTaskService, ClientSubTaskService>();
+            builder.Services.AddScoped<ISubTaskRepository, ClientSubTaskRepository>();
+            builder.Services.AddScoped<IMaterialService, ClientMaterialService>();
             builder.Services.AddScoped<IProductService, ProductService>();
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddScoped<IChatService, ChatService>();
@@ -83,6 +87,8 @@ namespace ISUMPK2.Web
             // Настройка SignalR для уведомлений
             builder.Services.AddSingleton<INotificationHubService, NotificationHubService>();
             builder.Services.AddSingleton<IChatHubService, ChatHubService>();
+            // Регистрация клиентских сервисов для работы с материалами задач
+            builder.Services.AddScoped<IClientTaskMaterialService, ClientTaskMaterialService>();
 
             await builder.Build().RunAsync();
         }

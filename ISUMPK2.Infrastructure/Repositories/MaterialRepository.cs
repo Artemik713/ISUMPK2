@@ -72,5 +72,12 @@ namespace ISUMPK2.Infrastructure.Repositories
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
         }
+        public async Task AddTransactionAsync(MaterialTransaction transaction)
+        {
+            // Зависит от конкретной реализации репозитория
+            // Для EntityFramework:
+            _context.MaterialTransactions.Add(transaction);
+            // Для Dapper может потребоваться другой подход
+        }
     }
 }

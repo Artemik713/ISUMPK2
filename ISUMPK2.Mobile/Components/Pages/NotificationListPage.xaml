@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ISUMPK2.Mobile.ViewModels"
+             xmlns:models="clr-namespace:ISUMPK2.Mobile.Models"
+             x:Class="ISUMPK2.Mobile.Components.Pages.NotificationListPage"
+             x:DataType="viewmodels:NotificationListViewModel"
+             Title="{Binding Title}">
+
+    <Grid RowDefinitions="Auto,*" Padding="10">
+        <HorizontalStackLayout Grid.Row="0" Spacing="10" HorizontalOptions="End">
+            <Button Text="Отметить все как прочитанные" 
+                   Command="{Binding MarkAllAsReadCommand}"
+                   FontSize="14" />
+
+            <ActivityIndicator IsRunning="{Binding IsLoading}" 
+                              IsVisible="{Binding IsLoading}" 
+                              VerticalOptions="Center" />
+        </HorizontalStackLayout>
+
+        <RefreshView Grid.Row="1" 
+                    Command="{Binding RefreshCommand}" 
+                    IsRefreshing="{Binding IsLoading}">
+            <CollectionView ItemsSource="{Binding Notifications}"
+                           EmptyView="У вас нет уведомлений">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:NotificationModel">
+                        <Frame Margin="0,5" Padding="15" 
+                              BorderColor="{Binding IsRead, Converter={StaticResource BoolToBorderColorConverter}, ConverterParameter='Transparent,LightBlue'}">
+                            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="5">
+                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                    <Label Grid.Column="0"
+                                          Text="{Binding Title}"
+                                          FontAttributes="{Binding IsRead, Converter={StaticResource BoolToFontAttributesConverter}}"
+                                          LineBreakMode="TailTruncation" />
+
+                                    <Label Grid.Column="1"
+                                          Text="{Binding CreatedAt, StringFormat='{0:dd.MM.yyyy HH:mm}'}"
+                                          FontSize="12"
+                                          TextColor="Gray" />
+                                </Grid>
+
+                                <Label Grid.Row="1"
+                                      Text="{Binding Message}"
+                                      LineBreakMode="TailTruncation"
+                                      MaxLines="2"
+                                      FontSize="14" />
+
+                                <Button Grid.Row="2"
+                                       Text="Отметить как прочитанное"
+                                       Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:NotificationListViewModel}}, Path=MarkAsReadCommand}"
+                                       CommandParameter="{Binding Id}"
+                                       IsVisible="{Binding IsRead, Converter={StaticResource InverseBoolConverter}}"
+                                       HorizontalOptions="End"
+                                       FontSize="12" />
+
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer 
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:NotificationListViewModel}}, Path=ViewNotificationCommand}"
+                                        CommandParameter="{Binding Id}" />
+                                </Grid.GestureRecognizers>
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+    </Grid>
+</ContentPage>

@@ -14,5 +14,8 @@ namespace ISUMPK2.Domain.Repositories
         Task UpdateStockAsync(Guid productId, decimal quantity, bool isAddition);
         Task<IEnumerable<ProductTransaction>> GetTransactionsByProductAsync(Guid productId);
         Task<IEnumerable<ProductTransaction>> GetTransactionsByDateRangeAsync(DateTime startDate, DateTime endDate);
+        Task<Product?> GetByIdWithDetailsAsync(Guid id);
+        Task RemoveAllProductMaterialsAsync(Guid productId);
+        Task AddProductMaterialAsync(ProductMaterial productMaterial);
     }
 }

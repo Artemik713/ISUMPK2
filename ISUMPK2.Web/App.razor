@@ -1,5 +1,7 @@
 ﻿@namespace ISUMPK2.Web
 @inherits ComponentBase
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
@@ -50,11 +52,62 @@
             </LayoutView>
         </NotFound>
     </Router>
+    <WorkerRoleRedirector />
+    <TokenMonitor /> <!-- Добавлен монитор токена -->
 </CascadingAuthenticationState>
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; }
-
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Проверяем, есть ли сохраненная тема
+                var themeName = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "theme");
+                var themeColor = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "themeColor") ?? "primary";
+                
+                bool isDark;
+                
+                if (string.IsNullOrEmpty(themeName))
+                {
+                    // Если тема не задана, используем системную тему
+                    try 
+                    {
+                        isDark = await JSRuntime.InvokeAsync<bool>("getSystemTheme");
+                    }
+                    catch
+                    {
+                        // Если функция не определена, используем светлую тему по умолчанию
+                        isDark = false;
+                    }
+                }
+                else
+                {
+                    isDark = themeName == "Dark";
+                }
+                
+                // Применяем тему
+                try 
+                {
+                    await JSRuntime.InvokeVoidAsync("applyTheme", isDark, themeColor);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ошибка при применении темы: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при инициализации темы: {ex.Message}");
+            }
+        }
+        
+        await base.OnAfterRenderAsync(firstRender);
+    }
+    
     public class RedirectToLogin : ComponentBase
     {
         [Inject]
@@ -67,4 +120,3 @@
         }
     }
 }
-

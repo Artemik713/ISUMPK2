@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ISUMPK2.Mobile.ViewModels"
+             x:Class="ISUMPK2.Mobile.Components.Pages.ProfilePage"
+             x:DataType="viewmodels:ProfileViewModel"
+             Title="{Binding Title}">
+
+    <RefreshView Command="{Binding RefreshCommand}" 
+                 IsRefreshing="{Binding IsLoading}">
+        <ScrollView>
+            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="20" Padding="20">
+                <!-- Профиль пользователя -->
+                <StackLayout Grid.Row="0" Spacing="15">
+                    <Frame Padding="20" HasShadow="True" CornerRadius="10">
+                        <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="100,*" RowSpacing="10">
+                            <Border Grid.Row="0" Grid.Column="0" Grid.RowSpan="3"
+                                   StrokeShape="RoundRectangle 50"
+                                   WidthRequest="85" 
+                                   HeightRequest="85"
+                                   Stroke="{StaticResource Primary}"
+                                   StrokeThickness="2"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center">
+                                <Label Text="{Binding User.FullName, Converter={StaticResource StringToInitialsConverter}}" 
+                                      FontSize="28" 
+                                      HorizontalTextAlignment="Center" 
+                                      VerticalTextAlignment="Center"
+                                      FontAttributes="Bold"
+                                      TextColor="{StaticResource Primary}" />
+                            </Border>
+                            
+                            <Label Grid.Row="0" Grid.Column="1"
+                                  Text="{Binding User.FullName}"
+                                  FontSize="18"
+                                  FontAttributes="Bold" />
+                            
+                            <StackLayout Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+                                <Label Text="Должность:" FontAttributes="Bold" />
+                                <Label Text="{Binding User.Position}" Margin="5,0,0,0" />
+                            </StackLayout>
+                            
+                            <StackLayout Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                                <Label Text="Цех:" FontAttributes="Bold" />
+                                <Label Text="{Binding User.DepartmentName}" Margin="5,0,0,0" />
+                            </StackLayout>
+                        </Grid>
+                    </Frame>
+                </StackLayout>
+                
+                <!-- Настройки -->
+                <StackLayout Grid.Row="1" Spacing="15">
+                    <Label Text="Настройки" FontSize="18" FontAttributes="Bold" />
+                    <Frame Padding="15" HasShadow="True" CornerRadius="5">
+                        <StackLayout Spacing="15">
+                            <StackLayout Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding IsDarkMode}" />
+                                <Label Text="Темная тема" VerticalOptions="Center" Margin="5,0,0,0" />
+                            </StackLayout>
+                            
+                            <Button Text="Изменить пароль" 
+                                   Command="{Binding ChangePasswordCommand}" />
+                            
+                            <Button Text="Выйти" 
+                                   Command="{Binding LogoutCommand}" 
+                                   BackgroundColor="Red" 
+                                   TextColor="White" />
+                        </StackLayout>
+                    </Frame>
+                </StackLayout>
+                
+                <!-- Информация о приложении -->
+                <StackLayout Grid.Row="2" VerticalOptions="End" HorizontalOptions="Center" Margin="0,0,0,20">
+                    <Label Text="ИСУ ПМК" FontSize="14" HorizontalOptions="Center" />
+                    <Label Text="Версия 1.0" FontSize="12" HorizontalOptions="Center" TextColor="Gray" />
+                </StackLayout>
+            </Grid>
+        </ScrollView>
+    </RefreshView>
+</ContentPage>

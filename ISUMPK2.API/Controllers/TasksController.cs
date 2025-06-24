@@ -4,6 +4,8 @@ using ISUMPK2.Application.Services.Implementations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Microsoft.Extensions.Logging; // Добавить импорт
+using ISUMPK2.API.Extensions;
 
 namespace ISUMPK2.API.Controllers
 {
@@ -14,11 +16,13 @@ namespace ISUMPK2.API.Controllers
     {
         private readonly ITaskService _taskService;
         private readonly IUserService _userService;
+        private readonly ILogger<TasksController> _logger;
 
-        public TasksController(ITaskService taskService, IUserService userService)
+        public TasksController(ITaskService taskService, IUserService userService, ILogger<TasksController> logger)
         {
             _taskService = taskService;
             _userService = userService;
+            _logger = logger;
         }
 
         // Получить все задачи (доступно администраторам/менеджерам)
@@ -278,15 +282,82 @@ namespace ISUMPK2.API.Controllers
         [Authorize(Roles = "Administrator,GeneralDirector,MetalShopManager,PaintShopManager")]
         [ProducesResponseType(204)]
         [ProducesResponseType(400)]
-        public async Task<ActionResult> DeleteTask(Guid id)
+        public async Task<IActionResult> DeleteTask(Guid id)
         {
             try
             {
+                // Логирование начала операции
+                _logger.LogInformation("Attempting to delete task with ID: {TaskId}", id);
+                
+                // Проверка авторизации пользователя
+                var userId = User.GetUserId();
+                if (!userId.HasValue)
+                {
+                    _logger.LogWarning("Unauthorized access attempt to delete task {TaskId}", id);
+                    return Unauthorized();
+                }
+
+                // Получение задачи для проверки прав доступа
+                var task = await _taskService.GetTaskByIdAsync(id);
+                if (task == null)
+                {
+                    _logger.LogWarning("Task {TaskId} not found for deletion", id);
+                    return NotFound();
+                }
+
+                // Проверка прав доступа
+                bool isAdmin = User.IsInRole("Administrator");
+                bool isManager = User.IsInRole("GeneralDirector") || 
+                                 User.IsInRole("MetalShopManager") || 
+                                 User.IsInRole("PaintShopManager");
+                bool isCreator = task.CreatorId == userId;
+                
+                _logger.LogInformation("User {UserId} permissions for delete: IsAdmin={IsAdmin}, IsManager={IsManager}, IsCreator={IsCreator}", 
+                    userId, isAdmin, isManager, isCreator);
+                
+                if (!isAdmin && !isManager && !isCreator)
+                {
+                    _logger.LogWarning("User {UserId} has insufficient permissions to delete task {TaskId}", userId, id);
+                    return Forbid();
+                }
+
+                // Вызов метода удаления
                 await _taskService.DeleteTaskAsync(id);
+                
+                _logger.LogInformation("Successfully deleted task {TaskId}", id);
                 return NoContent();
             }
             catch (ApplicationException ex)
             {
+                _logger.LogWarning(ex, "Application error deleting task {TaskId}: {Message}", id, ex.Message);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting task {TaskId}", id);
+                return StatusCode(500, new { message = "Внутренняя ошибка сервера" });
+            }
+        }
+
+        // Добавьте этот метод, если его еще нет
+        [HttpPost("subtasks")]
+        [Authorize(Roles = "Administrator,GeneralDirector,MetalShopManager,PaintShopManager")]
+        [ProducesResponseType(typeof(TaskDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<TaskDto>> CreateSubTask([FromBody] TaskCreateDto taskDto)
+        {
+            if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized();
+
+            try
+            {
+                _logger.LogInformation("Creating subtask by user {UserId}", userId);
+                var createdTask = await _taskService.CreateTaskAsync(userId, taskDto);
+                return CreatedAtAction(nameof(GetTaskById), new { id = createdTask.Id }, createdTask);
+            }
+            catch (ApplicationException ex)
+            {
+                _logger.LogWarning("Failed to create subtask: {Message}", ex.Message);
                 return BadRequest(new { message = ex.Message });
             }
         }

@@ -4,6 +4,7 @@
 @using ISUMPK2.Application.Services
 @using ISUMPK2.Web.Dialogs
 @using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Pages.Tasks
 @using ISUMPK2.Web.Services
 @using ISUMPK2.Web.Extensions
 @using Microsoft.AspNetCore.Authorization
@@ -11,6 +12,8 @@
 @inject ITaskService TaskService
 @inject IUserService UserService
 @inject IDepartmentService DepartmentService
+@inject ISubTaskService SubTaskService
+@inject IMaterialService MaterialService
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -19,7 +22,9 @@
 
 @if (isLoading)
 {
-    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    <div class="d-flex justify-center my-6">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </div>
 }
 else if (task == null)
 {
@@ -30,64 +35,203 @@ else if (task == null)
 }
 else
 {
-    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
-        <MudText Typo="Typo.h4" Class="mb-4">Редактирование задачи</MudText>
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+        <MudCard>
+            <MudCardHeader>
+                <MudText Typo="Typo.h5">Редактирование задачи</MudText>
+            </MudCardHeader>
 
-        <MudPaper Class="pa-4">
-            <MudTextField @bind-Value="updateModel.Title" Label="Название задачи*" Required="true" RequiredError="Название задачи обязательно" Class="mb-3" />
+            <MudCardContent>
+                <MudForm @ref="form" @bind-IsValid="@isValid">
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="updateModel.Title" Label="Название задачи" Required="true"
+                                          RequiredError="Название задачи обязательно" />
+                        </MudItem>
 
-            <MudTextField @bind-Value="updateModel.Description" Label="Описание" Lines="5" Class="mb-3" />
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="updateModel.Description" Label="Описание" Lines="5" />
+                        </MudItem>
 
-            <MudGrid>
-                <MudItem xs="12" md="6">
-                    <MudSelect T="int" @bind-Value="updateModel.PriorityId" Label="Приоритет*">
-                        <MudSelectItem Value="1">Низкий</MudSelectItem>
-                        <MudSelectItem Value="2">Средний</MudSelectItem>
-                        <MudSelectItem Value="3">Высокий</MudSelectItem>
-                        <MudSelectItem Value="4">Критический</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="int" @bind-Value="updateModel.PriorityId" Label="Приоритет" Required="true">
+                                <MudSelectItem Value="1">Низкий</MudSelectItem>
+                                <MudSelectItem Value="2">Средний</MudSelectItem>
+                                <MudSelectItem Value="3">Высокий</MudSelectItem>
+                                <MudSelectItem Value="4">Критический</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
 
-                <MudItem xs="12" md="6">
-                    <MudText Typo="Typo.subtitle2" Class="mb-n2">Исполнитель</MudText>
-                    <div class="d-flex align-center">
-                        <MudTextField Value="@GetAssigneeName()" ReadOnly="true" Class="flex-grow-1" />
-                        <MudButton OnClick="OpenSelectUserDialog" Variant="Variant.Text" Class="ml-2">
-                            <MudIcon Icon="@Icons.Material.Filled.Search" />
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="Guid?" @bind-Value="updateModel.AssigneeId" Label="Исполнитель" Clearable="true">
+                                @foreach (var user in users)
+                                {
+                                    <MudSelectItem Value="@((Guid?)user.Id)">@user.FullName</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="Guid?" Label="Отдел" @bind-Value="updateModel.DepartmentId" Clearable="true">
+                                @foreach (var department in departments)
+                                {
+                                    <MudSelectItem T="Guid?" Value="department.Id">@department.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudDatePicker Label="Срок выполнения" @bind-Date="dueDate" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <!-- Секция подзадач -->
+                    <MudDivider Class="my-4" />
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">Подзадачи</MudText>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                   OnClick="AddSubTask" StartIcon="@Icons.Material.Filled.Add"
+                                   Size="Size.Small">
+                            Добавить подзадачу
                         </MudButton>
                     </div>
-                </MudItem>
 
-                <MudItem xs="12" md="6">
-                    <MudText Typo="Typo.subtitle2" Class="mb-n2">Отдел</MudText>
-                    <div class="d-flex align-center">
-                        <MudTextField Value="@GetDepartmentName()" ReadOnly="true" Class="flex-grow-1" />
-                        <MudButton OnClick="OpenSelectDepartmentDialog" Variant="Variant.Text" Class="ml-2">
-                            <MudIcon Icon="@Icons.Material.Filled.Search" />
-                        </MudButton>
-                    </div>
-                </MudItem>
+                    @if (subTasks.Any())
+                    {
+                        @foreach (var subTask in subTasks)
+                        {
+                            <MudPaper Elevation="1" Class="pa-3 mb-3 border-solid border-1">
+                                <div class="d-flex justify-space-between align-center mb-2">
+                                    <MudText Typo="Typo.subtitle1">Подзадача</MudText>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                                   OnClick="() => RemoveSubTask(subTask)" Size="Size.Small" />
+                                </div>
 
-                <MudItem xs="12" md="6">
-                    <MudTextField @bind-Value="dueDateText" Label="Срок выполнения"
-                                  Class="mb-3" Placeholder="дд.мм.гггг" />
-                </MudItem>
-            </MudGrid>
+                                <MudTextField T="string" Label="Название" @bind-Value="subTask.Title"
+                                              Required="true" Class="mb-3" />
 
-            <div class="d-flex justify-space-between mt-4">
+                                <MudGrid>
+                                    <MudItem xs="12" md="6">
+                                        <MudSelect T="Guid?" @bind-Value="subTask.AssigneeId"
+                                                   Label="Исполнитель" Clearable="true">
+                                            @foreach (var user in users)
+                                            {
+                                                <MudSelectItem Value="@((Guid?)user.Id)">@user.FullName</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </MudItem>
+
+                                    <MudItem xs="12" md="6">
+                                        <MudDatePicker Label="Срок выполнения" @bind-Date="subTask.DueDate" />
+                                    </MudItem>
+
+                                    <MudItem xs="12">
+                                        <MudTextField T="string" Label="Описание" @bind-Value="subTask.Description"
+                                                      Lines="2" />
+                                    </MudItem>
+                                </MudGrid>
+                            </MudPaper>
+                        }
+                    }
+                    else
+                    {
+                        <MudText Color="Color.Secondary" Class="mb-3">
+                            Нет добавленных подзадач
+                        </MudText>
+                    }
+                </MudForm>
+            </MudCardContent>
+
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" OnClick="GoBackToTask">Отмена</MudButton>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTaskAsync"
+                           Disabled="@(!isValid || isSaving)">
+                    @if (isSaving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Сохранение...</span>
+                    }
+                    else
+                    {
+                        <span>Сохранить</span>
+                    }
+                </MudButton>
+            </MudCardActions>
+
+            <MudDivider Class="my-4" />
+
+            <!-- Секция материалов -->
+            <MudCardContent>
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Материалы задачи</MudText>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               OnClick="AddMaterial" StartIcon="@Icons.Material.Filled.Add"
+                               Size="Size.Small">
+                        Добавить материал
+                    </MudButton>
+                </div>
+
+                @if (taskMaterials.Any())
+                {
+                    <MudTable Items="@taskMaterials" Hover="true" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Материал</MudTh>
+                            <MudTh>Количество</MudTh>
+                            <MudTh>Ед. измерения</MudTh>
+                            <MudTh></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudSelect T="Guid" @bind-Value="context.MaterialId" Label="Материал"
+                                           @onchange="@(() => UpdateMaterialInfo(context))">
+                                    @foreach (var material in availableMaterials)
+                                    {
+                                        <MudSelectItem Value="@material.Id">@material.Name (@material.Code)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudTd>
+                            <MudTd>
+                                <MudNumericField T="decimal" @bind-Value="context.Quantity" Min="0" />
+                            </MudTd>
+                            <MudTd>
+                                @context.UnitOfMeasure
+                            </MudTd>
+                            <MudTd>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                               OnClick="@(() => RemoveMaterial(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary" Class="mb-3">
+                        Нет добавленных материалов
+                    </MudText>
+                }
+            </MudCardContent>
+
+            <MudCardActions Class="mt-4">
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@DeleteTaskAsync">
                     Удалить
                 </MudButton>
-                <div>
-                    <MudButton Variant="Variant.Outlined" OnClick="GoBackToTask" Class="mr-2">
-                        Отмена
+                @if (showForceDelete)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="@PerformForceDelete">
+                        Принудительно удалить
                     </MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTaskAsync">
-                        Сохранить
-                    </MudButton>
-                </div>
-            </div>
-        </MudPaper>
+                }
+                <MudSpacer />
+                <MudButton Variant="Variant.Text" OnClick="GoBackToTask" Class="mr-2">
+                    Отмена
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTaskAsync"
+                           Disabled="@(!isValid || isSaving)">
+                    Сохранить
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
     </MudContainer>
 }
 
@@ -95,15 +239,28 @@ else
     [Parameter]
     public Guid id { get; set; }
 
-    private TaskModel? task;
-    private TaskUpdateDto updateModel = new TaskUpdateDto();
+    private MudForm form;
+    private bool isValid = true;
+    private bool isSaving = false;
     private bool isLoading = true;
-    private string? dueDateText;
+    private TaskModel task;
+    private TaskUpdateDto updateModel = new TaskUpdateDto();
+    private DateTime? dueDate;
+    private bool showForceDelete = false;
+    private string lastErrorMessage = string.Empty;
 
     private List<UserModel> users = new List<UserModel>();
     private List<DepartmentModel> departments = new List<DepartmentModel>();
+    private List<SubTaskModel> subTasks = new List<SubTaskModel>();
+    private List<TaskMaterialModel> taskMaterials = new List<TaskMaterialModel>();
+    private List<MaterialDto> availableMaterials = new List<MaterialDto>();
 
     protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
     {
         isLoading = true;
         try
@@ -119,22 +276,25 @@ else
 
                 // Заполняем форму для редактирования
                 updateModel = new TaskUpdateDto
-                    {
-                        Title = task.Title ?? string.Empty,
-                        Description = task.Description ?? string.Empty,
-                        StatusId = task.StatusId,
-                        PriorityId = task.PriorityId,
-                        AssigneeId = task.AssigneeId,
-                        DepartmentId = task.DepartmentId,
-                        ProductId = task.ProductId,
-                        Quantity = task.Quantity
-                    };
-
-                // Форматируем дату
-                if (task.DueDate.HasValue)
                 {
-                    dueDateText = task.DueDate.Value.ToString("dd.MM.yyyy");
-                }
+                    Title = task.Title ?? string.Empty,
+                    Description = task.Description ?? string.Empty,
+                    StatusId = task.StatusId,
+                    PriorityId = task.PriorityId,
+                    AssigneeId = task.AssigneeId,
+                    DepartmentId = task.DepartmentId,
+                    ProductId = task.ProductId,
+                    Quantity = task.Quantity
+                };
+
+                // Устанавливаем срок выполнения
+                dueDate = task.DueDate;
+
+                // Загружаем подзадачи
+                await LoadSubTasksAsync();
+
+                // Загружаем материалы задачи
+                await LoadTaskMaterialsAsync();
             }
         }
         catch (Exception ex)
@@ -153,102 +313,112 @@ else
         {
             // Загружаем пользователей
             var usersDto = await UserService.GetAllUsersAsync();
-            users = usersDto.Select(u => u.ToModel()).ToList();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Ошибка загрузки пользователей: {ex.Message}", Severity.Warning);
-        }
+            users = usersDto.Select(u => new UserModel
+            {
+                Id = u.Id,
+                FullName = $"{u.FirstName} {u.LastName}"
+            }).ToList();
 
-        try
-        {
             // Загружаем отделы
             var departmentsDto = await DepartmentService.GetAllDepartmentsAsync();
-            departments = departmentsDto.Select(d => d.ToModel()).ToList();
+            departments = departmentsDto.Select(d => new DepartmentModel
+            {
+                Id = d.Id,
+                Name = d.Name
+            }).ToList();
+
+            // Загружаем материалы
+            availableMaterials = (await MaterialService.GetAllMaterialsAsync()).ToList();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Ошибка загрузки отделов: {ex.Message}", Severity.Warning);
+            Snackbar.Add($"Ошибка загрузки справочных данных: {ex.Message}", Severity.Warning);
         }
     }
 
-    // Получение имени исполнителя
-    private string GetAssigneeName()
+    private async Task LoadSubTasksAsync()
     {
-        if (!updateModel.AssigneeId.HasValue)
-            return "Не назначен";
-
-        var user = users.FirstOrDefault(u => u.Id == updateModel.AssigneeId);
-        return user?.FullName ?? "Не назначен";
-    }
-
-    // Получение названия отдела
-    private string GetDepartmentName()
-    {
-        if (!updateModel.DepartmentId.HasValue)
-            return "Не указан";
-
-        var department = departments.FirstOrDefault(d => d.Id == updateModel.DepartmentId);
-        return department?.Name ?? "Не указан";
-    }
-
-    // Открыть диалог выбора пользователя
-    // Открыть диалог выбора пользователя
-    private async Task OpenSelectUserDialog()
-    {
-        var options = new DialogOptions { CloseOnEscapeKey = true };
-        var dialogParams = new DialogParameters();
-        dialogParams.Add("Title", "Выберите исполнителя");
-        dialogParams.Add("Items", users.Select(u => new SelectItemDialog.ItemData
+        try
+        {
+            var subTasksDto = await SubTaskService.GetByParentTaskIdAsync(id);
+            subTasks = subTasksDto.Select(dto => new SubTaskModel
             {
-                Id = u.Id.ToString(),
-                Name = u.FullName
-            }).ToList());
-        dialogParams.Add("AllowClear", true);
-
-        var dialog = await DialogService.ShowAsync<SelectItemDialog>("Выбор исполнителя", dialogParams, options);
-        var result = await dialog.Result;
-
-        if (!result.Canceled && result.Data is string selectedId && !string.IsNullOrEmpty(selectedId))
-        {
-            updateModel.AssigneeId = Guid.Parse(selectedId);
+                Id = dto.Id,
+                Title = dto.Title,
+                Description = dto.Description,
+                AssigneeId = dto.AssigneeId,
+                AssigneeName = dto.AssigneeName,
+                DueDate = dto.DueDate,
+                StatusId = dto.StatusId,
+                IsNew = false // Это существующая подзадача
+            }).ToList();
         }
-        else if (!result.Canceled)
+        catch (Exception ex)
         {
-            updateModel.AssigneeId = null;
+            Snackbar.Add($"Не удалось загрузить подзадачи: {ex.Message}", Severity.Warning);
         }
     }
 
-    // Открыть диалог выбора отдела
-    private async Task OpenSelectDepartmentDialog()
+    private async Task LoadTaskMaterialsAsync()
     {
-        var options = new DialogOptions { CloseOnEscapeKey = true };
-        var dialogParams = new DialogParameters();
-        dialogParams.Add("Title", "Выберите отдел");
-
-        // Используем отделы вместо пользователей
-        dialogParams.Add("Items", departments.Select(d => new SelectItemDialog.ItemData
+        try
+        {
+            var materials = await TaskService.GetTaskMaterialsAsync(id);
+            taskMaterials = materials?.Select(m => new TaskMaterialModel
             {
-                Id = d.Id?.ToString() ?? string.Empty,
-                Name = d.Name ?? string.Empty
-            }).ToList());
-
-        dialogParams.Add("AllowClear", true);
-
-        var dialog = await DialogService.ShowAsync<SelectItemDialog>("Выбор отдела", dialogParams, options);
-        var result = await dialog.Result;
-
-        if (!result.Canceled && result.Data != null && result.Data is string selectedId && !string.IsNullOrEmpty(selectedId))
-        {
-            updateModel.DepartmentId = Guid.Parse(selectedId);
+                Id = m.Id,
+                MaterialId = m.MaterialId,
+                MaterialName = m.MaterialName ?? "Неизвестный материал",
+                MaterialCode = m.MaterialCode ?? "",
+                Quantity = m.Quantity,
+                UnitOfMeasure = m.UnitOfMeasure ?? "шт."
+            }).ToList() ?? new List<TaskMaterialModel>();
         }
-        else if (!result.Canceled)
+        catch (Exception ex)
         {
-            updateModel.DepartmentId = null;
+            Snackbar.Add($"Не удалось загрузить материалы: {ex.Message}", Severity.Warning);
+            taskMaterials = new List<TaskMaterialModel>();
         }
     }
 
+    private void AddSubTask()
+    {
+        subTasks.Add(new SubTaskModel
+        {
+            Title = string.Empty,
+            Description = string.Empty,
+            StatusId = 1, // По умолчанию "Создана"
+            IsNew = true // Это новая подзадача
+        });
+    }
 
+    private void RemoveSubTask(SubTaskModel subTask)
+    {
+        subTasks.Remove(subTask);
+    }
+
+    private void AddMaterial()
+    {
+        taskMaterials.Add(new TaskMaterialModel());
+        StateHasChanged();
+    }
+
+    private void RemoveMaterial(TaskMaterialModel material)
+    {
+        taskMaterials.Remove(material);
+        StateHasChanged();
+    }
+
+    private void UpdateMaterialInfo(TaskMaterialModel material)
+    {
+        var selectedMaterial = availableMaterials.FirstOrDefault(m => m.Id == material.MaterialId);
+        if (selectedMaterial != null)
+        {
+            material.MaterialName = selectedMaterial.Name;
+            material.MaterialCode = selectedMaterial.Code;
+            material.UnitOfMeasure = selectedMaterial.UnitOfMeasure ?? "шт.";
+        }
+    }
 
     private async Task SaveTaskAsync()
     {
@@ -259,43 +429,71 @@ else
             return;
         }
 
+        isSaving = true;
         try
         {
-            // Парсим дату, если она указана
-            if (!string.IsNullOrWhiteSpace(dueDateText))
+            // Устанавливаем срок выполнения
+            updateModel.DueDate = dueDate;
+
+            // Сохраняем изменения задачи
+            await TaskService.UpdateTaskAsync(id, updateModel);
+
+            // Обрабатываем подзадачи
+            foreach (var subTask in subTasks)
             {
-                if (DateTime.TryParseExact(dueDateText, "dd.MM.yyyy", null, System.Globalization.DateTimeStyles.None, out var date))
+                // Для новых подзадач
+                if (subTask.IsNew)
                 {
-                    updateModel.DueDate = date;
+                    var subTaskDto = new SubTaskCreateDto
+                    {
+                        ParentTaskId = id,
+                        Title = subTask.Title,
+                        Description = subTask.Description,
+                        AssigneeId = subTask.AssigneeId,
+                        DueDate = subTask.DueDate,
+                        StatusId = 1 // По умолчанию "Создана"
+                    };
+                    await SubTaskService.CreateSubTaskAsync(subTaskDto);
                 }
                 else
                 {
-                    Snackbar.Add("Неверный формат даты. Используйте формат дд.мм.гггг", Severity.Warning);
-                    return;
+                    // Для существующих подзадач
+                    var subTaskUpdateDto = new SubTaskUpdateDto
+                    {
+                        Title = subTask.Title,
+                        Description = subTask.Description,
+                        AssigneeId = subTask.AssigneeId,
+                        DueDate = subTask.DueDate
+                    };
+                    await SubTaskService.UpdateSubTaskAsync(subTask.Id, subTaskUpdateDto);
                 }
             }
-            else
-            {
-                updateModel.DueDate = null;
-            }
 
-            // Сохраняем изменения
-            await TaskService.UpdateTaskAsync(id, updateModel);
+            // Обрабатываем материалы
+            // Сначала очищаем текущие материалы, затем добавляем новые
+            var materialsToAdd = taskMaterials
+                .Where(m => m.MaterialId != Guid.Empty)
+                .Select(m => new TaskMaterialCreateDto
+                {
+                    TaskId = id,
+                    MaterialId = m.MaterialId,
+                    Quantity = m.Quantity
+                }).ToList();
+
+            await TaskService.UpdateTaskMaterialsAsync(id, materialsToAdd);
+
             Snackbar.Add("Задача успешно обновлена", Severity.Success);
             NavigationManager.NavigateTo($"/tasks/{id}");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed)
-        {
-            Snackbar.Add("Ошибка: метод не разрешен. Возможно, проблема с API.", Severity.Error);
-            Console.WriteLine($"HTTP метод не разрешен: {ex.Message}");
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Ошибка при сохранении: {ex.Message}", Severity.Error);
-            Console.WriteLine($"Ошибка при сохранении: {ex}");
+        }
+        finally
+        {
+            isSaving = false;
         }
     }
-
 
     private async Task DeleteTaskAsync()
     {
@@ -313,10 +511,71 @@ else
                 Snackbar.Add("Задача удалена", Severity.Success);
                 NavigationManager.NavigateTo("/tasks");
             }
+            catch (HttpRequestException ex)
+            {
+                string errorMessage = "Ошибка при удалении задачи";
+
+                if (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                {
+                    errorMessage = "Невозможно удалить задачу, так как она имеет зависимости (подзадачи или транзакции)";
+                    showForceDelete = true; // Активируем кнопку принудительного удаления
+                }
+
+                Snackbar.Add(errorMessage, Severity.Warning, config =>
+                {
+                    config.VisibleStateDuration = 6000;
+                });
+            }
             catch (Exception ex)
             {
                 Snackbar.Add($"Ошибка при удалении: {ex.Message}", Severity.Error);
             }
+        }
+    }
+
+    private async Task PerformForceDelete()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium };
+        var result = await DialogService.ShowMessageBox(
+            "Принудительное удаление",
+            "Вы действительно хотите удалить задачу вместе со всеми связанными элементами? Это действие нельзя отменить.",
+            yesText: "Да, удалить всё",
+            cancelText: "Отмена",
+            options: options);
+
+        if (result != true) return;
+
+        try
+        {
+            // Показываем индикатор загрузки
+            isLoading = true;
+
+            // Удаляем все подзадачи
+            foreach (var subTask in subTasks.Where(t => !t.IsNew))
+            {
+                try
+                {
+                    await SubTaskService.DeleteSubTaskAsync(subTask.Id);
+                }
+                catch (Exception ex)
+                {
+                    // Продолжаем удаление остальных подзадач даже если возникла ошибка
+                }
+            }
+
+            // Пытаемся удалить основную задачу
+            await TaskService.DeleteTaskAsync(id);
+
+            Snackbar.Add("Задача и связанные элементы удалены", Severity.Success);
+            NavigationManager.NavigateTo("/tasks");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при удалении: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
 
@@ -328,5 +587,41 @@ else
     private void GoBackToTask()
     {
         NavigationManager.NavigateTo($"/tasks/{id}");
+    }
+
+    // Модель для работы с материалами задачи
+    public class TaskMaterialModel
+    {
+        public Guid Id { get; set; }
+        public Guid MaterialId { get; set; }
+        public string MaterialName { get; set; } = string.Empty;
+        public string MaterialCode { get; set; } = string.Empty;
+        public decimal Quantity { get; set; }
+        public string UnitOfMeasure { get; set; } = "шт.";
+    }
+
+    // Класс для работы с подзадачами
+    public class SubTaskModel
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public Guid? AssigneeId { get; set; }
+        public string AssigneeName { get; set; } = string.Empty;
+        public DateTime? DueDate { get; set; }
+        public int StatusId { get; set; }
+        public bool IsNew { get; set; } // Флаг для отличия новых подзадач от существующих
+    }
+
+    public class UserModel
+    {
+        public Guid Id { get; set; }
+        public string FullName { get; set; } = string.Empty;
+    }
+
+    public class DepartmentModel
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
     }
 }

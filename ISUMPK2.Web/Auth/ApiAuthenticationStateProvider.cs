@@ -93,34 +93,67 @@ namespace ISUMPK2.Web.Auth
                     return claims;
                 }
 
-                if (keyValuePairs.TryGetValue("nameid", out var nameid) && nameid != null)
+                // Логируем все поля в токене для отладки
+                Console.WriteLine("JWT Payload:");
+                foreach (var kvp in keyValuePairs)
+                {
+                    Console.WriteLine($"  {kvp.Key}: {kvp.Value}");
+                }
+
+                if (keyValuePairs.TryGetValue("nameid", out var nameid) || keyValuePairs.TryGetValue("sub", out nameid))
                 {
                     claims.Add(new Claim(ClaimTypes.NameIdentifier, nameid.ToString()));
                 }
 
-                if (keyValuePairs.TryGetValue("unique_name", out var uniqueName) && uniqueName != null)
+                if (keyValuePairs.TryGetValue("unique_name", out var uniqueName) ||
+                    keyValuePairs.TryGetValue("name", out uniqueName) ||
+                    keyValuePairs.TryGetValue("username", out uniqueName))
                 {
                     claims.Add(new Claim(ClaimTypes.Name, uniqueName.ToString()));
                 }
 
-                if (keyValuePairs.TryGetValue("email", out var email) && email != null)
+                if (keyValuePairs.TryGetValue("email", out var email))
                 {
                     claims.Add(new Claim(ClaimTypes.Email, email.ToString()));
                 }
 
-                if (keyValuePairs.TryGetValue("role", out var role) && role != null)
+                // Проверяем наличие ролей во всех возможных форматах
+                var roleClaimKeys = new[] { "role", "roles", "http://schemas.microsoft.com/ws/2008/06/identity/claims/role" };
+                foreach (var roleKey in roleClaimKeys)
                 {
-                    if (role is JsonElement element && element.ValueKind == JsonValueKind.Array)
+                    if (keyValuePairs.TryGetValue(roleKey, out var roleValue) && roleValue != null)
                     {
-                        foreach (var r in element.EnumerateArray())
+                        if (roleValue is JsonElement element)
                         {
-                            claims.Add(new Claim(ClaimTypes.Role, r.GetString()));
+                            if (element.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var r in element.EnumerateArray())
+                                {
+                                    var roleString = r.GetString();
+                                    Console.WriteLine($"Добавляю роль из массива: {roleString}");
+                                    claims.Add(new Claim(ClaimTypes.Role, roleString));
+                                }
+                            }
+                            else if (element.ValueKind == JsonValueKind.String)
+                            {
+                                var roleString = element.GetString();
+                                Console.WriteLine($"Добавляю роль-строку: {roleString}");
+                                claims.Add(new Claim(ClaimTypes.Role, roleString));
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Добавляю роль-объект: {roleValue}");
+                            claims.Add(new Claim(ClaimTypes.Role, roleValue.ToString()));
                         }
                     }
-                    else
-                    {
-                        claims.Add(new Claim(ClaimTypes.Role, role.ToString()));
-                    }
+                }
+
+                // Выводим все итоговые claims для отладки
+                Console.WriteLine("Итоговые claims:");
+                foreach (var claim in claims)
+                {
+                    Console.WriteLine($"  {claim.Type}: {claim.Value}");
                 }
 
                 return claims;
