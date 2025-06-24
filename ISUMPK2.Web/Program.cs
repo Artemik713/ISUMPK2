@@ -26,7 +26,7 @@ namespace ISUMPK2.Web
             var builder = WebAssemblyHostBuilder.CreateDefault(args);
             builder.RootComponents.Add<Web.App>("#app");
             builder.RootComponents.Add<HeadOutlet>("head::after");
-            
+
             // Настройка HTTP клиента
             builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["API_URL"] ?? "https://localhost:7110") });
 
@@ -65,6 +65,8 @@ namespace ISUMPK2.Web
             builder.Services.AddScoped<IProductRepository, ClientProductRepository>();
             builder.Services.AddScoped(typeof(IRepository<>), typeof(ClientRepository<>));
             builder.Services.AddScoped<IMaterialCategoryRepository, ClientMaterialCategoryRepository>();
+            builder.Services.AddScoped<AuthTokenService>();
+            builder.Services.AddScoped<IThemeService, ThemeService>();
 
 
             // Уберите дублирующиеся регистрации MudServices

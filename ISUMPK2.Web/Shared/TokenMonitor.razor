@@ -1,0 +1,16 @@
+﻿<!-- ISUMPK2.Web\Shared\TokenMonitor.razor -->
+@using ISUMPK2.Web.Services
+@inject AuthTokenService AuthTokenService
+@implements IDisposable
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Сервис уже запущен при внедрении зависимости
+    }
+
+    public void Dispose()
+    {
+        AuthTokenService?.Dispose();
+    }
+}

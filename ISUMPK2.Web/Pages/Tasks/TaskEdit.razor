@@ -11,6 +11,7 @@
 @inject ITaskService TaskService
 @inject IUserService UserService
 @inject IDepartmentService DepartmentService
+@inject ISubTaskService SubTaskService
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -74,10 +75,74 @@ else
                 </MudItem>
             </MudGrid>
 
-            <div class="d-flex justify-space-between mt-4">
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@DeleteTaskAsync">
-                    Удалить
+            <!-- Новая секция подзадач -->
+            <MudDivider Class="my-4" />
+            <div class="d-flex justify-space-between align-center mb-3">
+                <MudText Typo="Typo.h6">Подзадачи</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                         OnClick="AddSubTask" StartIcon="@Icons.Material.Filled.Add"
+                         Size="Size.Small">
+                    Добавить подзадачу
                 </MudButton>
+            </div>
+
+            @if (subTasks.Any())
+            {
+                @foreach (var subTask in subTasks)
+                {
+                    <MudPaper Elevation="1" Class="pa-3 mb-3 border-solid border-1">
+                        <div class="d-flex justify-space-between align-center mb-2">
+                            <MudText Typo="Typo.subtitle1">Подзадача</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                        OnClick="() => RemoveSubTask(subTask)" Size="Size.Small" />
+                        </div>
+                        
+                        <MudTextField T="string" Label="Название" @bind-Value="subTask.Title"
+                                    Required="true" Class="mb-3" />
+                        
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudSelect T="Guid?" @bind-Value="subTask.AssigneeId"
+                                         Label="Исполнитель" Clearable="true">
+                                    @foreach (var user in users)
+                                    {
+                                        <MudSelectItem Value="@((Guid?)user.Id)">@user.FullName</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudDatePicker Label="Срок выполнения" @bind-Date="subTask.DueDate" />
+                            </MudItem>
+                            
+                            <MudItem xs="12">
+                                <MudTextField T="string" Label="Описание" @bind-Value="subTask.Description"
+                                            Lines="2" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                }
+            }
+            else
+            {
+                <MudText Color="Color.Secondary" Class="mb-3">
+                    Нет добавленных подзадач
+                </MudText>
+            }
+            <!-- Конец новой секции подзадач -->
+
+            <div class="d-flex justify-space-between mt-4">
+                <div>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@DeleteTaskAsync" Class="mr-2">
+                        Удалить
+                    </MudButton>
+                    @if (showForceDelete)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="@PerformForceDelete">
+                            Принудительно удалить
+                        </MudButton>
+                    }
+                </div>
                 <div>
                     <MudButton Variant="Variant.Outlined" OnClick="GoBackToTask" Class="mr-2">
                         Отмена
@@ -99,9 +164,11 @@ else
     private TaskUpdateDto updateModel = new TaskUpdateDto();
     private bool isLoading = true;
     private string? dueDateText;
-
+    private bool showForceDelete = false;
+    private string lastErrorMessage = string.Empty;
     private List<UserModel> users = new List<UserModel>();
     private List<DepartmentModel> departments = new List<DepartmentModel>();
+    private List<SubTaskModel> subTasks = new List<SubTaskModel>(); // Добавлен список подзадач
 
     protected override async Task OnInitializedAsync()
     {
@@ -135,6 +202,9 @@ else
                 {
                     dueDateText = task.DueDate.Value.ToString("dd.MM.yyyy");
                 }
+                
+                // Загружаем подзадачи
+                await LoadSubTasksAsync();
             }
         }
         catch (Exception ex)
@@ -144,6 +214,31 @@ else
         finally
         {
             isLoading = false;
+        }
+    }
+
+    // Новый метод для загрузки подзадач
+    private async Task LoadSubTasksAsync()
+    {
+        try
+        {
+            var subTasksDto = await SubTaskService.GetByParentTaskIdAsync(id);
+            subTasks = subTasksDto.Select(dto => new SubTaskModel
+            {
+                Id = dto.Id,
+                Title = dto.Title,
+                Description = dto.Description,
+                AssigneeId = dto.AssigneeId,
+                AssigneeName = dto.AssigneeName,
+                DueDate = dto.DueDate,
+                StatusId = dto.StatusId,
+                IsNew = false // Это существующая подзадача
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке подзадач: {ex.Message}");
+            Snackbar.Add("Не удалось загрузить подзадачи", Severity.Warning);
         }
     }
 
@@ -172,6 +267,25 @@ else
         }
     }
 
+    // Новый метод для добавления подзадачи
+    private void AddSubTask()
+    {
+        subTasks.Add(new SubTaskModel 
+        {
+            Title = string.Empty,
+            Description = string.Empty,
+            StatusId = 1, // По умолчанию "Создана"
+            IsNew = true // Это новая подзадача
+        });
+    }
+
+    // Новый метод для удаления подзадачи
+    private void RemoveSubTask(SubTaskModel subTask)
+    {
+        subTasks.Remove(subTask);
+        StateHasChanged();
+    }
+
     // Получение имени исполнителя
     private string GetAssigneeName()
     {
@@ -192,7 +306,6 @@ else
         return department?.Name ?? "Не указан";
     }
 
-    // Открыть диалог выбора пользователя
     // Открыть диалог выбора пользователя
     private async Task OpenSelectUserDialog()
     {
@@ -226,7 +339,6 @@ else
         var dialogParams = new DialogParameters();
         dialogParams.Add("Title", "Выберите отдел");
 
-        // Используем отделы вместо пользователей
         dialogParams.Add("Items", departments.Select(d => new SelectItemDialog.ItemData
             {
                 Id = d.Id?.ToString() ?? string.Empty,
@@ -247,8 +359,6 @@ else
             updateModel.DepartmentId = null;
         }
     }
-
-
 
     private async Task SaveTaskAsync()
     {
@@ -279,8 +389,40 @@ else
                 updateModel.DueDate = null;
             }
 
-            // Сохраняем изменения
+            // Сохраняем изменения задачи
             await TaskService.UpdateTaskAsync(id, updateModel);
+            
+            // Обрабатываем подзадачи
+            foreach (var subTask in subTasks)
+            {
+                // Для новых подзадач
+                if (subTask.IsNew)
+                {
+                    var subTaskDto = new SubTaskCreateDto
+                    {
+                        ParentTaskId = id,
+                        Title = subTask.Title,
+                        Description = subTask.Description,
+                        AssigneeId = subTask.AssigneeId,
+                        DueDate = subTask.DueDate,
+                        StatusId = 1 // По умолчанию "Создана"
+                    };
+                    await SubTaskService.CreateSubTaskAsync(subTaskDto);
+                }
+                else
+                {
+                    // Для существующих подзадач
+                    var subTaskUpdateDto = new SubTaskUpdateDto
+                    {
+                        Title = subTask.Title,
+                        Description = subTask.Description,
+                        AssigneeId = subTask.AssigneeId,
+                        DueDate = subTask.DueDate
+                    };
+                    await SubTaskService.UpdateSubTaskAsync(subTask.Id, subTaskUpdateDto);
+                }
+            }
+            
             Snackbar.Add("Задача успешно обновлена", Severity.Success);
             NavigationManager.NavigateTo($"/tasks/{id}");
         }
@@ -295,7 +437,6 @@ else
             Console.WriteLine($"Ошибка при сохранении: {ex}");
         }
     }
-
 
     private async Task DeleteTaskAsync()
     {
@@ -313,6 +454,21 @@ else
                 Snackbar.Add("Задача удалена", Severity.Success);
                 NavigationManager.NavigateTo("/tasks");
             }
+            catch (HttpRequestException ex)
+            {
+                string errorMessage = "Ошибка при удалении задачи";
+
+                if (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                {
+                    errorMessage = "Невозможно удалить задачу, так как она имеет зависимости (подзадачи или транзакции)";
+                    showForceDelete = true; // Активируем кнопку принудительного удаления
+                }
+
+                Snackbar.Add(errorMessage, Severity.Warning, config =>
+                {
+                    config.VisibleStateDuration = 6000;
+                });
+            }
             catch (Exception ex)
             {
                 Snackbar.Add($"Ошибка при удалении: {ex.Message}", Severity.Error);
@@ -320,6 +476,74 @@ else
         }
     }
 
+    private async Task<string> GetErrorMessageFromException(HttpRequestException ex)
+    {
+        try
+        {
+            // Используем HttpClient для обращения к свойствам исключения
+            if (ex.Data.Contains("ResponseContent"))
+            {
+                return ex.Data["ResponseContent"]?.ToString() ?? ex.Message;
+            }
+
+            // Если содержимое отсутствует, вернем сообщение исключения
+            return ex.Message;
+        }
+        catch
+        {
+            return ex.Message;
+        }
+    }
+    // Обновленный метод для принудительного удаления
+    private async Task PerformForceDelete()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium };
+        var result = await DialogService.ShowMessageBox(
+            "Принудительное удаление",
+            "Вы действительно хотите удалить задачу вместе со всеми связанными элементами? Это действие нельзя отменить.",
+            yesText: "Да, удалить всё",
+            cancelText: "Отмена",
+            options: options);
+
+        if (result != true) return;
+
+        try
+        {
+            // Показываем индикатор загрузки
+            isLoading = true;
+
+            // Удаляем все подзадачи
+            foreach (var subTask in subTasks.Where(t => !t.IsNew))
+            {
+                try
+                {
+                    await SubTaskService.DeleteSubTaskAsync(subTask.Id);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ошибка при удалении подзадачи {subTask.Id}: {ex.Message}");
+                    // Продолжаем удаление остальных подзадач даже если возникла ошибка
+                }
+            }
+
+            // Небольшая пауза чтобы дать серверу обработать удаление подзадач
+            await Task.Delay(500);
+
+            // Пытаемся удалить основную задачу
+            await TaskService.DeleteTaskAsync(id);
+
+            Snackbar.Add("Задача и связанные элементы удалены", Severity.Success);
+            NavigationManager.NavigateTo("/tasks");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при удалении: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
     private void GoBackToList()
     {
         NavigationManager.NavigateTo("/tasks");
@@ -328,5 +552,18 @@ else
     private void GoBackToTask()
     {
         NavigationManager.NavigateTo($"/tasks/{id}");
+    }
+    
+    // Новый класс для работы с подзадачами
+    public class SubTaskModel
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public Guid? AssigneeId { get; set; }
+        public string AssigneeName { get; set; }
+        public DateTime? DueDate { get; set; }
+        public int StatusId { get; set; }
+        public bool IsNew { get; set; } // Флаг для отличия новых подзадач от существующих
     }
 }

@@ -196,54 +196,69 @@
     }
 
     private async Task LoadProductAsync()
-    {
-        isLoading = true;
-
-        try
         {
-            var productDto = await ProductService.GetProductByIdAsync(Id);
-            if (productDto != null)
+            isLoading = true;
+
+            try
             {
-                product = new ProductModel
+                // Заменяем вызов метода GetProductByIdAsync на GetByIdWithDetailsAsync
+                var productDto = await ProductService.GetByIdWithDetailsAsync(Id);
+        
+                Console.WriteLine($"Загружен продукт: {productDto?.Name}");
+                Console.WriteLine($"Цех: {productDto?.DepartmentName ?? "Не указан"}");
+                Console.WriteLine($"Материалов: {productDto?.Materials?.Count ?? 0}");
+        
+                if (productDto?.Materials != null)
                 {
-                    Id = productDto.Id,
-                    Code = productDto.Code,
-                    Name = productDto.Name,
-                    Description = productDto.Description ?? "",
-                    ProductTypeId = productDto.ProductTypeId,
-                    ProductTypeName = productDto.ProductTypeName ?? "Без категории",
-                    Price = productDto.Price,
-                    CurrentStock = productDto.CurrentStock,
-                    UnitOfMeasure = productDto.UnitOfMeasure ?? "шт.",
-                    ImageUrl = productDto.ImageUrl,
-                    DepartmentId = productDto.DepartmentId,
-                    DepartmentName = productDto.DepartmentName ?? "Не указан",
-                    Weight = productDto.Weight.HasValue ? (double?)productDto.Weight.Value : null,
-                    Dimensions = productDto.Dimensions,
-                    Material = productDto.Material,
-                    TechnologyMap = productDto.TechnologyMap,
-                    ProductionTime = productDto.ProductionTime,
-                    CreatedAt = productDto.CreatedAt,
-                    UpdatedAt = productDto.UpdatedAt,
-                    Materials = productDto.Materials?.Select(m => new ProductMaterialModel
+                    foreach (var material in productDto.Materials)
                     {
-                        MaterialId = m.MaterialId,
-                        MaterialName = m.MaterialName,
-                        Quantity = m.Quantity,
-                        UnitOfMeasure = m.UnitOfMeasure
-                    }).ToList() ?? new List<ProductMaterialModel>()
-                };
+                        Console.WriteLine($"Материал: {material.MaterialName}, Количество: {material.Quantity} {material.UnitOfMeasure}");
+                    }
+                }
+        
+                if (productDto != null)
+                {
+                    product = new ProductModel
+                    {
+                        Id = productDto.Id,
+                        Code = productDto.Code,
+                        Name = productDto.Name,
+                        Description = productDto.Description ?? "",
+                        ProductTypeId = productDto.ProductTypeId,
+                        ProductTypeName = productDto.ProductTypeName ?? "Без категории",
+                        Price = productDto.Price,
+                        CurrentStock = productDto.CurrentStock,
+                        UnitOfMeasure = productDto.UnitOfMeasure ?? "шт.",
+                        ImageUrl = productDto.ImageUrl,
+                        DepartmentId = productDto.DepartmentId,
+                        DepartmentName = productDto.DepartmentName ?? "Не указан",
+                        Weight = productDto.Weight.HasValue ? (double?)productDto.Weight.Value : null,
+                        Dimensions = productDto.Dimensions,
+                        Material = productDto.Material,
+                        TechnologyMap = productDto.TechnologyMap,
+                        ProductionTime = productDto.ProductionTime,
+                        CreatedAt = productDto.CreatedAt,
+                        UpdatedAt = productDto.UpdatedAt,
+                        Materials = productDto.Materials?.Select(m => new ProductMaterialModel
+                        {
+                            MaterialId = m.MaterialId,
+                            MaterialName = m.MaterialName,
+                            Quantity = m.Quantity,
+                            UnitOfMeasure = m.UnitOfMeasure
+                        }).ToList() ?? new List<ProductMaterialModel>()
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка при загрузке продукта: {ex.Message}", Severity.Error);
+                Console.WriteLine($"Исключение при загрузке продукта: {ex.Message}");
+            }
+            finally
+            {
+                isLoading = false;
             }
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Ошибка при загрузке продукта: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            isLoading = false;
-        }
-    }
 
     private void SetupBreadcrumbs()
     {

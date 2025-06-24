@@ -11,9 +11,11 @@ namespace ISUMPK2.Web.Repositories
     public class ClientMaterialRepository : ClientRepositoryBase<Material>, IMaterialRepository
     {
         protected override string ApiEndpoint => "api/materials";
+        private readonly HttpClient _httpClient;
 
         public ClientMaterialRepository(HttpClient httpClient) : base(httpClient)
         {
+            _httpClient = httpClient;
         }
 
         public async Task<IEnumerable<Material>> GetMaterialsWithLowStockAsync()
@@ -39,6 +41,13 @@ namespace ISUMPK2.Web.Repositories
         public async Task UpdateStockAsync(Guid materialId, decimal quantity, bool isAddition)
         {
             await HttpClient.PutAsync($"{ApiEndpoint}/{materialId}/stock?quantity={quantity}&isAddition={isAddition}", null);
+        }
+
+        public async Task<IEnumerable<Material>> GetMaterialsByProductIdAsync(Guid productId)
+        {
+            var response = await _httpClient.GetAsync($"api/materials/product/{productId}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<IEnumerable<Material>>();
         }
 
         public async Task AddTransactionAsync(MaterialTransaction transaction)
@@ -68,6 +77,7 @@ namespace ISUMPK2.Web.Repositories
                 Console.WriteLine($"Ошибка API {(int)response.StatusCode}: {responseContent}");
                 Console.WriteLine($"Отправленные данные: MaterialId={transaction.MaterialId}, Type={transaction.TransactionType}, Quantity={transaction.Quantity}");
             }
+
 
             response.EnsureSuccessStatusCode();
         }

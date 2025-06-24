@@ -269,66 +269,100 @@ namespace ISUMPK2.Application.Services.Implementations
             if (task == null)
                 throw new ApplicationException($"Task with ID {id} not found.");
 
-            // Начинаем транзакцию для обеспечения целостности данных
+            // --- Удаляем проверку зависимостей ---
+
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                // 1. Сначала удаляем все связанные уведомления
+                // 1. Удаляем все связанные подзадачи
+                var subTasks = await _context.SubTasks
+                    .Where(st => st.ParentTaskId == id)
+                    .ToListAsync();
+                if (subTasks.Any())
+                    _context.SubTasks.RemoveRange(subTasks);
+
+                // 2. Удаляем все связанные уведомления
                 var notifications = await _context.Notifications
                     .Where(n => n.TaskId == id)
                     .ToListAsync();
-
                 if (notifications.Any())
-                {
                     _context.Notifications.RemoveRange(notifications);
-                }
 
-                // 2. Удаляем комментарии задачи
+                // 3. Удаляем комментарии задачи
                 var comments = await _context.TaskComments
                     .Where(c => c.TaskId == id)
                     .ToListAsync();
-
                 if (comments.Any())
-                {
                     _context.TaskComments.RemoveRange(comments);
-                }
 
-                // 3. Удаляем транзакции материалов (если есть)
+                // 4. Удаляем транзакции материалов
                 var materialTransactions = await _context.MaterialTransactions
                     .Where(mt => mt.TaskId == id)
                     .ToListAsync();
-
                 if (materialTransactions.Any())
-                {
                     _context.MaterialTransactions.RemoveRange(materialTransactions);
-                }
 
-                // 4. Удаляем транзакции продуктов (если есть)
+                // 5. Удаляем транзакции продуктов
                 var productTransactions = await _context.ProductTransactions
                     .Where(pt => pt.TaskId == id)
                     .ToListAsync();
-
                 if (productTransactions.Any())
-                {
                     _context.ProductTransactions.RemoveRange(productTransactions);
-                }
 
-                // 5. Наконец удаляем саму задачу
+                // 6. Удаляем саму задачу
                 await _taskRepository.DeleteAsync(id);
 
-                // 6. Сохраняем все изменения
+                // 7. Сохраняем все изменения
                 await _context.SaveChangesAsync();
 
-                // Подтверждаем транзакцию
                 await transaction.CommitAsync();
             }
             catch (Exception ex)
             {
-                // Откатываем транзакцию в случае ошибки
                 await transaction.RollbackAsync();
                 throw new ApplicationException($"Error deleting task: {ex.Message}", ex);
             }
+        }
+
+        // Добавляем новый метод для проверки зависимостей задачи
+        // Исправленный метод для проверки зависимостей задачи
+        // Исправленный метод для проверки зависимостей задачи
+        private async Task<List<string>> CheckTaskDependencies(Guid taskId)
+        {
+            var dependencies = new List<string>();
+
+            // Проверяем наличие подзадач (без анализа их статуса)
+            var subTasksCount = await _context.SubTasks
+                .Where(t => t.ParentTaskId == taskId)
+                .CountAsync();
+
+            if (subTasksCount > 0)
+            {
+                dependencies.Add($"Задача имеет {subTasksCount} связанных подзадач");
+            }
+
+            // Проверяем наличие связанных транзакций продуктов
+            var productTransactionsCount = await _context.ProductTransactions
+                .Where(pt => pt.TaskId == taskId)
+                .CountAsync();
+
+            if (productTransactionsCount > 0)
+            {
+                dependencies.Add($"Задача имеет {productTransactionsCount} связанных транзакций продуктов");
+            }
+
+            // Проверяем наличие связанных транзакций материалов
+            var materialTransactionsCount = await _context.MaterialTransactions
+                .Where(mt => mt.TaskId == taskId)
+                .CountAsync();
+
+            if (materialTransactionsCount > 0)
+            {
+                dependencies.Add($"Задача имеет {materialTransactionsCount} связанных транзакций материалов");
+            }
+
+            return dependencies;
         }
 
         public async Task<TaskCommentDto> AddCommentAsync(Guid userId, TaskCommentCreateDto commentDto)

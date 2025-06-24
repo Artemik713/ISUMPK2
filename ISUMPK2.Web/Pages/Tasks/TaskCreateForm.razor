@@ -9,6 +9,7 @@
 @inject ITaskService TaskService
 @inject IUserService UserService
 @inject IDepartmentService DepartmentService
+@inject ISubTaskService SubTaskService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject IAuthService AuthService
@@ -62,10 +63,65 @@
                         <MudDatePicker Label="Срок выполнения" @bind-Date="dueDate" />
                     </MudItem>
                 </MudGrid>
+
+                <!-- Секция подзадач -->
+                <MudDivider Class="my-4" />
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Подзадачи</MudText>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               OnClick="AddSubTask" StartIcon="@Icons.Material.Filled.Add"
+                               Size="Size.Small">
+                        Добавить подзадачу
+                    </MudButton>
+                </div>
+
+                @if (subTasks.Any())
+                {
+                    @foreach (var subTask in subTasks)
+                    {
+                        <MudPaper Elevation="1" Class="pa-3 mb-3 border-solid border-1">
+                            <div class="d-flex justify-space-between align-center mb-2">
+                                <MudText Typo="Typo.subtitle1">Подзадача</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                               OnClick="() => RemoveSubTask(subTask)" Size="Size.Small" />
+                            </div>
+
+                            <MudTextField T="string" Label="Название" @bind-Value="subTask.Title"
+                                          Required="true" Class="mb-3" />
+
+                            <MudGrid>
+                                <MudItem xs="12" md="6">
+                                    <MudSelect T="Guid?" @bind-Value="subTask.AssigneeId"
+                                               Label="Исполнитель" Clearable="true">
+                                        @foreach (var user in users)
+                                        {
+                                            <MudSelectItem Value="@((Guid?)user.Id)">@user.FullName</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+
+                                <MudItem xs="12" md="6">
+                                    <MudDatePicker Label="Срок выполнения" @bind-Date="subTask.DueDate" />
+                                </MudItem>
+
+                                <MudItem xs="12">
+                                    <MudTextField T="string" Label="Описание" @bind-Value="subTask.Description"
+                                                  Lines="2" />
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    }
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary" Class="mb-3">
+                        Нет добавленных подзадач
+                    </MudText>
+                }
             </MudForm>
         </MudCardContent>
         <MudCardActions>
-            <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="Cancel">Отмена</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="Cancel">Отмена</MudButton>
             <MudSpacer />
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitTask"
                        Disabled="@(!isValid || isProcessing)">
@@ -92,6 +148,7 @@
     private DateTime? dueDate;
     private List<UserModel> users = new List<UserModel>();
     private List<DepartmentModel> departments = new List<DepartmentModel>();
+    private List<SubTaskCreateModel> subTasks = new List<SubTaskCreateModel>();
 
     private List<PriorityModel> priorities = new List<PriorityModel>
     {
@@ -107,14 +164,14 @@
         {
             // Загружаем все необходимые данные
             await LoadUsersAndDepartments();
-            
+
             // Получаем текущего пользователя для установки CreatorId
             var currentUser = await UserService.GetCurrentUserAsync();
             if (currentUser != null)
             {
                 newTask.CreatorId = currentUser.Id;
                 Console.WriteLine($"Loaded user: {currentUser.UserName}, CreatorId: {newTask.CreatorId}");
-                
+
                 // Автоматически устанавливаем отдел текущего пользователя
                 if (currentUser.DepartmentId.HasValue)
                 {
@@ -135,21 +192,24 @@
 
     private async Task LoadUsersAndDepartments()
     {
-        try {
+        try
+        {
             users = (await UserService.GetAllUsersAsync())
-                .Select(dto => new UserModel { 
-                    Id = dto.Id, 
-                    FullName = $"{dto.FirstName} {dto.LastName}" 
+                .Select(dto => new UserModel
+                {
+                    Id = dto.Id,
+                    FullName = $"{dto.FirstName} {dto.LastName}"
                 })
                 .ToList();
 
             departments = (await DepartmentService.GetAllDepartmentsAsync())
-                .Select(dto => new DepartmentModel { 
-                    Id = dto.Id, 
-                    Name = dto.Name 
+                .Select(dto => new DepartmentModel
+                {
+                    Id = dto.Id,
+                    Name = dto.Name
                 })
                 .ToList();
-                
+
             Console.WriteLine($"Loaded {users.Count} users and {departments.Count} departments");
         }
         catch (Exception ex)
@@ -157,6 +217,18 @@
             Console.WriteLine($"Ошибка при загрузке справочников: {ex.Message}");
             Snackbar.Add($"Ошибка загрузки данных: {ex.Message}", Severity.Error);
         }
+    }
+
+    // Новые методы для управления подзадачами
+    private void AddSubTask()
+    {
+        subTasks.Add(new SubTaskCreateModel());
+    }
+
+    private void RemoveSubTask(SubTaskCreateModel subTask)
+    {
+        subTasks.Remove(subTask);
+        StateHasChanged();
     }
 
     private async Task SubmitTask()
@@ -185,20 +257,39 @@
             Console.WriteLine($"Creating task with CreatorId: {newTask.CreatorId}");
 
             var taskDto = new TaskCreateDto
-                {
-                    Title = newTask.Title ?? string.Empty,
-                    Description = newTask.Description ?? string.Empty,
-                    StatusId = 1, // По умолчанию "Создана"
-                    PriorityId = newTask.PriorityId,
-                    AssigneeId = newTask.AssigneeId,
-                    DepartmentId = newTask.DepartmentId,
-                    DueDate = newTask.DueDate
-                };
+            {
+                Title = newTask.Title ?? string.Empty,
+                Description = newTask.Description ?? string.Empty,
+                StatusId = 1, // По умолчанию "Создана"
+                PriorityId = newTask.PriorityId,
+                AssigneeId = newTask.AssigneeId,
+                DepartmentId = newTask.DepartmentId,
+                DueDate = newTask.DueDate
+            };
 
             try
             {
                 var createdTask = await TaskService.CreateTaskAsync(newTask.CreatorId, taskDto);
                 Console.WriteLine($"Задача успешно создана: {createdTask?.Id}");
+
+                // Создаем подзадачи, если они есть
+                if (createdTask != null && subTasks.Any())
+                {
+                    foreach (var subTask in subTasks)
+                    {
+                        var subTaskDto = new SubTaskCreateDto
+                        {
+                            ParentTaskId = createdTask.Id,
+                            Title = subTask.Title,
+                            Description = subTask.Description,
+                            AssigneeId = subTask.AssigneeId,
+                            DueDate = subTask.DueDate,
+                            StatusId = 1 // По умолчанию "Создана"
+                        };
+
+                        await SubTaskService.CreateSubTaskAsync(subTaskDto);
+                    }
+                }
 
                 Snackbar.Add("Задача успешно создана", Severity.Success);
                 NavigationManager.NavigateTo("/tasks");
@@ -220,10 +311,18 @@
         }
     }
 
-
     private void Cancel()
     {
         NavigationManager.NavigateTo("/tasks");
+    }
+
+    // Модель для создания подзадач
+    public class SubTaskCreateModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public Guid? AssigneeId { get; set; }
+        public DateTime? DueDate { get; set; }
     }
 
     public class TaskCreateModel
@@ -243,13 +342,13 @@
         public int Id { get; set; }
         public string? Name { get; set; }
     }
-    
+
     public class UserModel
     {
         public Guid Id { get; set; }
         public string FullName { get; set; }
     }
-    
+
     public class DepartmentModel
     {
         public Guid Id { get; set; }

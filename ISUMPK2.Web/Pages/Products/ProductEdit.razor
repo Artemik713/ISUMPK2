@@ -1,0 +1,533 @@
+﻿@page "/products/edit/{Id:guid}"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Dialogs
+@using ISUMPK2.Web.Models
+@using MudBlazor
+@using System.IO
+@using System.Net.Http.Json
+@inject IProductService ProductService
+@inject IDepartmentService DepartmentService
+@inject IMaterialService MaterialService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject HttpClient Http
+
+<PageTitle>Редактирование продукта - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+    <MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 my-4"></MudBreadcrumbs>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (product == null)
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">Продукт не найден.</MudAlert>
+        <MudButton OnClick="@(() => NavigationManager.NavigateTo("/products"))">Вернуться к каталогу</MudButton>
+    }
+    else
+    {
+        <MudPaper Elevation="2" Class="pa-4 mb-5">
+            <MudForm @ref="form" Model="@product" @bind-IsValid="@isValid">
+                <MudGrid>
+                    <!-- Левая колонка -->
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="0" Class="mb-4">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Основная информация</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudTextField T="string" Label="Код продукта" @bind-Value="product.Code"
+                                              Required="true" RequiredError="Код продукта обязателен" />
+
+                                <MudTextField T="string" Label="Наименование" Class="mt-3"
+                                              @bind-Value="product.Name" Required="true"
+                                              RequiredError="Наименование продукта обязательно" />
+
+                                <MudSelect T="Guid" Label="Тип продукта" Class="mt-3"
+                                           @bind-Value="selectedProductTypeId" Required="true">
+                                    @if (!productTypes.Any())
+                                    {
+                                        <MudSelectItem Value="Guid.Empty" Disabled="true">Типы продуктов отсутствуют</MudSelectItem>
+                                        <MudItem Class="d-flex align-center justify-end mt-2">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Secondary"
+                                                       Size="Size.Small"
+                                                       OnClick="OpenCreateProductTypeDialog">
+                                                Создать тип продукта
+                                            </MudButton>
+                                        </MudItem>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var type in productTypes)
+                                        {
+                                            <MudSelectItem Value="@type.Id">@type.Name</MudSelectItem>
+                                        }
+                                    }
+                                </MudSelect>
+
+                                <MudSelect T="Guid?" Label="Цех-производитель" Class="mt-3"
+                                           @bind-Value="product.DepartmentId" Required="true">
+                                    @foreach (var department in departments)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="@((Guid?)department.Id)">@department.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+
+                                <MudTextField T="string" Label="Описание" Class="mt-3"
+                                              @bind-Value="product.Description" Lines="3" />
+                            </MudCardContent>
+                        </MudCard>
+
+                        <MudCard Elevation="0" Class="mb-4">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Параметры</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudNumericField T="decimal" Label="Цена (₽)" @bind-Value="product.Price"
+                                                 Required="true" RequiredError="Укажите цену продукта"
+                                                 Min="0" Format="F2" Adornment="Adornment.Start"
+                                                 AdornmentIcon="@Icons.Material.Filled.CurrencyRuble" />
+
+                                <MudNumericField T="decimal" Label="Количество на складе" Class="mt-3"
+                                                 @bind-Value="product.CurrentStock" Min="0" />
+
+                                <MudSelect T="string" Label="Единица измерения" Class="mt-3"
+                                           @bind-Value="product.UnitOfMeasure" Required="true"
+                                           RequiredError="Укажите единицу измерения">
+                                    <MudSelectItem Value="@("шт.")">штуки</MudSelectItem>
+                                    <MudSelectItem Value="@("кг")">килограммы</MudSelectItem>
+                                    <MudSelectItem Value="@("л")">литры</MudSelectItem>
+                                    <MudSelectItem Value="@("м")">метры</MudSelectItem>
+                                    <MudSelectItem Value="@("м²")">квадратные метры</MudSelectItem>
+                                    <MudSelectItem Value="@("м³")">кубические метры</MudSelectItem>
+                                    <MudSelectItem Value="@("компл.")">комплекты</MudSelectItem>
+                                    <MudSelectItem Value="@("упак.")">упаковки</MudSelectItem>
+                                </MudSelect>
+                            </MudCardContent>
+                        </MudCard>
+
+                        <MudCard Elevation="0">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Технические характеристики</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudNumericField T="double?" Label="Вес (кг)" @bind-Value="product.Weight"
+                                                 Min="0" />
+
+                                <MudTextField T="string" Label="Габариты" Class="mt-3"
+                                              @bind-Value="product.Dimensions" />
+
+                                <MudTextField T="string" Label="Материал" Class="mt-3"
+                                              @bind-Value="product.Material" />
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <!-- Правая колонка -->
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="0" Class="mb-4">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Изображение продукта</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudPaper Height="250px" Width="100%" Elevation="0"
+                                          Class="d-flex justify-center align-center mud-background-gray pa-2">
+                                    @if (!string.IsNullOrEmpty(product.ImageUrl))
+                                    {
+                                        <MudImage Src="@(product.ImageUrl.StartsWith("http") ? product.ImageUrl : $"{ApiBaseUrl}{product.ImageUrl}")"
+                                                  Alt="Изображение продукта"
+                                                  ObjectFit="ObjectFit.Contain"
+                                                  Style="width: 100%; height: 100%;"
+                                                  Error="@(() => OnImageError())" />
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.body1" Color="Color.Secondary">
+                                            Изображение отсутствует
+                                        </MudText>
+                                    }
+                                </MudPaper>
+                                <div class="d-flex justify-center mt-2">
+                                    <MudButton HtmlTag="label" Variant="Variant.Outlined" Color="Color.Primary"
+                                               for="fileInput" Size="Size.Small" StartIcon="@Icons.Material.Filled.CloudUpload">
+                                        Загрузить изображение
+                                    </MudButton>
+                                    <InputFile id="fileInput" OnChange="UploadImage" hidden />
+                                </div>
+                            </MudCardContent>
+                        </MudCard>
+
+                        <MudCard Elevation="0" Class="mb-4">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Производство</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudTextField T="string" Label="Технологическая карта"
+                                              @bind-Value="product.TechnologyMap" />
+
+                                <MudNumericField T="int?" Label="Время производства (ч)" Class="mt-3"
+                                                 @bind-Value="product.ProductionTime" Min="0" />
+                            </MudCardContent>
+                        </MudCard>
+
+                        <MudCard Elevation="0">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <div class="d-flex justify-space-between">
+                                        <MudText Typo="Typo.h6">Материалы</MudText>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                                       OnClick="AddMaterial" Color="Color.Primary" />
+                                    </div>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                @if (product.Materials.Any())
+                                {
+                                    @foreach (var material in product.Materials)
+                                    {
+                                        <MudPaper Elevation="0" Class="d-flex align-center mb-2 pa-2 mud-background-gray">
+                                            <MudSelect T="Guid" Class="flex-1 mr-2" Label="Материал"
+                                                       @bind-Value="material.MaterialId">
+                                                @foreach (var m in materials)
+                                                {
+                                                    <MudSelectItem T="Guid" Value="@m.Id">@m.Name (@m.Code)</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                            <MudNumericField T="decimal" Class="flex-1 mr-2" Label="Количество"
+                                                             @bind-Value="material.Quantity" Min="0" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                           OnClick="@(e => RemoveMaterial(material))" Color="Color.Error" />
+                                        </MudPaper>
+                                    }
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                        Материалы не добавлены
+                                    </MudText>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+
+                <MudDivider Class="my-4" />
+
+                <div class="d-flex justify-end">
+                    <MudButton OnClick="NavigateToProduct" Variant="Variant.Text" Class="mr-2">
+                        Отмена
+                    </MudButton>
+                    <MudButton OnClick="SaveChanges" Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="@(!isValid || isSaving)">
+                        @if (isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Сохранение...</span>
+                        }
+                        else
+                        {
+                            <span>Сохранить</span>
+                        }
+                    </MudButton>
+                </div>
+            </MudForm>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ProductModel product;
+    private MudForm form;
+    private bool isValid;
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private Guid selectedProductTypeId;
+    private string ApiBaseUrl = "https://localhost:7110";
+
+    private List<BreadcrumbItem> _breadcrumbs = new();
+    private List<DepartmentDto> departments = new();
+    private List<ProductTypeDto> productTypes = new();
+    private List<MaterialDto> materials = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        SetupBreadcrumbs();
+
+        try
+        {
+            // Загружаем данные продукта
+            var productDto = await ProductService.GetByIdWithDetailsAsync(Id);
+            if (productDto == null)
+            {
+                Snackbar.Add("Продукт не найден", Severity.Error);
+                return;
+            }
+
+            // Логируем
+            Console.WriteLine($"Загружен продукт: {productDto.Name}");
+            Console.WriteLine($"Цех: {productDto.DepartmentName ?? "Не указан"}");
+            Console.WriteLine($"Материалов: {productDto.Materials?.Count ?? 0}");
+
+            // Создаем модель продукта
+            product = new ProductModel
+            {
+                Id = productDto.Id,
+                Code = productDto.Code,
+                Name = productDto.Name,
+                Description = productDto.Description ?? "",
+                ProductTypeId = productDto.ProductTypeId,
+                ProductTypeName = productDto.ProductTypeName ?? "Без категории",
+                Price = productDto.Price,
+                CurrentStock = productDto.CurrentStock,
+                UnitOfMeasure = productDto.UnitOfMeasure ?? "шт.",
+                ImageUrl = productDto.ImageUrl,
+                DepartmentId = productDto.DepartmentId,
+                DepartmentName = productDto.DepartmentName ?? "Не указан",
+                Weight = productDto.Weight.HasValue ? (double?)productDto.Weight.Value : null,
+                Dimensions = productDto.Dimensions,
+                Material = productDto.Material,
+                TechnologyMap = productDto.TechnologyMap,
+                ProductionTime = productDto.ProductionTime,
+                CreatedAt = productDto.CreatedAt,
+                UpdatedAt = productDto.UpdatedAt,
+                Materials = productDto.Materials?.Select(m => new ProductMaterialModel
+                {
+                    MaterialId = m.MaterialId,
+                    MaterialName = m.MaterialName,
+                    Quantity = m.Quantity,
+                    UnitOfMeasure = m.UnitOfMeasure
+                }).ToList() ?? new List<ProductMaterialModel>()
+            };
+
+            // Устанавливаем выбранный тип продукта
+            selectedProductTypeId = productDto.ProductTypeId;
+
+            // Загружаем вспомогательные данные
+            departments = (await DepartmentService.GetAllDepartmentsAsync()).ToList();
+
+            productTypes = (await ProductService.GetAllProductTypesAsync()).ToList();
+
+            materials = (await MaterialService.GetAllMaterialsAsync()).ToList();
+
+            // Обновляем хлебные крошки
+            SetupBreadcrumbs();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OnImageError()
+    {
+        // Если изображение не загружается, очищаем URL
+        product.ImageUrl = null;
+        StateHasChanged();
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        _breadcrumbs = new List<BreadcrumbItem>
+        {
+            new("Главная", "/"),
+            new("Каталог продукции", "/products"),
+            new(product?.Name ?? "Загрузка...", $"/products/{Id}"),
+            new("Редактирование", null, true)
+        };
+    }
+
+    private async Task SaveChanges()
+    {
+        try
+        {
+            isSaving = true;
+
+            // Обновляем ProductTypeId из выбранного значения
+            product.ProductTypeId = selectedProductTypeId;
+
+            // Проверка обязательных полей перед отправкой
+            if (string.IsNullOrEmpty(product.Code) || string.IsNullOrEmpty(product.Name) ||
+                selectedProductTypeId == Guid.Empty || !product.DepartmentId.HasValue)
+            {
+                Snackbar.Add("Заполнены не все обязательные поля", Severity.Warning);
+                return;
+            }
+
+            // Создаем объект для передачи API
+            var productDto = new ProductUpdateDto
+            {
+                Code = product.Code,
+                Name = product.Name,
+                Description = product.Description,
+                ProductTypeId = selectedProductTypeId,
+                UnitOfMeasure = product.UnitOfMeasure,
+                Price = product.Price,
+                CurrentStock = product.CurrentStock,
+                DepartmentId = product.DepartmentId,
+                Weight = product.Weight.HasValue ? (decimal?)product.Weight.Value : null,
+                Dimensions = product.Dimensions,
+                Material = product.Material,
+                TechnologyMap = product.TechnologyMap,
+                ProductionTime = product.ProductionTime,
+                ImageUrl = product.ImageUrl,
+                Materials = product.Materials
+                    .Where(m => m.MaterialId != Guid.Empty)
+                    .Select(m => new ProductMaterialCreateDto
+                    {
+                        MaterialId = m.MaterialId,
+                        Quantity = m.Quantity
+                    }).ToList()
+            };
+
+            Console.WriteLine($"Отправка запроса на обновление продукта с ID: {Id}");
+
+            // Для отладки выведем отправляемые данные
+            var jsonOptions = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            var jsonString = System.Text.Json.JsonSerializer.Serialize(productDto, jsonOptions);
+            Console.WriteLine("Отправляемые данные:");
+            Console.WriteLine(jsonString);
+
+            // ИСПОЛЬЗУЕМ ТОЛЬКО ОДИН СПОСОБ ОБНОВЛЕНИЯ - через прямой HTTP-запрос
+            var response = await Http.PutAsJsonAsync($"api/products/{Id}", productDto);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Продукт успешно обновлен", Severity.Success);
+                NavigationManager.NavigateTo($"/products/{Id}");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Ошибка API: {(int)response.StatusCode} {response.ReasonPhrase}");
+                Console.WriteLine($"Подробности: {error}");
+                Snackbar.Add($"Ошибка при обновлении: {response.StatusCode} - {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Исключение при обновлении продукта: {ex.Message}");
+            Console.WriteLine($"Трассировка стека: {ex.StackTrace}");
+            Snackbar.Add($"Ошибка при обновлении продукта: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void NavigateToProduct()
+    {
+        NavigationManager.NavigateTo($"/products/{Id}");
+    }
+
+    private void AddMaterial()
+    {
+        product.Materials.Add(new ProductMaterialModel());
+        StateHasChanged();
+    }
+
+    private void RemoveMaterial(ProductMaterialModel material)
+    {
+        product.Materials.Remove(material);
+        StateHasChanged();
+    }
+
+    private async Task UploadImage(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null)
+                return;
+
+            // Отображаем индикатор загрузки
+            Snackbar.Add("Загрузка изображения...", Severity.Info);
+
+            // Создаем multipart форму
+            using var formData = new MultipartFormDataContent();
+
+            // Читаем файл в массив байтов
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms); // 10MB max
+            ms.Position = 0;
+
+            var fileContent = new ByteArrayContent(ms.ToArray());
+            formData.Add(fileContent, "file", file.Name);
+
+            // Отправляем на сервер
+            var response = await Http.PostAsync("api/upload/images", formData);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var url = await response.Content.ReadAsStringAsync();
+                product.ImageUrl = url.Trim('"'); // Убираем кавычки, если они есть
+                Snackbar.Add("Изображение успешно загружено", Severity.Success);
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Ошибка загрузки: {response.StatusCode} - {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenCreateProductTypeDialog()
+    {
+        var parameters = new DialogParameters();
+        var dialog = DialogService.Show<ProductTypeDialog>("Создание типа продукта", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                var newType = (ProductTypeDto)result.Data;
+
+                if (newType != null)
+                {
+                    productTypes.Add(newType);
+                    selectedProductTypeId = newType.Id;
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add("Ошибка при добавлении типа продукта", Severity.Error);
+            }
+        }
+    }
+}

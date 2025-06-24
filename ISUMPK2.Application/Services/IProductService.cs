@@ -13,14 +13,14 @@ namespace ISUMPK2.Application.Services
         Task<ProductTypeDto> CreateProductTypeAsync(ProductTypeCreateDto productType);
         Task<ProductTypeDto> UpdateProductTypeAsync(Guid id, ProductTypeCreateDto productTypeDto);
         Task DeleteProductTypeAsync(Guid id);
-
         Task<ProductDto> GetProductByIdAsync(Guid id);
         Task<IEnumerable<ProductDto>> GetAllProductsAsync();
         Task<IEnumerable<ProductDto>> GetProductsByTypeAsync(Guid productTypeId);
         Task<ProductDto> CreateProductAsync(ProductCreateDto productDto);
         Task<ProductDto> UpdateProductAsync(Guid id, ProductUpdateDto productDto);
         Task DeleteProductAsync(Guid id);
-
+        Task UpdateProductMaterialsAsync(Guid productId, List<ProductMaterialCreateDto> materials);
+        Task<ProductDto> GetByIdWithDetailsAsync(Guid id);
         Task<bool> HasSufficientMaterialsForProductionAsync(Guid productId, decimal quantity);
         Task<ProductTransactionDto> AddTransactionAsync(Guid userId, ProductTransactionCreateDto transactionDto);
         Task<IEnumerable<ProductTransactionDto>> GetTransactionsByProductAsync(Guid productId);

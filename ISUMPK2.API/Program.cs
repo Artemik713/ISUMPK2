@@ -23,20 +23,21 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
 
-builder.WebHost.UseStaticWebAssets();
+
 // 2. Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "ISUMPK2 API",
         Version = "v1",
-        Description = "API для системы ИСУМПК2",
+        Description = "API для системы завода",
         Contact = new OpenApiContact
         {
-            Name = "Ваша команда",
-            Email = "contact@example.com"
+            Name = "В случае проблемы свяжитесь с\t",
+            Email = "houtuy96@gmail.com"
         }
     });
 

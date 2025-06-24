@@ -8,8 +8,11 @@
 @using ISUMPK2.Web.Extensions
 @using Microsoft.AspNetCore.Authorization
 @using MudBlazor
+@using System.Security.Claims
+@inject ILocalStorageService _localStorage
 @inject ISubTaskService SubTaskService
 @inject IUserService UserService
+@inject IAuthService AuthService
 @inject ITaskService TaskService
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
@@ -19,261 +22,231 @@
 
 @if (isLoading)
 {
-    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    <div class="d-flex justify-center my-6">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </div>
 }
 else if (task == null)
 {
     <MudAlert Severity="Severity.Error">Задача не найдена</MudAlert>
-    <MudButton OnClick="GoBackToList" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">
+    <MudButton OnClick="GoBackToList" Variant="Variant.Text" Color="Color.Primary" Class="mt-4">
         Вернуться к списку
     </MudButton>
 }
 else
 {
-    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-        <MudGrid>
-            <MudItem xs="12">
-                <div class="d-flex justify-space-between align-center mb-4">
-                    <MudText Typo="Typo.h5">@task.Title</MudText>
-                    <div>
-                        <MudButton Variant="Variant.Text"
-                                   StartIcon="@Icons.Material.Filled.ArrowBack"
-                                   OnClick="GoBackToList"
-                                   Class="mr-2">
-                            Назад
-                        </MudButton>
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Edit"
-                                   OnClick="EditTask">
-                            Редактировать
-                        </MudButton>
-                    </div>
-                </div>
-            </MudItem>
+    <MudContainer MaxWidth="MaxWidth.Large" Class="px-0">
+        <div class="d-flex justify-space-between align-center mb-4">
+            <MudText Typo="Typo.h5">@task.Title</MudText>
+            <div>
+                <MudIconButton Icon="@Icons.Material.Outlined.ArrowBack" OnClick="GoBackToList" />
+                @if (canEditTask)
+                {
+                    <MudIconButton Color="Color.Primary" Icon="@Icons.Material.Outlined.Edit" OnClick="EditTask" />
+                }
+            </div>
+        </div>
 
+        <MudGrid Spacing="2">
+            <!-- Информация о задаче -->
             <MudItem xs="12" md="6">
-                <MudPaper Elevation="2" Class="pa-4">
-                    <MudText Typo="Typo.h6" Class="mb-3">Информация о задаче</MudText>
+                <MudPaper Elevation="0" Class="pa-4 border-solid border-1">
+                    <MudText Typo="Typo.subtitle1">Информация о задаче</MudText>
 
-                    <MudGrid>
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Статус:</MudText>
-                        </MudItem>
-                        <MudItem xs="8">
+                    <div class="d-flex flex-column gap-2 mt-3">
+                        <div class="d-flex">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Статус:</MudText>
                             <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), task.StatusBadgeColor, true))"
-                                     Size="Size.Small">
-                                @task.StatusName
-                            </MudChip>
-                        </MudItem>
+                                     Size="Size.Small">@task.StatusName</MudChip>
+                        </div>
 
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Приоритет:</MudText>
-                        </MudItem>
-                        <MudItem xs="8">
+                        <div class="d-flex">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Приоритет:</MudText>
                             <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), task.PriorityBadgeColor, true))"
-                                     Size="Size.Small">
-                                @task.PriorityName
-                            </MudChip>
-                        </MudItem>
+                                     Size="Size.Small">@task.PriorityName</MudChip>
+                        </div>
 
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Создатель:</MudText>
-                        </MudItem>
-                        <MudItem xs="8">
-                            <MudText>@task.CreatorName</MudText>
-                        </MudItem>
+                        <div class="d-flex">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Создатель:</MudText>
+                            <MudText Typo="Typo.body2">@task.CreatorName</MudText>
+                        </div>
 
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Исполнитель:</MudText>
-                        </MudItem>
-                        <MudItem xs="8">
-                            @if (task.AssigneeId.HasValue && !string.IsNullOrEmpty(task.AssigneeName) && task.AssigneeName != "Не назначен")
-                            {
-                                <MudText>@task.AssigneeName</MudText>
-                            }
-                            else
-                            {
-                                <MudText>Не назначен</MudText>
-                            }
-                        </MudItem>
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Отдел:</MudText>
-                        </MudItem>
-                        <MudItem xs="8">
-                            <MudText>@(string.IsNullOrEmpty(task.DepartmentName) ? "Не указан" : task.DepartmentName)</MudText>
-                        </MudItem>
+                        <div class="d-flex">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Исполнитель:</MudText>
+                            <MudText Typo="Typo.body2">@(task.AssigneeName ?? "Не назначен")</MudText>
+                        </div>
 
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Срок выполнения:</MudText>
-                        </MudItem>
-                        <MudItem xs="8">
-                            <MudText>
-                                @(task.DueDate.HasValue ? task.DueDate.Value.ToString("dd.MM.yyyy") : "Не указан")
+                        <div class="d-flex">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Отдел:</MudText>
+                            <MudText Typo="Typo.body2">@(task.DepartmentName ?? "Не указан")</MudText>
+                        </div>
+
+                        <div class="d-flex">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Срок выполнения:</MudText>
+                            <div class="d-flex align-center">
+                                <MudText Typo="Typo.body2">
+                                    @(task.DueDate.HasValue? task.DueDate.Value.ToString("dd.MM.yyyy") : "Не указан")
+                                </MudText>
                                 @if (task.IsOverdue)
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" Class="ml-1" />
-                                    <span class="mud-error-text">Просрочено</span>
                                 }
-                            </MudText>
-                        </MudItem>
+                            </div>
+                        </div>
 
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Дата создания:</MudText>
-                        </MudItem>
-                        <MudItem xs="8">
-                            <MudText>@task.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
-                        </MudItem>
-                    </MudGrid>
-
-                    <MudDivider Class="my-3" />
-
-                    <MudText Typo="Typo.h6" Class="mb-2">Действия</MudText>
-                    <div class="d-flex flex-wrap gap-2">
-                        @if (task.StatusId == 1)
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Info"
-                                       OnClick="@(() => ShowUpdateStatusDialog(2))">
-                                Взять в работу
-                            </MudButton>
-                        }
-                        @if (task.StatusId == 2 || task.StatusId == 3)
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Info"
-                                       OnClick="@(() => ShowUpdateStatusDialog(4))">
-                                Отправить на проверку
-                            </MudButton>
-                        }
-                        @if (task.StatusId == 4)
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Success"
-                                       OnClick="@(() => ShowUpdateStatusDialog(5))">
-                                Подтвердить выполнение
-                            </MudButton>
-                            <MudButton Variant="Variant.Filled" Color="Color.Warning"
-                                       OnClick="@(() => ShowUpdateStatusDialog(3))">
-                                Вернуть на доработку
-                            </MudButton>
-                        }
+                        <div class="d-flex">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Дата создания:</MudText>
+                            <MudText Typo="Typo.body2">@task.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                        </div>
                     </div>
+
+                    @if (task.StatusId != 5) // Если задача не выполнена
+                    {
+                        <MudDivider Class="my-3" />
+                        <div class="d-flex gap-2">
+                            @if (task.StatusId == 1)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(() => ShowUpdateStatusDialog(2))">
+                                    Взять в работу
+                                </MudButton>
+                            }
+                            @if (task.StatusId == 2 || task.StatusId == 3)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(() => ShowUpdateStatusDialog(4))">
+                                    На проверку
+                                </MudButton>
+                            }
+                            @if (task.StatusId == 4)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                           OnClick="@(() => ShowUpdateStatusDialog(5))">
+                                    Выполнено
+                                </MudButton>
+                                <MudButton Variant="Variant.Filled" Color="Color.Warning" Size="Size.Small"
+                                           OnClick="@(() => ShowUpdateStatusDialog(3))">
+                                    На доработку
+                                </MudButton>
+                            }
+                        </div>
+                    }
                 </MudPaper>
             </MudItem>
 
+            <!-- Описание задачи -->
             <MudItem xs="12" md="6">
-                <MudPaper Elevation="2" Class="pa-4 mud-height-full">
-                    <MudText Typo="Typo.h6" Class="mb-3">Описание</MudText>
-                    <MudText>@(string.IsNullOrEmpty(task.Description) ? "Описание отсутствует" : task.Description)</MudText>
+                <MudPaper Elevation="0" Class="pa-4 border-solid border-1 h-100">
+                    <MudText Typo="Typo.subtitle1">Описание</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-3">
+                        @(string.IsNullOrEmpty(task.Description) ? "Описание отсутствует" : task.Description)
+                    </MudText>
 
                     @if (task.ProductId.HasValue)
                     {
                         <MudDivider Class="my-3" />
-                        <MudText Typo="Typo.h6" Class="mb-2">Информация о продукте</MudText>
-                        <MudGrid>
-                            <MudItem xs="4">
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Продукт:</MudText>
-                            </MudItem>
-                            <MudItem xs="8">
-                                <MudText>@task.ProductName</MudText>
-                            </MudItem>
-
+                        <MudText Typo="Typo.subtitle1">Информация о продукте</MudText>
+                        <div class="mt-2">
+                            <div class="d-flex">
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Продукт:</MudText>
+                                <MudText Typo="Typo.body2">@task.ProductName</MudText>
+                            </div>
                             @if (task.Quantity.HasValue)
                             {
-                                <MudItem xs="4">
-                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Количество:</MudText>
-                                </MudItem>
-                                <MudItem xs="8">
-                                    <MudText>@task.Quantity.Value</MudText>
-                                </MudItem>
+                                <div class="d-flex mt-1">
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Количество:</MudText>
+                                    <MudText Typo="Typo.body2">@task.Quantity.Value</MudText>
+                                </div>
                             }
-                        </MudGrid>
+                        </div>
                     }
                 </MudPaper>
             </MudItem>
 
-            
-<MudItem xs="12">
-    <MudPaper Elevation="2" Class="pa-4">
-        <div class="d-flex justify-space-between align-center mb-3">
-            <MudText Typo="Typo.h6">Подзадачи</MudText>
-            <MudButton Variant="Variant.Filled" 
-                      Color="Color.Primary" 
-                      StartIcon="@Icons.Material.Filled.Add" 
-                      OnClick="AddSubTask">
-                Добавить подзадачу
-            </MudButton>
-        </div>
-
-        @if (subTasks == null || !subTasks.Any())
-        {
-            <MudText>Нет подзадач</MudText>
-        }
-        else
-        {
-            <MudTable Items="@subTasks" Hover="true" Breakpoint="Breakpoint.Sm" Dense="true">
-                <HeaderContent>
-                    <MudTh>Название</MudTh>
-                    <MudTh>Статус</MudTh>
-                    <MudTh>Исполнитель</MudTh>
-                    <MudTh>Срок</MudTh>
-                    <MudTh>Действия</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd>@context.Title</MudTd>
-                                <MudTd>
-                                    <MudChip T="string" Color="@GetSubTaskStatusColor(context.StatusId)" Size="Size.Small">
-                                        @GetStatusName(context.StatusId)
-                                    </MudChip>
-                                </MudTd>
-                    <MudTd>@(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)</MudTd>
-                    <MudTd>@(context.DueDate.HasValue ? context.DueDate.Value.ToString("dd.MM.yyyy") : "-")</MudTd>
-                    <MudTd>
-                        <MudIconButton Icon="@Icons.Material.Filled.Edit" 
-                                      Size="Size.Small" 
-                                      OnClick="@(() => EditSubTask(context.Id))" />
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                                      Size="Size.Small" 
-                                      Color="Color.Error" 
-                                      OnClick="@(() => DeleteSubTask(context.Id))" />
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
-        }
-    </MudPaper>
-</MudItem>
-
+            <!-- Подзадачи -->
             <MudItem xs="12">
-                <MudPaper Elevation="2" Class="pa-4">
-                    <MudText Typo="Typo.h6" Class="mb-3">Комментарии</MudText>
+                <MudPaper Elevation="0" Class="pa-4 border-solid border-1">
+                    <MudText Typo="Typo.subtitle1">Подзадачи</MudText>
 
-                    @if (task.Comments != null && task.Comments.Count > 0)
+                    @if (subTasks == null || !subTasks.Any())
                     {
-                        <MudList T="TaskCommentModel" Clickable="false" Class="mb-4">
-                            @foreach (var comment in task.Comments.OrderByDescending(c => c.CreatedAt))
-                            {
-                                <MudListItem T="TaskCommentModel" Value="comment">
-                                    <div class="d-flex justify-space-between mb-1">
-                                        <MudText Typo="Typo.subtitle2">@comment.UserName</MudText>
-                                        <MudText Typo="Typo.caption">@comment.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
-                                    </div>
-                                    <MudText>@comment.Comment</MudText>
-                                </MudListItem>
-                                <MudDivider />
-                            }
-                        </MudList>
+                        <MudText Typo="Typo.body2" Class="my-2">Нет подзадач</MudText>
                     }
                     else
                     {
-                        <MudText Class="mb-4">Нет комментариев</MudText>
+                        <div class="mt-3">
+                            <MudSimpleTable Dense="true" Style="overflow-x:auto">
+                                <thead>
+                                    <tr>
+                                        <th>Название</th>
+                                        <th>Статус</th>
+                                        <th>Исполнитель</th>
+                                        <th>Срок</th>
+                                        <!-- Удалить этот столбец -->
+                                        <!-- <th></th> -->
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var subtask in subTasks)
+                                    {
+                                        <tr>
+                                            <td>@subtask.Title</td>
+                                            <td>
+                                                <MudChip T="string" Color="@GetSubTaskStatusColor(subtask.StatusId)"
+                                                         Size="Size.Small">
+                                                    @GetStatusName(subtask.StatusId)
+                                                </MudChip>
+                                            </td>
+                                            <td>@(string.IsNullOrEmpty(subtask.AssigneeName) ? "Не назначен" : subtask.AssigneeName)</td>
+                                            <td>@(subtask.DueDate.HasValue? subtask.DueDate.Value.ToString("dd.MM.yyyy") : "-")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        </div>
                     }
+                </MudPaper>
+            </MudItem>
 
-                    <MudTextField @bind-Value="newComment" Label="Новый комментарий" Lines="3" />
-                    <div class="d-flex justify-end mt-3">
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   OnClick="AddComment"
-                                   Disabled="string.IsNullOrWhiteSpace(newComment)">
-                            Добавить комментарий
-                        </MudButton>
+            <!-- Комментарии -->
+            <MudItem xs="12">
+                <MudPaper Elevation="0" Class="pa-4 border-solid border-1">
+                    <MudText Typo="Typo.subtitle1">Комментарии</MudText>
+
+                    <div class="mt-3">
+                        @if (task.Comments != null && task.Comments.Count > 0)
+                        {
+                            <div class="mb-4" style="max-height: 350px; overflow-y: auto;">
+                                @foreach (var comment in task.Comments.OrderByDescending(c => c.CreatedAt))
+                                {
+                                    <MudPaper Elevation="0" Class="pa-2 mb-2 comment-block border-solid border-1">
+                                        <div class="d-flex justify-space-between align-center">
+                                            <MudText Typo="Typo.subtitle2">@comment.UserName</MudText>
+                                            <MudText Typo="Typo.caption">@comment.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                                        </div>
+                                        <MudText Typo="Typo.body2" Class="mt-1">@comment.Comment</MudText>
+                                    </MudPaper>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="mb-4">Нет комментариев</MudText>
+                        }
+
+                        <MudTextField T="string" @bind-Value="newComment"
+                                      Placeholder="Добавить комментарий"
+                                      Lines="2"
+                                      Variant="Variant.Outlined"
+                                      Class="mb-2" />
+                        <div class="d-flex justify-end">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       OnClick="AddComment"
+                                       Disabled="string.IsNullOrWhiteSpace(newComment)">
+                                Добавить
+                            </MudButton>
+                        </div>
                     </div>
                 </MudPaper>
             </MudItem>
@@ -281,10 +254,18 @@ else
     </MudContainer>
 }
 
+<style>
+    .comment-block {
+        background-color: #fafafa;
+    }
+</style>
+
 @code {
     [Parameter]
     public Guid id { get; set; }
-
+    private bool canEditTask = false;
+    private List<string> userRoles = new List<string>();
+    private Guid currentUserId;
     private TaskModel? task;
     private bool isLoading = true;
     private string newComment = "";
@@ -292,13 +273,104 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Получаем текущего пользователя и его роли
+        await GetCurrentUserInfo();
         await LoadTaskAsync();
     }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (id != Guid.Empty)
+        {
+            await LoadTaskAsync();
+        }
+    }
+
+    private async Task GetCurrentUserInfo()
+    {
+        try
+        {
+            // Получаем ID пользователя из localStorage
+            var userIdString = await _localStorage.GetItemAsync<string>("userId");
+            if (!string.IsNullOrEmpty(userIdString) && Guid.TryParse(userIdString, out Guid userId))
+            {
+                currentUserId = userId;
+
+                // Получаем имя текущего пользователя из localStorage
+                var userName = await _localStorage.GetItemAsync<string>("userName") ?? "";
+                Console.WriteLine($"Имя пользователя: {userName}");
+
+                // Особая проверка для конкретных пользователей
+                if (userName.Equals("artemik713", StringComparison.OrdinalIgnoreCase))
+                {
+                    userRoles = new List<string> { "MetalShopManager" };
+                }
+                else if (userName.Contains("admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    userRoles = new List<string> { "Administrator" };
+                }
+                else if (userName.Contains("manager", StringComparison.OrdinalIgnoreCase) ||
+                         userName.Contains("MetalShopManager", StringComparison.OrdinalIgnoreCase))
+                {
+                    userRoles = new List<string> { "MetalShopManager" };
+                }
+                else if (userName.Contains("worker", StringComparison.OrdinalIgnoreCase))
+                {
+                    userRoles = new List<string> { "Worker" };
+                }
+                else
+                {
+                    // По умолчанию - обычный пользователь
+                    userRoles = new List<string> { "User" };
+                }
+
+                Console.WriteLine($"Назначены роли: {string.Join(", ", userRoles)}");
+            }
+            else
+            {
+                Console.WriteLine("Не удалось получить ID пользователя из localStorage");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при получении данных пользователя: {ex.Message}");
+        }
+    }
+    private void CheckEditPermissions()
+    {
+        if (task == null)
+        {
+            canEditTask = false;
+            return;
+        }
+
+        // Выводим текущие роли для отладки
+        Console.WriteLine($"Текущие роли: {string.Join(", ", userRoles)}");
+
+        // Проверяем конкретные роли
+        bool isAdmin = userRoles.Any(r =>
+            r == "Administrator" || r == "Admin");
+
+        bool isManager = userRoles.Any(r =>
+            r == "MetalShopManager" || r == "PaintShopManager" ||
+            r.Contains("Manager"));
+
+        bool isAdminOrManager = isAdmin || isManager;
+        bool isCreator = task.CreatorId == currentUserId;
+        bool isWorker = userRoles.Any(r => r == "Worker");
+
+        // Разрешаем редактирование для администраторов и менеджеров
+        canEditTask = isAdminOrManager && !isWorker;
+
+        // Подробный лог для отладки
+        Console.WriteLine($"Проверка прав: canEdit={canEditTask}, isAdmin={isAdmin}, " +
+            $"isManager={isManager}, isCreator={isCreator}, isWorker={isWorker}");
+    }
+
     private async Task LoadSubTasksAsync()
     {
         try
         {
-            // Предполагается, что у вас есть сервис для работы с подзадачами
             var subTasksDto = await SubTaskService.GetByParentTaskIdAsync(id);
             subTasks = subTasksDto.Select(dto => new SubTaskModel
             {
@@ -318,13 +390,7 @@ else
             Snackbar.Add($"Не удалось загрузить подзадачи: {ex.Message}", Severity.Warning);
         }
     }
-    protected override async Task OnParametersSetAsync()
-    {
-        if (id != Guid.Empty)
-        {
-            await LoadTaskAsync();
-        }
-    }
+
     private async Task LoadAssigneeInfoAsync()
     {
         if (task?.AssigneeId.HasValue == true && string.IsNullOrEmpty(task.AssigneeName))
@@ -349,19 +415,19 @@ else
     {
         isLoading = true;
         await LoadSubTasksAsync();
+
         try
         {
             Console.WriteLine($"Загрузка задачи с ID: {id}");
             var taskDto = await TaskService.GetTaskByIdAsync(id);
-            Console.WriteLine($"Получен DTO с данными: AssigneeId={taskDto?.AssigneeId}, AssigneeName={taskDto?.AssigneeName}");
 
             if (taskDto != null)
             {
                 task = taskDto.ToModel();
-                Console.WriteLine($"Преобразовано в модель: AssigneeId={task.AssigneeId}, AssigneeName={task.AssigneeName}");
-
-                // Добавьте этот вызов
                 await LoadAssigneeInfoAsync();
+
+                // Проверка прав на редактирование после загрузки задачи
+                CheckEditPermissions();
             }
             else
             {
@@ -380,6 +446,7 @@ else
             isLoading = false;
         }
     }
+
 
     private async Task AddComment()
     {

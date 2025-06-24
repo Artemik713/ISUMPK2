@@ -2,38 +2,193 @@
 @attribute [Authorize]
 @using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Services
 @using MudBlazor
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.JSInterop
+@using System.Text.Json
 @inject IUserService UserService
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Настройки профиля - ИСУ ПМК</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
     <MudText Typo="Typo.h5" Class="mb-4">Настройки профиля</MudText>
 
-    <MudTabs Elevation="0" Color="Color.Primary" ApplyEffectsToContainer="true" PanelClass="pa-4">
-        <MudTabPanel Text="Личные данные" Icon="@Icons.Material.Filled.Person">
-            <!-- Форма для изменения личных данных будет здесь -->
-            <MudAlert Severity="Severity.Info" Class="my-4">
-                Функциональность изменения личных данных находится в разработке.
-            </MudAlert>
-        </MudTabPanel>
+    @if (isLoading)
+    {
+        <div class="d-flex justify-center my-6">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else
+    {
+        <MudTabs Elevation="0" Color="Color.Primary" ApplyEffectsToContainer="true" PanelClass="pa-4">
+            <MudTabPanel Text="Личные данные" Icon="@Icons.Material.Filled.Person">
+                <EditForm Model="@userProfile" OnValidSubmit="SavePersonalData">
+                    <DataAnnotationsValidator />
+                    <MudCard Elevation="0" Class="mb-4">
+                        <MudCardContent>
+                            <div class="d-flex justify-center mb-4">
+                                <MudAvatar Size="Size.Large" Color="Color.Primary">
+                                    @(string.IsNullOrEmpty(userProfile.FirstName) ? "U" : userProfile.FirstName[0].ToString().ToUpper())
+                                </MudAvatar>
+                            </div>
 
-        <MudTabPanel Text="Внешний вид" Icon="@Icons.Material.Filled.Palette">
-            <!-- Настройки темы приложения -->
-            <MudAlert Severity="Severity.Info" Class="my-4">
-                Настройки внешнего вида будут доступны в следующем обновлении.
-            </MudAlert>
-        </MudTabPanel>
+                            <MudGrid>
+                                <MudItem xs="12" md="6">
+                                    <MudTextField T="string" @bind-Value="userProfile.FirstName"
+                                                  Label="Имя" Required="true" RequiredError="Имя обязательно" />
+                                </MudItem>
+                                <MudItem xs="12" md="6">
+                                    <MudTextField T="string" @bind-Value="userProfile.LastName"
+                                                  Label="Фамилия" Required="true" RequiredError="Фамилия обязательна" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="userProfile.Email"
+                                                  Label="Email" Required="true" RequiredError="Email обязателен"
+                                                  Pattern="@(@"^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$")"
+                                                  PatternError="Неверный формат email" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="userProfile.PhoneNumber"
+                                                  Label="Телефон" Pattern="@(@"^(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}$")"
+                                                  PatternError="Неверный формат телефона" />
+                                </MudItem>
+                            </MudGrid>
 
-        <MudTabPanel Text="Уведомления" Icon="@Icons.Material.Filled.Notifications">
-            <!-- Настройки уведомлений -->
-            <MudAlert Severity="Severity.Info" Class="my-4">
-                Настройки уведомлений находятся в разработке.
-            </MudAlert>
-        </MudTabPanel>
-    </MudTabs>
+                            <MudDivider Class="my-4" />
+
+                            <MudText Typo="Typo.h6" Class="mb-3">Смена пароля</MudText>
+                            <MudGrid>
+                                <MudItem xs="12" md="6">
+                                    <MudTextField T="string" @bind-Value="currentPassword"
+                                                  Label="Текущий пароль" InputType="InputType.Password" />
+                                </MudItem>
+                                <MudItem xs="12" md="6">
+                                    <MudTextField T="string" @bind-Value="newPassword"
+                                                  Label="Новый пароль" InputType="InputType.Password" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="confirmPassword"
+                                                  Label="Подтверждение пароля" InputType="InputType.Password"
+                                                  Error="@(!string.IsNullOrEmpty(passwordError))"
+                                                  ErrorText="@passwordError" />
+                                </MudItem>
+                            </MudGrid>
+
+                            <div class="d-flex justify-end mt-4">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           ButtonType="ButtonType.Submit">
+                                    Сохранить
+                                </MudButton>
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
+                </EditForm>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Внешний вид" Icon="@Icons.Material.Filled.Palette">
+                <MudCard Elevation="0" Class="mb-4">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-4">Тема оформления</MudText>
+
+                        <!-- Заменяем обычную MudRadioGroup на версию с обработчиком события -->
+                        <MudRadioGroup T="ThemeMode" Value="@selectedTheme"
+                                       Required="true" RequiredError="Выберите тему"
+                                       SelectedOptionChanged="OnThemeChanged">
+                            <MudRadio T="ThemeMode" Option="ThemeMode.Light" Color="Color.Primary">Светлая тема</MudRadio>
+                            <MudRadio T="ThemeMode" Option="ThemeMode.Dark" Color="Color.Primary">Темная тема</MudRadio>
+                            <MudRadio T="ThemeMode" Option="ThemeMode.System" Color="Color.Primary">Системная тема (как в ОС)</MudRadio>
+                        </MudRadioGroup>
+
+                        <MudDivider Class="my-4" />
+
+                        <MudText Typo="Typo.h6" Class="mb-4">Основной цвет</MudText>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var color in themeColors)
+                            {
+                                <MudAvatar Color="@color.MudColor"
+                                           Class="@($"ma-2 {(selectedColor == color.Name ? "border-solid border-2 border-primary" : "")}")"
+                                           Style="cursor: pointer;"
+                                           Size="Size.Large"
+                                           @onclick="async () => await SelectColor(color.Name)">
+                                </MudAvatar>
+                            }
+                        </div>
+
+                        <div class="d-flex justify-end mt-4">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       OnClick="SaveThemeSettings">
+                                Сохранить
+                            </MudButton>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Уведомления" Icon="@Icons.Material.Filled.Notifications">
+                <MudCard Elevation="0" Class="mb-4">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-4">Настройки уведомлений</MudText>
+
+                        <MudList T="NotificationItem" Dense="true">
+                            <MudListItem T="NotificationItem">
+                                <MudCheckBox T="bool" @bind-Checked="@notificationSettings.TaskAssigned"
+                                             Label="Уведомлять, когда мне назначена задача"
+                                             Color="Color.Primary" />
+                            </MudListItem>
+                            <MudListItem T="NotificationItem">
+                                <MudCheckBox T="bool" @bind-Checked="@notificationSettings.TaskStatusChanged"
+                                             Label="Уведомлять об изменении статуса моих задач"
+                                             Color="Color.Primary" />
+                            </MudListItem>
+                            <MudListItem T="NotificationItem">
+                                <MudCheckBox T="bool" @bind-Checked="@notificationSettings.TaskCommented"
+                                             Label="Уведомлять о новых комментариях в задачах"
+                                             Color="Color.Primary" />
+                            </MudListItem>
+                            <MudListItem T="NotificationItem">
+                                <MudCheckBox T="bool" @bind-Checked="@notificationSettings.DeadlineApproaching"
+                                             Label="Уведомлять о приближающихся сроках"
+                                             Color="Color.Primary" />
+                            </MudListItem>
+                        </MudList>
+
+                        <MudDivider Class="my-4" />
+
+                        <MudText Typo="Typo.h6" Class="mb-4">Каналы уведомлений</MudText>
+
+                        <MudList T="NotificationChannel" Dense="true">
+                            <MudListItem T="NotificationChannel">
+                                <MudCheckBox T="bool" @bind-Checked="@notificationSettings.EmailNotification"
+                                             Label="Получать уведомления по email"
+                                             Color="Color.Primary" />
+                            </MudListItem>
+                            <MudListItem T="NotificationChannel">
+                                <MudCheckBox T="bool" @bind-Checked="@notificationSettings.BrowserNotification"
+                                             Label="Получать уведомления в браузере"
+                                             Color="Color.Primary" />
+                            </MudListItem>
+                        </MudList>
+
+                        <div class="d-flex justify-end mt-4">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       OnClick="SaveNotificationSettings">
+                                Сохранить
+                            </MudButton>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+        </MudTabs>
+    }
 
     <div class="d-flex justify-end mt-4">
         <MudButton Variant="Variant.Text"
@@ -45,5 +200,297 @@
 </MudContainer>
 
 @code {
-    // Код будет добавлен при реализации функциональности
+    private bool isLoading = true;
+    private UserProfileDto userProfile = new UserProfileDto();
+    private string currentPassword = string.Empty;
+    private string newPassword = string.Empty;
+    private string confirmPassword = string.Empty;
+    private string passwordError = string.Empty;
+
+    // Для списков MudList
+    private class NotificationItem { }
+    private class NotificationChannel { }
+
+    // Theme settings
+    private ThemeMode selectedTheme = ThemeMode.Light;
+    private string selectedColor = "primary";
+    private List<ThemeColorOption> themeColors = new List<ThemeColorOption>
+    {
+        new ThemeColorOption { Name = "primary", MudColor = Color.Primary },
+        new ThemeColorOption { Name = "secondary", MudColor = Color.Secondary },
+        new ThemeColorOption { Name = "tertiary", MudColor = Color.Tertiary },
+        new ThemeColorOption { Name = "info", MudColor = Color.Info },
+        new ThemeColorOption { Name = "success", MudColor = Color.Success },
+        new ThemeColorOption { Name = "warning", MudColor = Color.Warning },
+        new ThemeColorOption { Name = "error", MudColor = Color.Error },
+        new ThemeColorOption { Name = "dark", MudColor = Color.Dark }
+    };
+
+    // Notification settings
+    private NotificationSettingsDto notificationSettings = new NotificationSettingsDto
+    {
+        TaskAssigned = true,
+        TaskStatusChanged = true,
+        TaskCommented = true,
+        DeadlineApproaching = true,
+        EmailNotification = true,
+        BrowserNotification = true
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Загрузка данных пользователя
+            string userId = await GetLocalStorageItem("userId");
+            if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out Guid userGuid))
+            {
+                var user = await UserService.GetUserByIdAsync(userGuid);
+                if (user != null)
+                {
+                    userProfile.Id = user.Id;
+                    userProfile.FirstName = user.FirstName;
+                    userProfile.LastName = user.LastName;
+                    userProfile.Email = user.Email;
+                    userProfile.PhoneNumber = user.PhoneNumber;
+                }
+                else
+                {
+                    Snackbar.Add("Не удалось загрузить данные пользователя", Severity.Error);
+                }
+            }
+
+            // Загрузка настроек темы
+            string theme = await GetLocalStorageItem("theme");
+            if (!string.IsNullOrEmpty(theme) && Enum.TryParse<ThemeMode>(theme, true, out var themeMode))
+            {
+                selectedTheme = themeMode;
+            }
+
+            string themeColor = await GetLocalStorageItem("themeColor");
+            if (!string.IsNullOrEmpty(themeColor))
+            {
+                selectedColor = themeColor;
+            }
+
+            // Загрузка настроек уведомлений
+            string notificationSettingsJson = await GetLocalStorageItem("notificationSettings");
+            if (!string.IsNullOrEmpty(notificationSettingsJson))
+            {
+                try
+                {
+                    var settings = JsonSerializer.Deserialize<NotificationSettingsDto>(notificationSettingsJson);
+                    if (settings != null)
+                    {
+                        notificationSettings = settings;
+                    }
+                }
+                catch { }
+            }
+
+            // Применяем тему при инициализации
+            await ApplyThemeImmediately();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task<string> GetLocalStorageItem(string key)
+    {
+        try
+        {
+            return await JSRuntime.InvokeAsync<string>("localStorage.getItem", key) ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private async Task SetLocalStorageItem(string key, string value)
+    {
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", key, value);
+    }
+
+    private async Task SavePersonalData()
+    {
+        try
+        {
+            // Проверка на совпадение паролей
+            if (!string.IsNullOrEmpty(newPassword) && newPassword != confirmPassword)
+            {
+                passwordError = "Пароли не совпадают";
+                return;
+            }
+            else
+            {
+                passwordError = string.Empty;
+            }
+
+            // Создаем DTO для обновления пользователя
+            var userUpdateDto = new ISUMPK2.Application.DTOs.UserUpdateDto
+            {
+                FirstName = userProfile.FirstName,
+                LastName = userProfile.LastName,
+                Email = userProfile.Email,
+                PhoneNumber = userProfile.PhoneNumber
+            };
+
+            // Сохранение личных данных
+            await UserService.UpdateUserAsync(userProfile.Id, userUpdateDto);
+
+            // Смена пароля, если он был изменен
+            if (!string.IsNullOrEmpty(currentPassword) && !string.IsNullOrEmpty(newPassword))
+            {
+                await UserService.ChangePasswordAsync(userProfile.Id, currentPassword, newPassword);
+
+                // Очистка полей паролей
+                currentPassword = string.Empty;
+                newPassword = string.Empty;
+                confirmPassword = string.Empty;
+            }
+
+            Snackbar.Add("Данные успешно сохранены", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при сохранении: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Обработка изменения темы
+    private async Task OnThemeChanged(ThemeMode newTheme)
+    {
+        Console.WriteLine($"Сработало событие OnThemeChanged: выбрана тема {newTheme}");
+        selectedTheme = newTheme;
+        await ApplyThemeImmediately();
+    }
+
+    // Метод для выбора цвета
+    private async Task SelectColor(string colorName)
+    {
+        selectedColor = colorName;
+        await ApplyThemeImmediately();
+    }
+
+    // Применение темы напрямую
+    private async Task ApplyThemeImmediately()
+    {
+        try
+        {
+            // Определяем тему
+            bool isDark = selectedTheme == ThemeMode.Dark;
+
+            if (selectedTheme == ThemeMode.System)
+            {
+                try
+                {
+                    isDark = await JSRuntime.InvokeAsync<bool>("getSystemTheme");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ошибка при определении системной темы: {ex.Message}");
+                }
+            }
+
+            // Отладочный вывод
+            Console.WriteLine($"ApplyThemeImmediately: isDark={isDark}, theme={selectedTheme}, color={selectedColor}");
+
+            if (selectedTheme == ThemeMode.Dark)
+            {
+                Console.WriteLine("ЯВНО ВЫБРАНА ТЕМНАЯ ТЕМА");
+                isDark = true; // Гарантируем true для темной темы
+            }
+
+            // Применяем тему через JavaScript
+            await JSRuntime.InvokeVoidAsync("applyTheme", isDark, selectedColor);
+
+            // Сохраняем настройки
+            await SetLocalStorageItem("theme", selectedTheme.ToString());
+            await SetLocalStorageItem("themeColor", selectedColor);
+
+            // Обновляем UI
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при применении темы: {ex.Message}");
+        }
+    }
+
+    // Сохранение настроек темы
+    private async Task SaveThemeSettings()
+    {
+        try
+        {
+            await ApplyThemeImmediately();
+            Snackbar.Add("Настройки темы сохранены", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при сохранении настроек темы: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveNotificationSettings()
+    {
+        try
+        {
+            string notificationSettingsJson = JsonSerializer.Serialize(notificationSettings);
+            await SetLocalStorageItem("notificationSettings", notificationSettingsJson);
+
+            Snackbar.Add("Настройки уведомлений сохранены", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при сохранении настроек уведомлений: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Data Transfer Objects
+    public class UserProfileDto
+    {
+        public Guid Id { get; set; }
+
+        [Required(ErrorMessage = "Имя обязательно")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Фамилия обязательна")]
+        public string LastName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email обязателен")]
+        [EmailAddress(ErrorMessage = "Некорректный формат email")]
+        public string Email { get; set; } = string.Empty;
+
+        public string PhoneNumber { get; set; } = string.Empty;
+    }
+
+    public class NotificationSettingsDto
+    {
+        public bool TaskAssigned { get; set; } = true;
+        public bool TaskStatusChanged { get; set; } = true;
+        public bool TaskCommented { get; set; } = true;
+        public bool DeadlineApproaching { get; set; } = true;
+        public bool EmailNotification { get; set; } = true;
+        public bool BrowserNotification { get; set; } = true;
+    }
+
+    public class ThemeColorOption
+    {
+        public string Name { get; set; } = string.Empty;
+        public Color MudColor { get; set; }
+    }
+
+    public enum ThemeMode
+    {
+        Light,
+        Dark,
+        System
+    }
 }

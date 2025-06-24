@@ -216,6 +216,10 @@
         {
             // Загрузка продукции и категорий
             var productsDto = await ProductService.GetAllProductsAsync();
+            foreach (var p in productsDto)
+            {
+                Console.WriteLine($"Продукт: {p.Name}, TypeId: {p.ProductTypeId}, TypeName: {p.ProductTypeName}");
+            }
             products = productsDto.Select(p => new ProductModel
             {
                 Id = p.Id,
@@ -227,11 +231,8 @@
                 Price = p.Price,
                 CurrentStock = p.CurrentStock,
                 UnitOfMeasure = p.UnitOfMeasure ?? "шт.",
-                // Исправлено: используем свойство, которое действительно существует в ProductDto
-                ImageUrl = p.ImageUrl // Используем ImageUrl вместо ImagePath
+                ImageUrl = p.ImageUrl
             }).ToList();
-
-            // Получаем уникальные категории для фильтра
             categories = products.Select(p => p.ProductTypeName).Distinct().OrderBy(c => c).ToList();
 
             // Применяем фильтры
@@ -319,18 +320,8 @@
     {
         if (!string.IsNullOrEmpty(product.ImageUrl))
             return product.ImageUrl;
-        
-        // Заглушка по умолчанию в зависимости от категории
-        switch (product.ProductTypeName?.ToLower())
-        {
-            case "металлические конструкции":
-                return "/images/products/metal-structure-default.jpg";
-            case "детали для станков":
-                return "/images/products/machine-parts-default.jpg";
-            case "покрасочные изделия":
-                return "/images/products/painted-products-default.jpg";
-            default:
-                return "/images/products/default-product.jpg";
-        }
+
+        // Используем встроенный data URL вместо запроса к файлу
+        return "data:image/png;base64,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";
     }
 }
