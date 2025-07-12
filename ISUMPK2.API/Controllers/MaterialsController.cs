@@ -49,6 +49,37 @@ namespace ISUMPK2.API.Controllers
                 return NotFound(ex.Message);
             }
         }
+
+        [HttpGet("transactions")]
+        [Authorize]
+        public async Task<ActionResult<IEnumerable<MaterialTransactionDto>>> GetTransactionsByDateRange(
+            [FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+        {
+            try
+            {
+                // Логирование для диагностики
+                _logger.LogInformation("Получен запрос на транзакции за период: {StartDate:yyyy-MM-dd} - {EndDate:yyyy-MM-dd}",
+                    startDate, endDate);
+
+                // Преобразуем в локальную дату, если это требуется
+                startDate = startDate.Date;
+                endDate = endDate.Date.AddDays(1).AddTicks(-1); // До конца дня
+
+                // Проверка корректности диапазона
+                if (endDate < startDate)
+                {
+                    return BadRequest(new { message = "Дата окончания не может быть раньше даты начала" });
+                }
+
+                var transactions = await _materialService.GetTransactionsByDateRangeAsync(startDate, endDate);
+                return Ok(transactions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении транзакций по диапазону дат");
+                return StatusCode(500, new { message = "Внутренняя ошибка сервера" });
+            }
+        }
         // Убедитесь, что этот метод существует в API контроллере
         [HttpPost("{materialId}/transactions")]
         [Authorize]

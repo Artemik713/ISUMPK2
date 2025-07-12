@@ -1,0 +1,147 @@
+﻿@using ISUMPK2.Application.DTOs
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Link" Class="mr-3" />
+            Зависимости задачи
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (Dependencies != null)
+        {
+            <div class="mb-4">
+                <MudText Typo="Typo.h6">@Dependencies.TaskTitle</MudText>
+                <MudAlert Severity="@(Dependencies.CanDelete? Severity.Success: Severity.Warning)" Class="mt-2">
+                    @Dependencies.Summary
+                </MudAlert>
+            </div>
+
+            @if (Dependencies.Dependencies.Any())
+            {
+                <MudText Typo="Typo.subtitle1" Class="mb-3">Найденные зависимости:</MudText>
+
+                @foreach (var dependency in Dependencies.Dependencies)
+                {
+                    <MudExpansionPanels MultiExpansion="true" Class="mb-3">
+                        <MudExpansionPanel>
+                            <TitleContent>
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="@GetDependencyIcon(dependency.Type)" Class="mr-3" />
+                                    <MudText>@dependency.Description</MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-2">
+                                        @dependency.Count.ToString()
+                                    </MudChip>
+                                </div>
+                            </TitleContent>
+                            <ChildContent>
+                                @if (dependency.Items.Any())
+                                {
+                                    <MudSimpleTable Dense="true" Hover="true">
+                                        <thead>
+                                            <tr>
+                                                <th>Название</th>
+                                                <th>Статус</th>
+                                                <th>Детали</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in dependency.Items)
+                                            {
+                                                <tr>
+                                                    <td>@item.Name</td>
+                                                    <td>
+                                                        <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(item.Status)">
+                                                            @item.Status
+                                                        </MudChip>
+                                                    </td>
+                                                    <td>@item.Details</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </MudSimpleTable>
+                                }
+                                else
+                                {
+                                    <MudText Color="Color.Secondary">Нет элементов для отображения</MudText>
+                                }
+                            </ChildContent>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                }
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info">
+                    У задачи нет зависимостей. Её можно безопасно удалить.
+                </MudAlert>
+            }
+        }
+        else
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Закрыть</MudButton>
+        @if (Dependencies?.CanDelete == true)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmDelete">
+                Удалить задачу
+            </MudButton>
+        }
+        else if (Dependencies?.Dependencies.Any() == true)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="ForceDelete">
+                Принудительно удалить
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public TaskDependencyInfoDto? Dependencies { get; set; }
+    [Parameter] public EventCallback<bool> OnDeleteConfirmed { get; set; }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task ConfirmDelete()
+    {
+        await OnDeleteConfirmed.InvokeAsync(false); // false = обычное удаление
+        MudDialog.Close();
+    }
+
+    private async Task ForceDelete()
+    {
+        await OnDeleteConfirmed.InvokeAsync(true); // true = принудительное удаление
+        MudDialog.Close();
+    }
+
+    private string GetDependencyIcon(string type)
+    {
+        return type switch
+        {
+            "SubTasks" => Icons.Material.Filled.Subtitles,
+            "Materials" => Icons.Material.Filled.Category,
+            "MaterialTransactions" => Icons.Material.Filled.SwapHoriz,
+            "ProductTransactions" => Icons.Material.Filled.Inventory,
+            "Comments" => Icons.Material.Filled.Comment,
+            "Notifications" => Icons.Material.Filled.Notifications,
+            _ => Icons.Material.Filled.Link
+        };
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Выполнена" or "Прочитано" => Color.Success,
+            "В работе" or "Зарезервировано" => Color.Info,
+            "Требует уточнения" => Color.Warning,
+            "Отклонена" => Color.Error,
+            _ => Color.Default
+        };
+    }
+}

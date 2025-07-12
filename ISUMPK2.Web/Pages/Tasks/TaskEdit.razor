@@ -163,52 +163,30 @@ else
 
             <!-- Секция материалов -->
             <MudCardContent>
-                <div class="d-flex justify-space-between align-center mb-3">
-                    <MudText Typo="Typo.h6">Материалы задачи</MudText>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                               OnClick="AddMaterial" StartIcon="@Icons.Material.Filled.Add"
-                               Size="Size.Small">
-                        Добавить материал
-                    </MudButton>
-                </div>
+                <MudText Typo="Typo.h6">Материалы задачи</MudText>
+                <MudDivider Class="my-2" />
 
                 @if (taskMaterials.Any())
                 {
                     <MudTable Items="@taskMaterials" Hover="true" Dense="true">
                         <HeaderContent>
-                            <MudTh>Материал</MudTh>
+                            <MudTh>Название</MudTh>
+                            <MudTh>Код</MudTh>
                             <MudTh>Количество</MudTh>
                             <MudTh>Ед. измерения</MudTh>
-                            <MudTh></MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd>
-                                <MudSelect T="Guid" @bind-Value="context.MaterialId" Label="Материал"
-                                           @onchange="@(() => UpdateMaterialInfo(context))">
-                                    @foreach (var material in availableMaterials)
-                                    {
-                                        <MudSelectItem Value="@material.Id">@material.Name (@material.Code)</MudSelectItem>
-                                    }
-                                </MudSelect>
-                            </MudTd>
-                            <MudTd>
-                                <MudNumericField T="decimal" @bind-Value="context.Quantity" Min="0" />
-                            </MudTd>
-                            <MudTd>
-                                @context.UnitOfMeasure
-                            </MudTd>
-                            <MudTd>
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
-                                               OnClick="@(() => RemoveMaterial(context))" />
-                            </MudTd>
+                            <MudTd>@context.MaterialName</MudTd>
+                            <MudTd>@context.MaterialCode</MudTd>
+                            <MudTd>@context.Quantity</MudTd>
+                            <MudTd>@context.UnitOfMeasure</MudTd>
                         </RowTemplate>
                     </MudTable>
+                    <MudText Typo="Typo.caption" Class="mt-2">Редактирование материалов доступно только при создании задачи</MudText>
                 }
                 else
                 {
-                    <MudText Color="Color.Secondary" Class="mb-3">
-                        Нет добавленных материалов
-                    </MudText>
+                    <MudAlert Severity="Severity.Info">Материалы не указаны</MudAlert>
                 }
             </MudCardContent>
 
@@ -397,29 +375,6 @@ else
         subTasks.Remove(subTask);
     }
 
-    private void AddMaterial()
-    {
-        taskMaterials.Add(new TaskMaterialModel());
-        StateHasChanged();
-    }
-
-    private void RemoveMaterial(TaskMaterialModel material)
-    {
-        taskMaterials.Remove(material);
-        StateHasChanged();
-    }
-
-    private void UpdateMaterialInfo(TaskMaterialModel material)
-    {
-        var selectedMaterial = availableMaterials.FirstOrDefault(m => m.Id == material.MaterialId);
-        if (selectedMaterial != null)
-        {
-            material.MaterialName = selectedMaterial.Name;
-            material.MaterialCode = selectedMaterial.Code;
-            material.UnitOfMeasure = selectedMaterial.UnitOfMeasure ?? "шт.";
-        }
-    }
-
     private async Task SaveTaskAsync()
     {
         // Валидация обязательных полей
@@ -463,7 +418,8 @@ else
                         Title = subTask.Title,
                         Description = subTask.Description,
                         AssigneeId = subTask.AssigneeId,
-                        DueDate = subTask.DueDate
+                        DueDate = subTask.DueDate,
+                        StatusId = subTask.StatusId // Добавлено передача StatusId
                     };
                     await SubTaskService.UpdateSubTaskAsync(subTask.Id, subTaskUpdateDto);
                 }
@@ -477,7 +433,8 @@ else
                 {
                     TaskId = id,
                     MaterialId = m.MaterialId,
-                    Quantity = m.Quantity
+                    Quantity = m.Quantity,
+                    UnitOfMeasure = m.UnitOfMeasure ?? "шт." // Добавьте это свойство
                 }).ToList();
 
             await TaskService.UpdateTaskMaterialsAsync(id, materialsToAdd);
@@ -497,39 +454,90 @@ else
 
     private async Task DeleteTaskAsync()
     {
-        var result = await DialogService.ShowMessageBox(
-            "Подтверждение",
-            "Вы действительно хотите удалить эту задачу?",
-            yesText: "Да",
-            noText: "Нет");
-
-        if (result == true)
+        try
         {
-            try
+            isLoading = true;
+            StateHasChanged();
+
+            Console.WriteLine($"Проверяем зависимости для задачи {id}");
+
+            // Сначала проверяем зависимости
+            var dependencies = await TaskService.GetTaskDependenciesAsync(id);
+
+            Console.WriteLine($"Получены зависимости: CanDelete={dependencies.CanDelete}, Count={dependencies.Dependencies.Count}");
+
+            var parameters = new DialogParameters
+        {
+            { "Dependencies", dependencies },
+            { "OnDeleteConfirmed", EventCallback.Factory.Create<bool>(this, HandleDeleteConfirmed) }
+        };
+
+            var options = new DialogOptions
             {
+                MaxWidth = MaxWidth.Large,
+                CloseButton = true,
+                CloseOnEscapeKey = true
+            };
+
+            await DialogService.ShowAsync<TaskDependenciesDialog>("Проверка зависимостей", parameters, options);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при проверке зависимостей: {ex.Message}");
+            Snackbar.Add($"Ошибка при проверке зависимостей: {ex.Message}", Severity.Error);
+
+            // Если не удается проверить зависимости, показываем обычное подтверждение
+            var result = await DialogService.ShowMessageBox(
+                "Подтверждение",
+                "Не удалось проверить зависимости. Вы действительно хотите удалить эту задачу?",
+                yesText: "Да",
+                noText: "Нет");
+
+            if (result == true)
+            {
+                await HandleDeleteConfirmed(false);
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleDeleteConfirmed(bool forceDelete)
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            Console.WriteLine($"Подтверждено удаление задачи {id}, forceDelete={forceDelete}");
+
+            if (forceDelete)
+            {
+                // Принудительное удаление через новый метод
+                await TaskService.ForceDeleteTaskAsync(id);
+                Snackbar.Add("Задача и все связанные данные принудительно удалены", Severity.Success);
+            }
+            else
+            {
+                // Обычное удаление
                 await TaskService.DeleteTaskAsync(id);
-                Snackbar.Add("Задача удалена", Severity.Success);
-                NavigationManager.NavigateTo("/tasks");
+                Snackbar.Add("Задача успешно удалена", Severity.Success);
             }
-            catch (HttpRequestException ex)
-            {
-                string errorMessage = "Ошибка при удалении задачи";
 
-                if (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
-                {
-                    errorMessage = "Невозможно удалить задачу, так как она имеет зависимости (подзадачи или транзакции)";
-                    showForceDelete = true; // Активируем кнопку принудительного удаления
-                }
-
-                Snackbar.Add(errorMessage, Severity.Warning, config =>
-                {
-                    config.VisibleStateDuration = 6000;
-                });
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Ошибка при удалении: {ex.Message}", Severity.Error);
-            }
+            NavigationManager.NavigateTo("/tasks");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при удалении задачи: {ex.Message}");
+            Snackbar.Add($"Ошибка при удалении: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
         }
     }
 

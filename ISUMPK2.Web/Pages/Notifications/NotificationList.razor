@@ -249,6 +249,8 @@
     {
         try
         {
+            Console.WriteLine($"NotificationList: Клик по уведомлению {notification.Id}, TaskId: {notification.TaskId}");
+
             if (!notification.IsRead)
             {
                 await NotificationService.MarkAsReadAsync(notification.Id);
@@ -264,13 +266,33 @@
                 }
             }
 
-            // Остальной код без изменений...
+            // Показываем карточку задачи, если уведомление связано с задачей
             if (notification.TaskId.HasValue)
             {
-                NavigationManager.NavigateTo($"/tasks/{notification.TaskId}");
+                Console.WriteLine($"NotificationList: Показываем карточку задачи для TaskId: {notification.TaskId.Value}");
+
+                var parameters = new DialogParameters
+            {
+                { "TaskId", notification.TaskId.Value }
+            };
+
+                var options = new DialogOptions
+                {
+                    MaxWidth = MaxWidth.Medium,
+                    CloseButton = true,
+                    CloseOnEscapeKey = true,
+                    FullWidth = false,
+                    Position = DialogPosition.Center,
+                    NoHeader = false
+                };
+
+                var dialog = await DialogService.ShowAsync<TaskCardDialog>("Задача", parameters, options);
+                Console.WriteLine($"NotificationList: Диалог показан, результат: {dialog}");
             }
             else
             {
+                Console.WriteLine("NotificationList: Показываем обычный диалог уведомления");
+                // Обычный диалог для уведомлений без задач
                 var parameters = new DialogParameters
             {
                 { "Title", notification.Title },
@@ -283,6 +305,7 @@
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"NotificationList: Ошибка обработки уведомления: {ex.Message}");
             await DialogService.ShowMessageBox("Ошибка", $"Не удалось обработать уведомление: {ex.Message}");
         }
     }

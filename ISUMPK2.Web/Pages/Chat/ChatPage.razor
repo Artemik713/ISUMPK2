@@ -15,6 +15,8 @@
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject IChatHubService ChatHubService
+@inject ISnackbar Snackbar
+@implements IDisposable
 
 <PageTitle>Чат - ИСУ ПМК</PageTitle>
 
@@ -22,12 +24,18 @@
     <MudGrid Style="height: 100%;">
         <MudItem xs="12" md="4" Style="height: 100%;">
             <MudPaper Class="pa-3" Style="height: 100%; display: flex; flex-direction: column;">
-                <MudText Typo="Typo.h5" Class="mb-4">Чаты</MudText>
-                
+                <div class="d-flex justify-space-between align-center mb-4">
+                    <MudText Typo="Typo.h5">Чаты</MudText>
+                    <MudChip T="string" Color="@(ChatHubService.IsConnected? Color.Success: Color.Error)" Size="Size.Small">
+                        @(ChatHubService.IsConnected ? "Онлайн" : "Офлайн")
+                    </MudChip>
+                </div>
+
                 <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="mt-2" Style="flex-grow: 1; display: flex; flex-direction: column;">
                     <MudTabPanel Text="Пользователи" Icon="@Icons.Material.Filled.Person" Style="flex-grow: 1; display: flex; flex-direction: column;">
-                        <MudTextField @bind-Value="userSearchText" Label="Поиск пользователей" Adornment="Adornment.Start" 
-                                     AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Class="mt-2 mb-4" /> 
+                        <MudTextField @bind-Value="userSearchText" Label="Поиск пользователей" Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Class="mt-2 mb-4"
+                                      @bind-Value:after="ApplyUserFilter" />
                         <MudList T="UserModel" Clickable="true" Style="flex-grow: 1; overflow-y: auto;">
                             @if (isLoading)
                             {
@@ -59,7 +67,9 @@
                                 }
                             }
                         </MudList>
+                    </MudTabPanel>
 
+                    <MudTabPanel Text="Отделы" Icon="@Icons.Material.Filled.Business" Style="flex-grow: 1; display: flex; flex-direction: column;">
                         <MudList T="DepartmentModel" Clickable="true" Style="flex-grow: 1; overflow-y: auto;">
                             @if (isLoading)
                             {
@@ -88,7 +98,7 @@
                 </MudTabs>
             </MudPaper>
         </MudItem>
-        
+
         <MudItem xs="12" md="8" Style="height: 100%;">
             <MudPaper Class="pa-3" Style="height: 100%; display: flex; flex-direction: column;">
                 @if (selectedRecipientId.HasValue || selectedDepartmentId.HasValue)
@@ -116,30 +126,41 @@
                             }
                         }
                     </div>
-                    
+
                     <div class="flex-grow-1 overflow-auto pa-3" style="background-color: var(--mud-palette-background-grey);" @ref="chatMessagesElement">
-                        @foreach (var message in currentChatMessages)
+                        @if (currentChatMessages.Any())
                         {
-                            <div class="d-flex @(message.SenderId == currentUserId ? "justify-end" : "justify-start") mb-2">
-                                <MudPaper Class="pa-3" Style="@(message.SenderId == currentUserId ? "background-color: var(--mud-palette-primary-lighten)" : "")">
-                                    @if (message.SenderId != currentUserId)
-                                    {
-                                        <MudText Typo="Typo.caption" Color="Color.Primary">@message.SenderName</MudText>
-                                    }
-                                    <MudText>@message.Message</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-flex justify-end">
-                                        @message.CreatedAt.ToString("HH:mm")
-                                    </MudText>
-                                </MudPaper>
+                            @foreach (var message in currentChatMessages)
+                            {
+                                <div class="d-flex @(message.SenderId == currentUserId ? "justify-end" : "justify-start") mb-2">
+                                    <MudPaper Class="@GetMessageCssClass(message)"
+                                              Style="@(message.SenderId == currentUserId ? "background-color: var(--mud-palette-primary-lighten);" : "")">
+                                        @if (message.SenderId != currentUserId)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Primary">@message.SenderName</MudText>
+                                        }
+                                        <MudText>@message.Message</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-flex justify-end">
+                                            @message.CreatedAt.ToString("HH:mm")
+                                        </MudText>
+                                    </MudPaper>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="d-flex justify-center align-center" style="height: 100%;">
+                                <MudText Color="Color.Secondary">Нет сообщений</MudText>
                             </div>
                         }
                     </div>
-                    
+
                     <div class="mt-3">
-                        <MudTextField @bind-Value="newMessage" Label="Сообщение" Variant="Variant.Outlined" 
-                                     Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Send"
-                                     OnAdornmentClick="@SendMessageAsync" OnKeyDown="@OnMessageKeyDown" 
-                                     Immediate="true" DisableUnderLine="true" />
+                        <MudTextField @bind-Value="newMessage" Label="Сообщение" Variant="Variant.Outlined"
+                                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Send"
+                                      OnAdornmentClick="@SendMessageAsync" OnKeyDown="@OnMessageKeyDown"
+                                      Immediate="true" DisableUnderLine="true" Disabled="@(!ChatHubService.IsConnected)"
+                                      Placeholder="@(ChatHubService.IsConnected ? "Введите сообщение..." : "Подключение...")" />
                     </div>
                 }
                 else
@@ -153,6 +174,18 @@
         </MudItem>
     </MudGrid>
 </MudContainer>
+
+<style>
+    .chat-message-sent {
+        max-width: 70%;
+        margin-left: auto;
+    }
+
+    .chat-message-received {
+        max-width: 70%;
+        margin-right: auto;
+    }
+</style>
 
 @code {
     [Parameter]
@@ -174,22 +207,44 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Получаем текущего пользователя
-        var currentUser = await UserService.GetCurrentUserAsync();
-        currentUserId = currentUser.Id;
-
-        // Если указан получатель в URL, устанавливаем его
-        if (RecipientId.HasValue)
+        try
         {
-            selectedRecipientId = RecipientId.Value;
+            Console.WriteLine("ChatPage: Инициализация...");
+
+            // Получаем текущего пользователя
+            var currentUser = await UserService.GetCurrentUserAsync();
+            Console.WriteLine($"ChatPage: Текущий пользователь: {currentUser?.UserName}, ID: {currentUser?.Id}");
+
+            if (currentUser == null)
+            {
+                Console.WriteLine("ChatPage: ОШИБКА - текущий пользователь не найден!");
+                Snackbar.Add("Ошибка: не удалось получить данные пользователя", Severity.Error);
+                return;
+            }
+
+            currentUserId = currentUser.Id;
+            Console.WriteLine($"ChatPage: Установлен currentUserId = {currentUserId}");
+
+            // Если указан получатель в URL, устанавливаем его
+            if (RecipientId.HasValue)
+            {
+                selectedRecipientId = RecipientId.Value;
+            }
+
+            // Загружаем данные
+            await LoadDataAsync();
+
+            // Подключаемся к хабу чата
+            await ChatHubService.ConnectAsync();
+            ChatHubService.OnReceiveMessage += HandleReceiveMessage;
+            ChatHubService.OnMessageSent += HandleMessageSent;
+            ChatHubService.OnMessageError += HandleMessageError;
         }
-
-        // Загружаем данные
-        await LoadDataAsync();
-
-        // Подключаемся к хабу чата
-        await ChatHubService.ConnectAsync();
-        ChatHubService.OnReceiveMessage += HandleReceiveMessage;
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ChatPage: Ошибка инициализации: {ex.Message}");
+            Snackbar.Add($"Ошибка инициализации чата: {ex.Message}", Severity.Error);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -202,18 +257,30 @@
         isLoading = true;
         try
         {
+            Console.WriteLine("ChatPage: Начинаем загрузку данных...");
+
             // Загружаем пользователей
+            Console.WriteLine("ChatPage: Загружаем пользователей...");
             var usersDto = await UserService.GetAllUsersAsync();
-            users = usersDto.Select(dto => dto.ToModel()).ToList();
+            Console.WriteLine($"ChatPage: Получено {usersDto?.Count() ?? 0} пользователей");
+
+            users = usersDto?.Select(dto => dto.ToModel()).ToList() ?? new List<UserModel>();
+            Console.WriteLine($"ChatPage: Преобразовано в модели: {users.Count} пользователей");
+
             ApplyUserFilter();
+            Console.WriteLine($"ChatPage: После фильтрации: {filteredUsers.Count} пользователей");
 
             // Загружаем отделы
+            Console.WriteLine("ChatPage: Загружаем отделы...");
             var departmentsDto = await DepartmentService.GetAllDepartmentsAsync();
-            departments = departmentsDto.Select(dto => dto.ToModel()).ToList();
+            departments = departmentsDto?.Select(dto => dto.ToModel()).ToList() ?? new List<DepartmentModel>();
+            Console.WriteLine($"ChatPage: Получено {departments.Count} отделов");
 
             // Загружаем все сообщения для текущего пользователя
+            Console.WriteLine($"ChatPage: Загружаем сообщения для пользователя {currentUserId}...");
             var messagesDto = await ChatService.GetMessagesForUserAsync(currentUserId);
-            allMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+            allMessages = messagesDto?.Select(dto => dto.ToModel()).ToList() ?? new List<ChatMessageModel>();
+            Console.WriteLine($"ChatPage: Получено {allMessages.Count} сообщений");
 
             // Считаем непрочитанные сообщения
             CountUnreadMessages();
@@ -230,21 +297,30 @@
         }
         catch (Exception ex)
         {
-            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить данные: {ex.Message}");
+            Console.WriteLine($"ChatPage: Ошибка загрузки данных: {ex.Message}");
+            Snackbar.Add($"Не удалось загрузить данные: {ex.Message}", Severity.Error);
         }
         finally
         {
             isLoading = false;
+            Console.WriteLine("ChatPage: Загрузка данных завершена");
         }
     }
+
     private async Task LoadConversationAsync(Guid? userId, Guid? departmentId)
     {
         try
         {
+            Console.WriteLine($"ChatPage: LoadConversationAsync - userId: {userId}, departmentId: {departmentId}");
+
             if (userId.HasValue)
             {
+                Console.WriteLine($"ChatPage: Загружаем переписку между {currentUserId} и {userId.Value}");
+
                 var messagesDto = await ChatService.GetConversationAsync(currentUserId, userId.Value);
-                currentChatMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+                currentChatMessages = messagesDto?.Select(dto => dto.ToModel()).ToList() ?? new List<ChatMessageModel>();
+
+                Console.WriteLine($"ChatPage: Загружено {currentChatMessages.Count} сообщений в переписке");
 
                 // Отмечаем сообщения как прочитанные
                 var unreadMessages = currentChatMessages.Where(m => m.SenderId == userId.Value && !m.IsRead).ToList();
@@ -254,6 +330,8 @@
                     message.IsRead = true;
                 }
 
+                Console.WriteLine($"ChatPage: Отмечено как прочитанные {unreadMessages.Count} сообщений");
+
                 // Обновляем счетчик непрочитанных
                 if (unreadMessages.Any() && unreadMessageCounts.ContainsKey(userId.Value))
                 {
@@ -262,8 +340,12 @@
             }
             else if (departmentId.HasValue)
             {
+                Console.WriteLine($"ChatPage: Загружаем сообщения отдела {departmentId.Value}");
+
                 var messagesDto = await ChatService.GetMessagesForDepartmentAsync(departmentId.Value);
-                currentChatMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+                currentChatMessages = messagesDto?.Select(dto => dto.ToModel()).ToList() ?? new List<ChatMessageModel>();
+
+                Console.WriteLine($"ChatPage: Загружено {currentChatMessages.Count} сообщений отдела");
             }
             else
             {
@@ -271,31 +353,47 @@
             }
 
             await ScrollToBottom();
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
-            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить переписку: {ex.Message}");
+            Console.WriteLine($"ChatPage: Ошибка загрузки переписки: {ex.Message}");
+            Snackbar.Add($"Не удалось загрузить переписку: {ex.Message}", Severity.Error);
         }
     }
 
     private void ApplyUserFilter()
     {
+        Console.WriteLine($"ChatPage: ApplyUserFilter - всего пользователей: {users.Count}, currentUserId: {currentUserId}");
+
+        // Выводим всех пользователей для отладки
+        foreach (var user in users)
+        {
+            Console.WriteLine($"  Пользователь: {user.UserName} (ID: {user.Id}) - {(user.Id == currentUserId ? "ТЕКУЩИЙ" : "ДРУГОЙ")}");
+        }
+
         if (string.IsNullOrWhiteSpace(userSearchText))
         {
             filteredUsers = users.Where(u => u.Id != currentUserId).ToList();
         }
         else
         {
-            filteredUsers = users.Where(u => u.Id != currentUserId && 
+            filteredUsers = users.Where(u => u.Id != currentUserId &&
                                         (u.FullName.Contains(userSearchText, StringComparison.OrdinalIgnoreCase) ||
                                          u.UserName.Contains(userSearchText, StringComparison.OrdinalIgnoreCase))).ToList();
+        }
+
+        Console.WriteLine($"ChatPage: После фильтрации: {filteredUsers.Count} пользователей");
+        foreach (var user in filteredUsers)
+        {
+            Console.WriteLine($"  Отфильтрованный пользователь: {user.UserName} (ID: {user.Id})");
         }
     }
 
     private void CountUnreadMessages()
     {
         unreadMessageCounts.Clear();
-        
+
         foreach (var user in users.Where(u => u.Id != currentUserId))
         {
             var count = allMessages.Count(m => m.SenderId == user.Id && !m.IsRead);
@@ -307,7 +405,7 @@
     {
         selectedRecipientId = userId;
         selectedDepartmentId = departmentId;
-        
+
         if (userId.HasValue)
         {
             await LoadConversationAsync(userId.Value, null);
@@ -322,37 +420,36 @@
 
     private async Task SendMessageAsync()
     {
-        if (string.IsNullOrWhiteSpace(newMessage))
+        if (string.IsNullOrWhiteSpace(newMessage) || !ChatHubService.IsConnected)
+        {
+            Console.WriteLine($"ChatPage: Нельзя отправить сообщение. Пустое: {string.IsNullOrWhiteSpace(newMessage)}, Подключен: {ChatHubService.IsConnected}");
             return;
+        }
 
         try
         {
-            var messageDto = new ChatMessageCreateDto
-                {
-                    ReceiverId = selectedRecipientId,
-                    DepartmentId = selectedDepartmentId,
-                    Message = newMessage
-                };
+            Console.WriteLine($"ChatPage: Попытка отправки сообщения: '{newMessage}'");
 
-            var sentMessageDto = await ChatService.SendMessageAsync(currentUserId, messageDto);
+            if (selectedRecipientId.HasValue)
+            {
+                Console.WriteLine($"ChatPage: Отправляем сообщение пользователю {selectedRecipientId.Value}");
+                await ChatHubService.SendMessageToUserAsync(selectedRecipientId.Value.ToString(), newMessage);
+            }
+            else if (selectedDepartmentId.HasValue)
+            {
+                Console.WriteLine($"ChatPage: Отправляем сообщение отделу {selectedDepartmentId.Value}");
+                await ChatHubService.SendMessageToDepartmentAsync(selectedDepartmentId.Value.ToString(), newMessage);
+            }
 
-            // Преобразуем полученный ChatMessageDto в ChatMessageModel
-            var sentMessage = sentMessageDto.ToModel();
-
-            currentChatMessages.Add(sentMessage);
             newMessage = "";
-
-            StateHasChanged();
-            await ScrollToBottom();
+            Console.WriteLine("ChatPage: Сообщение отправлено, поле очищено");
         }
         catch (Exception ex)
         {
-            await DialogService.ShowMessageBox("Ошибка", $"Не удалось отправить сообщение: {ex.Message}");
+            Console.WriteLine($"ChatPage: Ошибка отправки сообщения: {ex.Message}");
+            Snackbar.Add($"Не удалось отправить сообщение: {ex.Message}", Severity.Error);
         }
     }
-
-
-
 
     private async Task OnMessageKeyDown(KeyboardEventArgs args)
     {
@@ -364,26 +461,70 @@
 
     private async void HandleReceiveMessage(ChatMessageModel message)
     {
+        Console.WriteLine($"ChatPage: Получено сообщение от {message.SenderName}: {message.Message}");
+
         // Если сообщение от текущего собеседника или для текущего отдела, добавляем его в чат
         if ((selectedRecipientId.HasValue && message.SenderId == selectedRecipientId.Value) ||
             (selectedDepartmentId.HasValue && message.DepartmentId == selectedDepartmentId.Value))
         {
+            Console.WriteLine("ChatPage: Добавляем сообщение в текущий чат");
+
             currentChatMessages.Add(message);
             message.IsRead = true;
-            await ChatService.MarkAsReadAsync(message.Id);
-            
+
+            try
+            {
+                await ChatService.MarkAsReadAsync(message.Id);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ChatPage: Ошибка отметки сообщения как прочитанного: {ex.Message}");
+            }
+
             await InvokeAsync(StateHasChanged);
             await ScrollToBottom();
         }
         else
         {
+            Console.WriteLine("ChatPage: Увеличиваем счетчик непрочитанных сообщений");
+
             // Иначе увеличиваем счетчик непрочитанных сообщений
-            if (message.SenderId != currentUserId && unreadMessageCounts.ContainsKey(message.SenderId))
+            if (message.SenderId != currentUserId)
             {
-                unreadMessageCounts[message.SenderId]++;
+                if (unreadMessageCounts.ContainsKey(message.SenderId))
+                {
+                    unreadMessageCounts[message.SenderId]++;
+                }
+                else
+                {
+                    unreadMessageCounts[message.SenderId] = 1;
+                }
+
                 await InvokeAsync(StateHasChanged);
             }
         }
+    }
+
+    private async void HandleMessageSent(ChatMessageModel message)
+    {
+        Console.WriteLine($"ChatPage: Сообщение отправлено: {message.Message}");
+
+        // Добавляем отправленное сообщение в текущий чат
+        currentChatMessages.Add(message);
+        await InvokeAsync(StateHasChanged);
+        await ScrollToBottom();
+    }
+
+    private void HandleMessageError(string error)
+    {
+        InvokeAsync(() => Snackbar.Add(error, Severity.Error));
+    }
+
+    private string GetMessageCssClass(ChatMessageModel message)
+    {
+        var baseClass = "pa-3";
+        var positionClass = message.SenderId == currentUserId ? "chat-message-sent" : "chat-message-received";
+        return $"{baseClass} {positionClass}";
     }
 
     private string GetUserRole(UserModel user)
@@ -400,7 +541,7 @@
             return "Кладовщик";
         if (user.Roles.Contains("Administrator"))
             return "Администратор";
-            
+
         return string.Empty;
     }
 
@@ -419,5 +560,7 @@
     public void Dispose()
     {
         ChatHubService.OnReceiveMessage -= HandleReceiveMessage;
+        ChatHubService.OnMessageSent -= HandleMessageSent;
+        ChatHubService.OnMessageError -= HandleMessageError;
     }
 }

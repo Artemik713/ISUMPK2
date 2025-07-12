@@ -53,23 +53,41 @@ namespace ISUMPK2.Web.Auth
 
         public void MarkUserAsAuthenticated(UserLoginResponse user)
         {
-            var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            Console.WriteLine($"Вход пользователя: {user.UserName}, роли: {string.Join(", ", user.Roles)}");
+
+            var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.UserName),
                 new Claim(ClaimTypes.Email, user.Email ?? string.Empty)
-            }.Concat(user.Roles.Select(role => new Claim(ClaimTypes.Role, role))), "jwt"));
+            };
 
+            // Добавляем роли
+            claims.AddRange(user.Roles.Select(role => new Claim(ClaimTypes.Role, role)));
+
+            var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(claims, "jwt"));
             var authState = Task.FromResult(new AuthenticationState(authenticatedUser));
             NotifyAuthenticationStateChanged(authState);
+
+            Console.WriteLine($"Установлены claims: {string.Join(", ", claims.Select(c => $"{c.Type}={c.Value}"))}");
         }
 
         public void MarkUserAsLoggedOut()
         {
+            Console.WriteLine("Выход пользователя из системы");
+
+            // Очищаем заголовок авторизации
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.Authorization = null;
+
             var anonymousUser = new ClaimsPrincipal(new ClaimsIdentity());
             var authState = Task.FromResult(new AuthenticationState(anonymousUser));
             NotifyAuthenticationStateChanged(authState);
+
+            Console.WriteLine("Состояние аутентификации сброшено");
         }
+
+
 
         private IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
         {

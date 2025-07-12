@@ -148,10 +148,19 @@
 
     private async Task LogoutClick()
     {
-        // Перенаправляем сначала на главную страницу
-        NavigationManager.NavigateTo("/", true); // Используем true для полной перезагрузки страницы
+        try
+        {
+            // Сначала выполняем выход из системы
+            await AuthService.Logout();
 
-        // Затем выполняем выход из системы
-        await AuthService.Logout();
+            // Затем принудительно перезагружаем страницу
+            NavigationManager.NavigateTo("/login", true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при выходе: {ex.Message}");
+            // В случае ошибки все равно перенаправляем на страницу входа
+            NavigationManager.NavigateTo("/login", true);
+        }
     }
 }

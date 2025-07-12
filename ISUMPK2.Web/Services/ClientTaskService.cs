@@ -167,17 +167,89 @@ namespace ISUMPK2.Web.Services
             }
         }
 
+        public async Task ReserveMaterialsAsync(Guid taskId, List<TaskMaterialCreateDto> materials)
+        {
+            await SetAuthorizationHeaderAsync();
+            var response = await _httpClient.PostAsJsonAsync($"api/tasks/{taskId}/reserve-materials", materials);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Ошибка при резервировании материалов: {response.StatusCode}, {errorContent}");
+                response.EnsureSuccessStatusCode();
+            }
+        }
         public async Task UpdateTaskMaterialsAsync(Guid taskId, List<TaskMaterialCreateDto> materials)
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync($"api/tasks/{taskId}/materials", materials);
-                response.EnsureSuccessStatusCode();
+                await SetAuthorizationHeaderAsync();
+
+                // Проверьте URL - он должен быть api/tasks/{id}/materials, а не api/tasks/{id}/m
+                var response = await _httpClient.PutAsJsonAsync($"api/tasks/{taskId}/materials", materials);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Error updating task materials: {response.StatusCode}, Content: {errorContent}");
+                    response.EnsureSuccessStatusCode();
+                }
+
+                // Резервировать материалы уже должно на стороне API при вызове UpdateTaskMaterialsAsync
+                // Закомментируйте эту строку, если резервирование уже происходит на API
+                // await ReserveMaterialsAsync(taskId, materials);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error updating task materials: {ex.Message}");
                 throw;
+            }
+        }
+        public async Task<TaskDependencyInfoDto> GetTaskDependenciesAsync(Guid taskId)
+        {
+            await SetAuthorizationHeaderAsync();
+            return await _httpClient.GetFromJsonAsync<TaskDependencyInfoDto>($"api/tasks/{taskId}/dependencies");
+        }
+        public async Task ForceDeleteTaskAsync(Guid taskId)
+        {
+            await SetAuthorizationHeaderAsync();
+
+            try
+            {
+                Console.WriteLine($"Принудительное удаление задачи {taskId}");
+
+                var response = await _httpClient.DeleteAsync($"api/tasks/{taskId}/force");
+
+                Console.WriteLine($"Ответ сервера для принудительного удаления: {response.StatusCode}");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Ошибка принудительного удаления задачи {taskId}: {response.StatusCode}, {errorContent}");
+
+                    var httpEx = new HttpRequestException($"Ошибка при принудительном удалении задачи: {response.StatusCode}")
+                    {
+                        Data = { { "StatusCode", response.StatusCode } }
+                    };
+
+                    if (httpEx.GetType().GetProperty("StatusCode") != null)
+                    {
+                        httpEx.GetType().GetProperty("StatusCode")?.SetValue(httpEx, response.StatusCode);
+                    }
+
+                    throw httpEx;
+                }
+
+                Console.WriteLine($"Задача {taskId} принудительно удалена");
+            }
+            catch (HttpRequestException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Неожиданная ошибка при принудительном удалении задачи {taskId}: {ex.Message}");
+                throw new ApplicationException($"Неожиданная ошибка при принудительном удалении задачи: {ex.Message}", ex);
             }
         }
     }

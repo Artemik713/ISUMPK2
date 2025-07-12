@@ -106,7 +106,23 @@ namespace ISUMPK2.Web.Extensions
                 CreatedAt = dto.CreatedAt
             };
         }
+        // Добавьте этот метод в класс DtoExtensions:
 
+        public static DepartmentModel ToModel(this DepartmentDto dto)
+        {
+            if (dto == null) return null;
+
+            return new DepartmentModel
+            {
+                Id = dto.Id,
+                Name = dto.Name,
+                Description = dto.Description,
+                HeadId = dto.HeadId,
+                HeadName = dto.HeadName,
+                CreatedAt = dto.CreatedAt,
+                UpdatedAt = dto.UpdatedAt
+            };
+        }
         // Вспомогательный метод для определения цвета статуса задачи
         private static string GetStatusColor(int statusId)
         {

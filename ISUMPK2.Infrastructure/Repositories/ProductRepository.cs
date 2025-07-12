@@ -99,6 +99,17 @@ namespace ISUMPK2.Infrastructure.Repositories
         }
         public async Task<IEnumerable<ProductTransaction>> GetTransactionsByDateRangeAsync(DateTime startDate, DateTime endDate)
         {
+            // Убедимся, что даты заданы правильно (endDate >= startDate)
+            if (endDate < startDate)
+            {
+                var temp = startDate;
+                startDate = endDate;
+                endDate = temp;
+            }
+
+            // Установим время конца дня для endDate, чтобы включить весь день
+            endDate = endDate.Date.AddDays(1).AddTicks(-1);
+
             return await _context.Set<ProductTransaction>()
                 .Where(t => t.CreatedAt >= startDate && t.CreatedAt <= endDate)
                 .Include(t => t.Product)

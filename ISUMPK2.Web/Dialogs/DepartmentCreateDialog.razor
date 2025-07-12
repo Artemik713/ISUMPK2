@@ -4,7 +4,6 @@
 @inject IDepartmentService DepartmentService
 @inject MudBlazor.ISnackbar Snackbar
 
-
 <MudDialog>
     <DialogContent>
         <MudForm @ref="form">
@@ -14,11 +13,16 @@
             <MudTextField @bind-Value="model.Description" Label="Описание"
                           Lines="3" Class="mt-3" />
 
-            <MudSelect T="string" @bind-Value="selectedHeadId" Label="Руководитель" Class="mt-3">
-                <MudSelectItem T="string" Value="@string.Empty">Не выбран</MudSelectItem>
+            <MudSelect T="Guid?" @bind-Value="model.HeadId" Label="Руководитель" Class="mt-3" Clearable="true">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">Не назначен</MudSelectItem>
                 @foreach (var user in Users)
                 {
-                    <MudSelectItem T="string" Value="@user.Id.ToString()">@($"{user.LastName} {user.FirstName}")</MudSelectItem>
+                    var fullName = $"{user.LastName} {user.FirstName} {user.MiddleName}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName))
+                    {
+                        fullName = user.UserName ?? $"Пользователь {user.Id}";
+                    }
+                    <MudSelectItem T="Guid?" Value="@((Guid?)user.Id)">@fullName</MudSelectItem>
                 }
             </MudSelect>
         </MudForm>
@@ -36,9 +40,6 @@
     private MudForm form;
     private DepartmentCreateDto model = new DepartmentCreateDto();
 
-    // Используем простое поле для привязки к MudSelect
-    private string selectedHeadId = string.Empty;
-
     private void Cancel() => MudDialog.Cancel();
 
     private async Task Submit()
@@ -48,16 +49,6 @@
         {
             try
             {
-                // Преобразуем строковый ID в Guid перед отправкой
-                if (!string.IsNullOrEmpty(selectedHeadId))
-                {
-                    model.HeadId = Guid.Parse(selectedHeadId);
-                }
-                else
-                {
-                    model.HeadId = null;
-                }
-
                 await DepartmentService.CreateDepartmentAsync(model);
                 MudDialog.Close(DialogResult.Ok(true));
             }

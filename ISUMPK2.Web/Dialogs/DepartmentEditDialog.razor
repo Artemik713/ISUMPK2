@@ -13,14 +13,16 @@
             <MudTextField @bind-Value="model.Description" Label="Описание"
                           Lines="3" Class="mt-3" />
 
-            <MudSelect @bind-Value="model.HeadId" Label="Руководитель" Class="mt-3">
-                <MudSelectItem Value="@((Guid?)null)">Не выбрано</MudSelectItem>
-                @if (Users != null)
+            <MudSelect T="Guid?" @bind-Value="model.HeadId" Label="Руководитель" Class="mt-3" Clearable="true">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">Не назначен</MudSelectItem>
+                @foreach (var user in Users)
                 {
-                    @foreach (var user in Users)
+                    var fullName = $"{user.LastName} {user.FirstName} {user.MiddleName}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName))
                     {
-                        <MudSelectItem Value="@user.Id">@($"{user.LastName} {user.FirstName}")</MudSelectItem>
+                        fullName = user.UserName ?? $"Пользователь {user.Id}";
                     }
+                    <MudSelectItem T="Guid?" Value="@((Guid?)user.Id)">@fullName</MudSelectItem>
                 }
             </MudSelect>
         </MudForm>
@@ -33,29 +35,24 @@
 
 @code {
     [CascadingParameter] MudDialogInstance MudDialog { get; set; }
-    [Parameter] public DepartmentDto Department { get; set; }
+    [Parameter] public DepartmentDto Department { get; set; } // ДОБАВЛЕН отсутствующий параметр
     [Parameter] public IEnumerable<UserDto> Users { get; set; } = new List<UserDto>();
 
     private MudForm form;
-    private DepartmentUpdateDto model = new DepartmentUpdateDto();
+    private DepartmentUpdateDto model = new DepartmentUpdateDto(); // ИСПРАВЛЕН тип на DepartmentUpdateDto
 
     protected override void OnInitialized()
     {
+        // ДОБАВЛЕНА инициализация данными из Department
         if (Department != null)
         {
-            model = new DepartmentUpdateDto
-                {
-                    Name = Department.Name,
-                    Description = Department.Description,
-                    HeadId = Department.HeadId
-                };
+            model.Name = Department.Name;
+            model.Description = Department.Description;
+            model.HeadId = Department.HeadId;
         }
     }
 
-    private void Cancel()
-    {
-        MudDialog?.Cancel();
-    }
+    private void Cancel() => MudDialog.Cancel();
 
     private async Task Submit()
     {
@@ -64,15 +61,9 @@
         {
             try
             {
-                if (Department != null)
-                {
-                    await DepartmentService.UpdateDepartmentAsync(Department.Id, model);
-                    MudDialog?.Close(DialogResult.Ok(true));
-                }
-                else
-                {
-                    Snackbar.Add("Ошибка: отсутствует информация об отделе", Severity.Error);
-                }
+                // ИСПРАВЛЕН вызов метода на UpdateDepartmentAsync с ID департамента
+                await DepartmentService.UpdateDepartmentAsync(Department.Id, model);
+                MudDialog.Close(DialogResult.Ok(true));
             }
             catch (Exception ex)
             {

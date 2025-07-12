@@ -12,6 +12,7 @@
     <Compile Remove="Services\IMaterialService.cs" />
     <Compile Remove="Services\INotificationService.cs" />
     <Compile Remove="Services\NotificationService.cs" />
+    <Compile Remove="Shared\SubTaskProgressComponent.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,8 @@
-﻿using System.IdentityModel.Tokens.Jwt;
-using Microsoft.AspNetCore.Components;
+﻿using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.JSInterop;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
 
 namespace ISUMPK2.Web.Services
 {
@@ -10,6 +11,7 @@ namespace ISUMPK2.Web.Services
     {
         private readonly NavigationManager _navigationManager;
         private readonly ILocalStorageService _localStorage;
+        private readonly HttpClient _httpClient;
         private readonly AuthenticationStateProvider _authStateProvider;
         private Timer _tokenTimer;
         private readonly TimeSpan _tokenRefreshInterval = TimeSpan.FromMinutes(55); // Обновлять за 5 минут до истечения
@@ -17,7 +19,8 @@ namespace ISUMPK2.Web.Services
         public AuthTokenService(
             NavigationManager navigationManager,
             ILocalStorageService localStorage,
-            AuthenticationStateProvider authStateProvider)
+            AuthenticationStateProvider authStateProvider,
+            HttpClient httpClient)
         {
             _navigationManager = navigationManager;
             _localStorage = localStorage;
@@ -25,8 +28,36 @@ namespace ISUMPK2.Web.Services
 
             // Запустить таймер сразу после создания сервиса
             _tokenTimer = new Timer(CheckTokenValidity, null, TimeSpan.Zero, _tokenRefreshInterval);
+            _httpClient = httpClient;
         }
+        public async Task EnsureAuthTokenAsync()
+        {
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                if (!string.IsNullOrEmpty(token))
+                {
+                    // Очищаем предыдущий заголовок
+                    _httpClient.DefaultRequestHeaders.Authorization = null;
 
+                    // Устанавливаем новый
+                    _httpClient.DefaultRequestHeaders.Authorization =
+                        new AuthenticationHeaderValue("Bearer", token);
+
+                    Console.WriteLine($"✅ Токен установлен: Bearer {token.Substring(0, Math.Min(20, token.Length))}...");
+                }
+                else
+                {
+                    Console.WriteLine("❌ Токен не найден в localStorage");
+                    _httpClient.DefaultRequestHeaders.Authorization = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Ошибка установки токена: {ex.Message}");
+                _httpClient.DefaultRequestHeaders.Authorization = null;
+            }
+        }
         private async void CheckTokenValidity(object state)
         {
             try

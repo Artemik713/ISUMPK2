@@ -2,8 +2,10 @@
 @using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
 @using ISUMPK2.Application.Constants
+@using ISUMPK2.Web.Dialogs
 @using MudBlazor
 @inject IMaterialService MaterialService
+@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 
@@ -69,13 +71,13 @@
                                 <MudTextField T="string" Label="Технические характеристики" @bind-Value="updateDto.Specifications" Lines="3" Required="false" />
                             </MudItem>
                         </MudGrid>
-                        
+
                         <div class="d-flex justify-space-between mt-4">
                             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Cancel" OnClick="CancelEdit">
                                 Отмена
                             </MudButton>
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" 
-                                      OnClick="SaveMaterial" Disabled="@(!isValid || isSaving)">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                                       OnClick="SaveMaterial" Disabled="@(!isValid || isSaving)">
                                 @if (isSaving)
                                 {
                                     <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
@@ -123,7 +125,7 @@
                             <MudText>@material.Specifications</MudText>
                         </MudItem>
                     </MudGrid>
-                    
+
                     <div class="d-flex justify-space-between mt-4">
                         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="NavigateToList">
                             Вернуться к списку
@@ -184,7 +186,7 @@
                 NavigationManager.NavigateTo("/materials");
                 return;
             }
-            
+
             // Инициализация DTO для редактирования
             updateDto = new MaterialUpdateDto
             {
@@ -267,22 +269,54 @@
 
     private async Task OpenTransactionDialog()
     {
-        // Здесь нужно добавить логику открытия диалога добавления операции
-        // После успешного добавления операции вызываем обновление материала
-        await LoadMaterial();
+        var parameters = new DialogParameters
+        {
+            ["MaterialId"] = Id,
+            ["OnTransactionAdded"] = EventCallback.Factory.Create(this, LoadMaterial)
+        };
+
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<MaterialTransactionDialog>(
+            "Добавить операцию", parameters, options);
+
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadMaterial(); // Обновляем данные материала после операции
+            Snackbar.Add("Операция успешно добавлена", Severity.Success);
+        }
     }
 
     private async Task DeleteMaterial()
     {
-        try
+        var parameters = new DialogParameters
         {
-            await MaterialService.DeleteMaterialAsync(Id);
-            Snackbar.Add("Материал успешно удален", Severity.Success);
-            NavigateToList();
-        }
-        catch (Exception ex)
+            ["Title"] = "Подтверждение удаления",
+            ["Message"] = $"Вы действительно хотите удалить материал '{material.Name}'? Это действие нельзя отменить."
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Подтверждение", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
         {
-            Snackbar.Add($"Ошибка при удалении материала: {ex.Message}", Severity.Error);
+            try
+            {
+                await MaterialService.DeleteMaterialAsync(Id);
+                Snackbar.Add("Материал успешно удален", Severity.Success);
+                NavigateToList();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка при удалении материала: {ex.Message}", Severity.Error);
+            }
         }
     }
 }

@@ -22,7 +22,7 @@
                 </div>
             }
 
-            <MudSelect @bind-Value="transaction.TransactionType" Label="Тип операции" Required="true" Class="mb-4">
+            <MudSelect @bind-Value="selectedTransactionType" Label="Тип операции" Required="true" Class="mb-4">
                 <MudSelectItem Value="@("Приход")">Приход</MudSelectItem>
                 <MudSelectItem Value="@("Расход")">Расход</MudSelectItem>
             </MudSelect>
@@ -75,14 +75,14 @@
     private bool isProcessing = false;
     private bool showTaskSelect = false;
     private string selectedTaskId = "00000000-0000-0000-0000-000000000000";
+    private string selectedTransactionType = "Приход"; // Используем отдельную переменную для UI
 
     private MaterialTransactionCreateDto transaction = new MaterialTransactionCreateDto
     {
-        TransactionType = "Приход", // Изменено с Receipt на Приход
         Quantity = 0
     };
 
-    private bool IsValid => transaction.Quantity > 0 && !string.IsNullOrEmpty(transaction.TransactionType);
+    private bool IsValid => transaction.Quantity > 0 && !string.IsNullOrEmpty(selectedTransactionType);
 
     protected override async Task OnInitializedAsync()
     {
@@ -92,7 +92,7 @@
 
             // Загружаем данные о материале
             var materialDto = await MaterialService.GetMaterialByIdAsync(MaterialId);
-            material = materialDto.ToModel();
+            material = materialDto?.ToModel();
 
             // Загружаем задачи, если доступно
             try
@@ -104,9 +104,9 @@
                     showTaskSelect = tasks.Any();
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Если возникла ошибка при загрузке задач, игнорируем
+                Console.WriteLine($"Ошибка при загрузке задач: {ex.Message}");
                 showTaskSelect = false;
             }
         }
@@ -131,25 +131,21 @@
         try
         {
             // Проверяем достаточное количество при расходе
-            if (transaction.TransactionType == "Расход" && material != null)
+            if (selectedTransactionType == "Расход" && material != null)
             {
                 if (material.CurrentStock < transaction.Quantity)
                 {
                     throw new InvalidOperationException($"Недостаточно материала на складе. Доступно: {material.CurrentStock} {material.UnitOfMeasure}");
                 }
-                // Преобразуем русское название в английское для API
-                transaction.TransactionType = "Issue";
             }
-            else if (transaction.TransactionType == "Приход")
-            {
-                // Преобразуем русское название в английское для API
-                transaction.TransactionType = "Receipt";
-            }
+
+            // Конвертируем русские названия в английские для API
+            transaction.TransactionType = selectedTransactionType == "Приход" ? "Receipt" : "Issue";
 
             // Проверка и установка значений по умолчанию
             if (string.IsNullOrEmpty(transaction.Notes))
             {
-                transaction.Notes = "-"; // Устанавливаем дефолтное значение, если поле пустое
+                transaction.Notes = "-";
             }
 
             // Устанавливаем ID задачи из строкового представления
@@ -163,6 +159,8 @@
             {
                 transaction.TaskId = null;
             }
+
+            Console.WriteLine($"Отправка транзакции: MaterialId={transaction.MaterialId}, Type={transaction.TransactionType}, Quantity={transaction.Quantity}, TaskId={transaction.TaskId}");
 
             // Добавляем транзакцию через сервис
             await MaterialService.AddMaterialTransactionAsync(transaction);
@@ -180,7 +178,16 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Ошибка при сохранении операции: {ex.Message}", Severity.Error);
+            var errorMessage = ex.Message;
+
+            // Попытка извлечь более читаемое сообщение об ошибке
+            if (errorMessage.Contains("API вернул ошибку"))
+            {
+                errorMessage = "Ошибка при сохранении операции. Проверьте корректность данных.";
+            }
+
+            Console.WriteLine($"Ошибка при отправке транзакции: {ex.Message}");
+            Snackbar.Add($"Ошибка при сохранении операции: {errorMessage}", Severity.Error);
         }
         finally
         {

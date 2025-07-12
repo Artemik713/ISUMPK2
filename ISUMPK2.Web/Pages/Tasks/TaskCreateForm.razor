@@ -6,7 +6,8 @@
 @using ISUMPK2.Application.Services.Implementations
 @using ISUMPK2.Web.Models
 @using ISUMPK2.Web.Extensions
-@using ISUMPK2.Web.Services;
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Application.Constants
 @using MudBlazor
 @inject ITaskService TaskService
 @inject IUserService UserService
@@ -67,7 +68,31 @@
                         <MudDatePicker Label="Срок выполнения" @bind-Date="dueDate" />
                     </MudItem>
                 </MudGrid>
+                <!-- Добавить после общих полей задачи, перед разделом подзадач -->
+                <MudDivider Class="my-4" />
 
+                @if (ProductId.HasValue)
+                {
+                    <MudPaper Class="pa-4 mb-3 border-solid border-1">
+                        <MudText Typo="Typo.h6">Информация о продукте</MudText>
+
+                        <div class="d-flex gap-4 mt-3">
+                            <MudField Label="Продукт" Variant="Variant.Outlined"
+                                      ReadOnly="true" Value="@ProductName" FullWidth="true" />
+
+                            <MudNumericField T="decimal?" Label="Количество" Required="true"
+                                             Variant="Variant.Outlined" @bind-Value="newTask.Quantity"
+                                             Min="1" Class="flex-grow-1" />
+                        </div>
+
+                        <div class="d-flex justify-end mt-2">
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                       Href="@($"/products/{ProductId}")">
+                                Открыть страницу продукта
+                            </MudButton>
+                        </div>
+                    </MudPaper>
+                }
                 <!-- Секция подзадач -->
                 <MudDivider Class="my-4" />
                 <div class="d-flex justify-space-between align-center mb-3">
@@ -160,11 +185,11 @@
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd>
-                        <MudSelect T="Guid" @bind-Value="context.MaterialId" Label="Материал"
-                                   @onchange="@(() => UpdateMaterialInfo(context))">
+                        <MudSelect T="Guid" Value="context.MaterialId" Label="Материал"
+                                   ValueChanged="@(value => MaterialChanged(value, context))">
                             @foreach (var material in availableMaterials)
                             {
-                                <MudSelectItem Value="@material.Id">@material.Name</MudSelectItem>
+                                <MudSelectItem Value="@material.Id">@material.Name (@material.Code)</MudSelectItem>
                             }
                         </MudSelect>
                     </MudTd>
@@ -172,7 +197,7 @@
                         <MudNumericField T="decimal" @bind-Value="context.Quantity" Min="0" />
                     </MudTd>
                     <MudTd>
-                        @context.UnitOfMeasure
+                        <MudText Style="padding: 10px 0;">@(string.IsNullOrEmpty(context.UnitOfMeasure) ? "-" : context.UnitOfMeasure)</MudText>
                     </MudTd>
                     <MudTd>
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
@@ -232,51 +257,83 @@
     {
         try
         {
+            // Добавляем отладочный вывод параметров из URL
+            Console.WriteLine("Получены параметры из URL:");
+            Console.WriteLine($"ProductId: {ProductId}");
+            Console.WriteLine($"Operation: {Operation}");
+            Console.WriteLine($"ProductName: {ProductName}");
+            Console.WriteLine($"DepartmentId: {DepartmentId}");
             // Загружаем все необходимые данные
             await LoadUsersAndDepartments();
 
             // Если открыли страницу из продукта, предзаполняем данные
             if (ProductId.HasValue)
             {
-                var product = await ProductService.GetProductByIdAsync(ProductId.Value);
-                if (product != null)
+                try
                 {
-                    // Заполняем название задачи с типом обработки и названием продукта
-                    newTask.Title = $"{Operation ?? "Производство"} {ProductName ?? product.Name}";
-                    newTask.Description = product.Description;
-                    newTask.DepartmentId = DepartmentId ?? product.DepartmentId;
-                    newTask.ProductId = ProductId;
-                    newTask.Quantity = 1; // По умолчанию 1 единица
+                    var product = await ProductService.GetProductByIdAsync(ProductId.Value);
+                    Console.WriteLine($"Продукт загружен: {product?.Name ?? "не найден"}");
 
-                    // Добавляем материалы продукта как материалы задачи
-                    if (product.Materials != null && product.Materials.Any())
+                    if (product != null)
                     {
-                        foreach (var material in product.Materials)
-                        {
-                            taskMaterials.Add(new TaskMaterialModel
-                            {
-                                MaterialId = material.MaterialId,
-                                MaterialName = material.MaterialName,
-                                Quantity = material.Quantity,
-                                UnitOfMeasure = material.UnitOfMeasure
-                            });
-                        }
-                    }
+                        // Заполняем название задачи с типом обработки и названием продукта
+                        newTask.Title = $"{Operation ?? "Производство"} {ProductName ?? product.Name}";
+                        newTask.Description = product.Description;
+                        newTask.DepartmentId = DepartmentId ?? product.DepartmentId;
+                        newTask.ProductId = ProductId;
+                        newTask.Quantity = 1; // По умолчанию 1 единица
+                        StateHasChanged();
 
-                    // Добавляем стандартные подзадачи для производства
-                    AddStandardSubTasks(product.ProductTypeName);
+                        // Добавляем материалы продукта как материалы задачи
+                        if (product.Materials != null && product.Materials.Any())
+                        {
+                            foreach (var material in product.Materials)
+                            {
+                                taskMaterials.Add(new TaskMaterialModel
+                                    {
+                                        MaterialId = material.MaterialId,
+                                        MaterialName = material.MaterialName,
+                                        Quantity = material.Quantity,
+                                        UnitOfMeasure = material.UnitOfMeasure ?? "шт." // Используем значение из материала или "шт." по умолчанию
+                                    });
+                            }
+                        }
+                        // Затем после загрузки доступных материалов
+                        availableMaterials = (await MaterialService.GetAllMaterialsAsync()).ToList();
+
+                        // Обновляем информацию о материалах для правильной установки единиц измерения
+                        foreach (var taskMaterial in taskMaterials)
+                        {
+                            UpdateMaterialInfo(taskMaterial);
+                        }
+                        // Добавляем стандартные подзадачи для производства
+                        AddStandardSubTasks(product.ProductTypeName);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ошибка при загрузке данных продукта: {ex.Message}");
+                    Snackbar.Add($"Ошибка при загрузке данных продукта: {ex.Message}", Severity.Error);
                 }
             }
-
             // Загружаем доступные материалы
             try
             {
                 availableMaterials = (await MaterialService.GetAllMaterialsAsync()).ToList();
+                Console.WriteLine($"Загружено материалов: {availableMaterials.Count}");
+
+                // Проверяем наличие единиц измерения в загруженных материалах
+                foreach (var material in availableMaterials.Take(5)) // Выводим первые 5 для примера
+                {
+                    Console.WriteLine($"Материал: {material.Name}, Единица измерения: {material.UnitOfMeasure}");
+                }
             }
             catch (Exception ex)
             {
-                Snackbar.Add($"Не удалось загрузить материалы: {ex.Message}", Severity.Error);
+                Console.WriteLine($"Ошибка в OnInitializedAsync: {ex.Message}");
+                Snackbar.Add($"Ошибка загрузки данных: {ex.Message}", Severity.Error);
             }
+
 
             // Получаем текущего пользователя для установки CreatorId
             var currentUser = await UserService.GetCurrentUserAsync();
@@ -310,13 +367,35 @@
         {
             material.MaterialName = selectedMaterial.Name;
             material.MaterialCode = selectedMaterial.Code;
+
+            // Всегда устанавливаем единицу измерения из выбранного материала
             material.UnitOfMeasure = selectedMaterial.UnitOfMeasure ?? "шт.";
+
+            // Добавляем отладочную информацию
+            Console.WriteLine($"UpdateMaterialInfo: Материал {selectedMaterial.Name}, Единица измерения: {material.UnitOfMeasure}");
+
+            // Обеспечиваем обновление интерфейса
+            StateHasChanged();
+        }
+        else
+        {
+            Console.WriteLine($"UpdateMaterialInfo: Материал не найден для ID {material.MaterialId}");
         }
     }
 
     private void AddMaterial()
     {
-        taskMaterials.Add(new TaskMaterialModel());
+        // При добавлении материала устанавливаем пустые значения
+        var newMaterial = new TaskMaterialModel()
+        {
+            MaterialId = Guid.Empty,
+            MaterialName = string.Empty,
+            MaterialCode = string.Empty,
+            UnitOfMeasure = string.Empty,
+            Quantity = 1
+        };
+        taskMaterials.Add(newMaterial);
+        Console.WriteLine("Добавлен новый материал");
         StateHasChanged();
     }
 
@@ -404,6 +483,32 @@
         StateHasChanged();
     }
 
+    private async Task MaterialChanged(Guid materialId, TaskMaterialModel model)
+    {
+        model.MaterialId = materialId;
+
+        // Находим выбранный материал
+        var selectedMaterial = availableMaterials.FirstOrDefault(m => m.Id == materialId);
+        if (selectedMaterial != null)
+        {
+            // Обновляем данные материала в модели
+            model.MaterialName = selectedMaterial.Name;
+            model.MaterialCode = selectedMaterial.Code;
+            model.UnitOfMeasure = selectedMaterial.UnitOfMeasure ?? "шт.";
+
+            // Выводим отладочную информацию
+            Console.WriteLine($"Материал выбран: {selectedMaterial.Name}, Единица измерения: {model.UnitOfMeasure}");
+        }
+        else
+        {
+            Console.WriteLine($"Материал с ID {materialId} не найден в списке доступных материалов");
+        }
+
+        // Обязательно обновляем интерфейс
+        StateHasChanged();
+    }
+
+
     private async Task SubmitTask()
     {
         if (!isValid) return;
@@ -443,7 +548,8 @@
                 Materials = taskMaterials.Select(m => new TaskMaterialCreateDto
                 {
                     MaterialId = m.MaterialId,
-                    Quantity = m.Quantity
+                    Quantity = m.Quantity,
+                    UnitOfMeasure = m.UnitOfMeasure // Добавляем единицу измерения, если API это поддерживает
                 }).ToList()
             };
 
@@ -524,7 +630,8 @@
         public string MaterialName { get; set; } = string.Empty;
         public string MaterialCode { get; set; } = string.Empty;
         public decimal Quantity { get; set; }
-        public string UnitOfMeasure { get; set; } = "шт.";
+        // Удаляем значение по умолчанию "шт."
+        public string UnitOfMeasure { get; set; } = string.Empty;
 
         // Метод для обновления названия материала и единицы измерения
         public void UpdateMaterialInfo(List<MaterialDto> materials)
@@ -533,7 +640,7 @@
             if (material != null)
             {
                 MaterialName = material.Name;
-                UnitOfMeasure = material.UnitOfMeasure;
+                UnitOfMeasure = material.UnitOfMeasure ?? string.Empty;
             }
         }
     }

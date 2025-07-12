@@ -23,6 +23,7 @@ namespace ISUMPK2.Application.DTOs
         public Guid TaskId { get; set; }
         public Guid MaterialId { get; set; }
         public decimal Quantity { get; set; }
+        public string UnitOfMeasure { get; set; }
     }
 
     public class TaskMaterialUpdateDto

@@ -9,6 +9,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @inject ITaskService TaskService
+@inject ISubTaskService SubTaskService
 @inject IUserService UserService
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
@@ -109,16 +110,44 @@ else
                                                            Size="Size.Medium" Striped="true">
                                             <MudText Typo="Typo.caption" Class="progress-text">@taskProgress%</MudText>
                                         </MudProgressLinear>
+
+                                        @if (subTasks.Any())
+                                        {
+                                            <MudDivider Class="my-3" />
+                                            <MudText Typo="Typo.subtitle2" Class="mb-2">Подзадачи (@completedSubTasksCount из @subTasks.Count выполнено)</MudText>
+                                            @foreach (var subTask in subTasks.Take(3))
+                                            {
+                                                <div class="d-flex align-center mb-1">
+                                                    <MudIcon Icon="@(subTask.StatusId == 5 ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
+                                                             Color="@(subTask.StatusId == 5 ? Color.Success : Color.Default)"
+                                                             Size="Size.Small" Class="mr-2" />
+                                                    <MudText Typo="Typo.body2" Style="@(subTask.StatusId == 5 ? "text-decoration: line-through; opacity: 0.7;" : "")">@subTask.Title</MudText>
+                                                </div>
+                                            }
+                                            @if (subTasks.Count > 3)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">и еще @(subTasks.Count - 3) подзадач...</MudText>
+                                            }
+                                        }
                                     </MudCardContent>
                                     <MudCardActions>
                                         <MudButton Variant="Variant.Filled" Color="Color.Primary"
                                                    OnClick="@(() => NavigationManager.NavigateTo($"/tasks/{activeTask.Id}"))">
                                             Подробнее
                                         </MudButton>
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Success"
-                                                   OnClick="@(() => SendTaskForReview())">
-                                            Отправить на проверку
-                                        </MudButton>
+                                        @if (activeTask.StatusId == 2 || activeTask.StatusId == 3)
+                                        {
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                                                       OnClick="@(() => SendTaskForReview())">
+                                                Отправить на проверку
+                                            </MudButton>
+                                        }
+                                        else if (activeTask.StatusId == 4)
+                                        {
+                                            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                                                Задача на проверке у администратора
+                                            </MudAlert>
+                                        }
                                         <MudButton Variant="Variant.Outlined" Color="Color.Warning"
                                                    OnClick="@(() => ReportIssue())">
                                             Сообщить о проблеме
@@ -138,6 +167,15 @@ else
                                                 <MudText>@taskProgress%</MudText>
                                             </div>
                                         </MudListItem>
+                                        @if (subTasks.Any())
+                                        {
+                                            <MudListItem T="string">
+                                                <div class="d-flex justify-space-between">
+                                                    <MudText>Подзадачи:</MudText>
+                                                    <MudText>@completedSubTasksCount/@subTasks.Count</MudText>
+                                                </div>
+                                            </MudListItem>
+                                        }
                                         <MudListItem T="string">
                                             <div class="d-flex justify-space-between">
                                                 <MudText>План. время:</MudText>
@@ -230,12 +268,14 @@ else
                     <MudTh>Название</MudTh>
                     <MudTh>Продукт</MudTh>
                     <MudTh>Завершено</MudTh>
+                    <MudTh>Прогресс</MudTh>
                     <MudTh>Действия</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="Название">@context.Title</MudTd>
                     <MudTd DataLabel="Продукт">@context.ProductName</MudTd>
                     <MudTd DataLabel="Завершено">@context.CompletedDate?.ToString("dd.MM.yyyy")</MudTd>
+                    <MudTd DataLabel="Прогресс">100%</MudTd>
                     <MudTd>
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
                                    OnClick="@(() => NavigationManager.NavigateTo($"/tasks/{context.Id}"))">
@@ -270,11 +310,13 @@ else
     private UserModel currentUser;
     private TaskModel activeTask;
     private List<TaskModel> completedTasks = new();
+    private List<SubTaskModel> subTasks = new();
     private bool isLoading = true;
     private bool hasActiveTask = false;
     private int taskProgress = 0;
     private int updatedProgress = 0;
     private string newComment = "";
+    private int completedSubTasksCount = 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -300,7 +342,6 @@ else
                 if (currentUser != null && currentUser.DepartmentId.HasValue)
                 {
                     // Загружаем активные задачи пользователя
-                    // (ИД пользователя - обычный Guid, не Guid?)
                     var tasksDto = await TaskService.GetTasksByAssigneeAsync(currentUser.Id);
                     var tasks = tasksDto.Select(t => t.ToModel()).ToList();
 
@@ -310,7 +351,10 @@ else
 
                     if (hasActiveTask)
                     {
-                        taskProgress = CalculateTaskProgress(activeTask);
+                        // Загружаем подзадачи для активной задачи
+                        await LoadSubTasks();
+
+                        taskProgress = await CalculateTaskProgressAsync(activeTask);
                         updatedProgress = taskProgress;
                     }
 
@@ -329,21 +373,68 @@ else
         }
     }
 
-    private int CalculateTaskProgress(TaskModel task)
+    private async Task LoadSubTasks()
     {
-        // Логика расчета прогресса задачи
-        // Можно использовать данные из задачи или добавить специальное поле в модели
-        if (task.StatusId == 5) return 100; // Если задача завершена
-        if (task.StatusId == 1) return 0;   // Если задача только создана
+        try
+        {
+            if (activeTask != null)
+            {
+                var subTasksDto = await SubTaskService.GetByParentTaskIdAsync(activeTask.Id);
+                subTasks = subTasksDto.Select(dto => new SubTaskModel
+                {
+                    Id = dto.Id,
+                    ParentTaskId = dto.ParentTaskId,
+                    Title = dto.Title ?? string.Empty,
+                    Description = dto.Description ?? string.Empty,
+                    StatusId = dto.StatusId,
+                    AssigneeId = dto.AssigneeId,
+                    AssigneeName = dto.AssigneeName ?? string.Empty,
+                    DueDate = dto.DueDate,
+                    CompletedDate = dto.CompletedDate,
+                    EstimatedHours = dto.EstimatedHours,
+                    ActualHours = dto.ActualHours
+                }).ToList();
 
-        // Пример расчета на основе соотношения фактических и плановых часов
+                completedSubTasksCount = subTasks.Count(st => st.StatusId == 5);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке подзадач: {ex.Message}", Severity.Warning);
+            subTasks = new List<SubTaskModel>();
+        }
+    }
+
+    private async Task<int> CalculateTaskProgressAsync(TaskModel task)
+    {
+        // Если задача завершена, возвращаем 100%
+        if (task.StatusId == 5) return 100;
+
+        // Если задача только создана и нет подзадач
+        if (task.StatusId == 1 && !subTasks.Any()) return 0;
+
+        // Расчет на основе подзадач (приоритетный метод)
+        if (subTasks.Any())
+        {
+            var totalSubTasks = subTasks.Count;
+            var completedSubTasks = subTasks.Count(st => st.StatusId == 5);
+
+            if (totalSubTasks == 0) return 0;
+
+            var subTaskProgress = (int)((double)completedSubTasks / totalSubTasks * 100);
+
+            // Если все подзадачи выполнены, но основная задача не завершена, показываем 99%
+            return subTaskProgress == 100 && task.StatusId < 5 ? 99 : subTaskProgress;
+        }
+
+        // Резервный расчет на основе соотношения фактических и плановых часов
         if (task.ActualHours.HasValue && task.EstimatedHours.HasValue && task.EstimatedHours.Value > 0)
         {
             var progress = (int)((task.ActualHours.Value / task.EstimatedHours.Value) * 100);
             return Math.Min(progress, 99); // Не больше 99%, т.к. 100% - это завершенная задача
         }
 
-        // По умолчанию, на основе статуса
+        // Последний резерв - расчет на основе статуса
         return task.StatusId * 20; // Примерное соответствие статуса и прогресса
     }
 
@@ -371,23 +462,22 @@ else
     {
         try
         {
-            // Логика отправки задачи на проверку
-            var options = new DialogOptions { CloseOnEscapeKey = true };
-            var parameters = new DialogParameters
-            {
-                { "TaskId", activeTask.Id },
-                { "Title", "Отправка на проверку" },
-                { "Message", "Вы уверены, что хотите отправить задачу на проверку?" }
-            };
+            var confirmed = await DialogService.ShowMessageBox(
+                "Отправка на проверку",
+                "Вы уверены, что хотите отправить задачу на проверку администратору?",
+                "Да", "Отмена");
 
-            var dialog = await DialogService.ShowAsync<ConfirmDialog>("Подтверждение", parameters, options);
-            var result = await dialog.Result;
-
-            if (!result.Canceled)
+            if (confirmed == true)
             {
-                // Вызов API для изменения статуса задачи
-                Snackbar.Add("Задача отправлена на проверку", Severity.Success);
-                await LoadUserData(); // Перезагрузка данных
+                var statusDto = new TaskStatusUpdateDto
+                {
+                    StatusId = 4, // На проверке
+                    Comment = "Задача отправлена на проверку исполнителем"
+                };
+
+                await TaskService.UpdateTaskStatusAsync(activeTask.Id, currentUser.Id, statusDto);
+                Snackbar.Add("Задача отправлена на проверку администратору", Severity.Success);
+                await LoadUserData();
             }
         }
         catch (Exception ex)
@@ -436,7 +526,7 @@ else
             {
                 Id = Guid.NewGuid(),
                 TaskId = activeTask.Id,
-                UserId = currentUser.Id, // Используем как обычный Guid
+                UserId = currentUser.Id,
                 UserName = currentUser.FullName,
                 Comment = newComment,
                 CreatedAt = DateTime.Now

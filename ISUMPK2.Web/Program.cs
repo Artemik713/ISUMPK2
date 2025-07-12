@@ -14,7 +14,7 @@ using ISUMPK2.Application.Auth;
 using ISUMPK2.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using MudBlazor;
-using Microsoft.AspNetCore.Components.Routing ;
+using Microsoft.AspNetCore.Components.Routing;
 
 namespace ISUMPK2.Web
 {
@@ -27,9 +27,17 @@ namespace ISUMPK2.Web
             builder.RootComponents.Add<Web.App>("#app");
             builder.RootComponents.Add<HeadOutlet>("head::after");
 
-            // Настройка HTTP клиента
-            builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["API_URL"] ?? "https://localhost:7110") });
+            // В конфигурации HttpClient
+            builder.Services.AddScoped(sp =>
+            {
+                var client = new HttpClient { BaseAddress = new Uri(builder.Configuration["API_URL"] ?? "https://localhost:7110") };
 
+                // Добавляем пользовательские заголовки для обхода блокировщиков
+                client.DefaultRequestHeaders.Add("User-Agent", "ISUMPK2-WebApp");
+                client.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
+
+                return client;
+            });
             // Добавление сервисов MudBlazor
             builder.Services.AddMudServices(config =>
             {
@@ -43,13 +51,13 @@ namespace ISUMPK2.Web
                 config.SnackbarConfiguration.SnackbarVariant = Variant.Filled;
             });
 
-
             // Настройка аутентификации
             builder.Services.AddOptions();
             builder.Services.AddAuthorizationCore();
             builder.Services.AddScoped<AuthenticationStateProvider, ISUMPK2.Web.Auth.ApiAuthenticationStateProvider>();
             builder.Services.AddScoped<ISUMPK2.Web.Auth.ApiAuthenticationStateProvider>(); // если требуется напрямую
             builder.Services.AddScoped<IAuthService, AuthService>();
+
             // Локальное хранилище
             builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 
@@ -63,30 +71,31 @@ namespace ISUMPK2.Web
             builder.Services.AddScoped<IUserRepository, ClientUserRepository>();
             builder.Services.AddScoped<ITaskRepository, ClientTaskRepository>();
             builder.Services.AddScoped<IProductRepository, ClientProductRepository>();
+            builder.Services.AddScoped<IChatRepository, ClientChatRepository>();
             builder.Services.AddScoped(typeof(IRepository<>), typeof(ClientRepository<>));
             builder.Services.AddScoped<IMaterialCategoryRepository, ClientMaterialCategoryRepository>();
             builder.Services.AddScoped<AuthTokenService>();
             builder.Services.AddScoped<IThemeService, ThemeService>();
 
-
-
-            // Уберите дублирующиеся регистрации MudServices
-
             // Регистрация сервисов приложения
             builder.Services.AddScoped<ITaskService, ClientTaskService>();
+            builder.Services.AddScoped<ITaskProgressService, TaskProgressService>();
+            builder.Services.AddScoped<AuthTokenService>();
             builder.Services.AddScoped<IUserService, ClientUserService>();
             builder.Services.AddScoped<ISubTaskService, ClientSubTaskService>();
             builder.Services.AddScoped<ISubTaskRepository, ClientSubTaskRepository>();
             builder.Services.AddScoped<IMaterialService, ClientMaterialService>();
             builder.Services.AddScoped<IProductService, ProductService>();
             builder.Services.AddScoped<INotificationService, NotificationService>();
-            builder.Services.AddScoped<IChatService, ChatService>();
+            builder.Services.AddScoped<IChatService, ClientChatService>(); // Изменено на клиентский сервис
             builder.Services.AddScoped<IDepartmentService, DepartmentService>();
             builder.Services.AddScoped<IJwtTokenGenerator, WebAssemblyJwtTokenGenerator>();
             builder.Services.AddScoped<IPasswordHasher<User>, DummyPasswordHasher>();
-            // Настройка SignalR для уведомлений
-            builder.Services.AddSingleton<INotificationHubService, NotificationHubService>();
-            builder.Services.AddSingleton<IChatHubService, ChatHubService>();
+
+            // Настройка SignalR для уведомлений и чата
+            builder.Services.AddScoped<INotificationHubService, NotificationHubService>();
+            builder.Services.AddScoped<IChatHubService, ChatHubService>();
+
             // Регистрация клиентских сервисов для работы с материалами задач
             builder.Services.AddScoped<IClientTaskMaterialService, ClientTaskMaterialService>();
 

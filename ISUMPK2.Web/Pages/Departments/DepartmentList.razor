@@ -14,7 +14,7 @@
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudPaper Class="pa-4">
         <MudText Typo="Typo.h4" Class="mb-4">Управление отделами</MudText>
-        
+
         <MudButton Class="mb-4" Variant="Variant.Filled" Color="Color.Primary" OnClick="@OpenCreateDialog">
             <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" /> Добавить отдел
         </MudButton>
@@ -41,7 +41,19 @@
                         <MudLink Href="@($"/departments/{context.Id}")">@context.Name</MudLink>
                     </MudTd>
                     <MudTd DataLabel="Описание">@context.Description</MudTd>
-                    <MudTd DataLabel="Руководитель">@context.HeadName</MudTd>
+                    <MudTd DataLabel="Руководитель">
+                        @if (!string.IsNullOrEmpty(context.HeadName) && context.HeadName != "Не назначен")
+                        {
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-2" />
+                                <span>@context.HeadName</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudText Color="Color.Secondary">Не назначен</MudText>
+                        }
+                    </MudTd>
                     <MudTd>
                         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                        OnClick="@(() => OpenEditDialog(context))" />
@@ -67,19 +79,29 @@
     private async Task LoadData()
     {
         loading = true;
-        departments = await DepartmentService.GetAllDepartmentsAsync();
-        users = await UserService.GetAllUsersAsync();
-        loading = false;
+        try
+        {
+            departments = await DepartmentService.GetAllDepartmentsAsync();
+            users = await UserService.GetAllUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+        }
     }
 
     private async Task OpenCreateDialog()
     {
         var parameters = new DialogParameters
         {
-            ["Users"] = users
+            { "Users", users }
         };
 
-        var dialog = DialogService.Show<DepartmentCreateDialog>("Создание отдела", parameters);
+        var dialog = await DialogService.ShowAsync<DepartmentCreateDialog>("Создать отдел", parameters);
         var result = await dialog.Result;
 
         if (!result.Canceled)
@@ -89,16 +111,15 @@
         }
     }
 
-    // Проверьте этот метод в DepartmentList.razor
     private async Task OpenEditDialog(DepartmentDto department)
     {
         var parameters = new DialogParameters
-            {
-                ["Department"] = department,
-                ["Users"] = users // Убедитесь, что users заполнено!
-            };
+        {
+            { "Department", department },
+            { "Users", users }
+        };
 
-        var dialog = DialogService.Show<DepartmentEditDialog>("Редактирование отдела", parameters);
+        var dialog = await DialogService.ShowAsync<DepartmentEditDialog>("Редактировать отдел", parameters);
         var result = await dialog.Result;
 
         if (!result.Canceled)
@@ -108,22 +129,25 @@
         }
     }
 
-
     private async Task OpenDeleteDialog(DepartmentDto department)
     {
-        var parameters = new DialogParameters
-        {
-            ["ContentText"] = $"Вы уверены, что хотите удалить отдел '{department.Name}'?"
-        };
+        var confirmed = await DialogService.ShowMessageBox(
+            "Подтверждение удаления",
+            $"Вы уверены, что хотите удалить отдел '{department.Name}'?",
+            "Да", "Отмена");
 
-        var dialog = DialogService.Show<ConfirmDialog>("Подтверждение", parameters);
-        var result = await dialog.Result;
-
-        if (!result.Canceled)
+        if (confirmed == true)
         {
-            await DepartmentService.DeleteDepartmentAsync(department.Id);
-            await LoadData();
-            Snackbar.Add("Отдел успешно удален", Severity.Success);
+            try
+            {
+                await DepartmentService.DeleteDepartmentAsync(department.Id);
+                await LoadData();
+                Snackbar.Add("Отдел успешно удален", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Ошибка при удалении отдела: {ex.Message}", Severity.Error);
+            }
         }
     }
 }

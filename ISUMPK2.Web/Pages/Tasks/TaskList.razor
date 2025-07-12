@@ -10,6 +10,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using MudBlazor
 @inject ITaskService TaskService
+@inject ISubTaskService SubTaskService
 @inject IUserService UserService
 @inject IDepartmentService DepartmentService
 @inject NavigationManager NavigationManager
@@ -130,7 +131,7 @@
                     </MudSelect>
                 </MudItem>
             </MudGrid>
-            
+
             <!-- Легенда статусов и приоритетов -->
             <MudGrid Class="mt-2">
                 <MudItem xs="12" md="6">
@@ -159,14 +160,33 @@
                 </MudItem>
             </MudGrid>
         </MudPaper>
-        
+
         @if (isCardView)
         {
-            <!-- Карточный вид задач -->
-            @if (filteredTasks.Any())
+            <!-- Карточный вид задач с сортировкой -->
+            <div class="d-flex justify-end mb-3">
+                <MudSelect T="string"
+                           Value="@currentSortField"
+                           ValueChanged="@OnSortChanged"
+                           Label="Сортировать по"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Style="width: 200px;">
+                    <MudSelectItem Value="@("CreatedAt")">Дате создания</MudSelectItem>
+                    <MudSelectItem Value="@("DueDate")">Сроку выполнения</MudSelectItem>
+                    <MudSelectItem Value="@("PriorityId")">Приоритету</MudSelectItem>
+                    <MudSelectItem Value="@("StatusId")">Статусу</MudSelectItem>
+                    <MudSelectItem Value="@("Title")">Названию</MudSelectItem>
+                </MudSelect>
+                <MudIconButton Icon="@(isDescending? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)"
+                               OnClick="ToggleSortDirection"
+                               Class="ml-2" />
+            </div>
+
+            @if (sortedFilteredTasks.Any())
             {
                 <div class="task-grid">
-                    @foreach (var task in filteredTasks)
+                    @foreach (var task in sortedFilteredTasks)
                     {
                         <MudCard Elevation="2" Class="task-card">
                             <MudCardHeader>
@@ -217,6 +237,20 @@
                                         </MudChip>
                                     }
                                 </div>
+
+                                <!-- Прогресс подзадач -->
+                                @if (taskSubTasksProgress.ContainsKey(task.Id))
+                                {
+                                    var progress = taskSubTasksProgress[task.Id];
+                                    <div class="mb-2">
+                                        <div class="d-flex justify-space-between align-center mb-1">
+                                            <MudText Typo="Typo.caption">Прогресс:</MudText>
+                                            <MudText Typo="Typo.caption">@progress.CompletedCount/@progress.TotalCount подзадач</MudText>
+                                        </div>
+                                        <MudProgressLinear Color="Color.Primary" Value="@progress.Percentage" Size="Size.Small" />
+                                    </div>
+                                }
+
                                 <MudText Typo="Typo.body2">
                                     <strong>Исполнитель:</strong> @(string.IsNullOrEmpty(task.AssigneeName) ? "Не назначен" : task.AssigneeName)
                                 </MudText>
@@ -265,12 +299,13 @@
                       ServerData="ServerReload"
                       @ref="table">
                 <HeaderContent>
-                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.Title)">Название</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.StatusId)">Статус</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.PriorityId)">Приоритет</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.AssigneeName)">Исполнитель</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.DueDate)">Срок</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.CreatedAt)">Создана</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.Title)" InitialDirection="SortDirection.None">Название</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.StatusId)" InitialDirection="SortDirection.None">Статус</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.PriorityId)" InitialDirection="SortDirection.Descending">Приоритет</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.AssigneeName ?? string.Empty)" InitialDirection="SortDirection.None">Исполнитель</MudTableSortLabel></MudTh>
+                    <MudTh>Прогресс</MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.DueDate ?? DateTime.MaxValue)" InitialDirection="SortDirection.None">Срок</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<TaskModel, object>(x => x.CreatedAt)" InitialDirection="SortDirection.Descending">Создана</MudTableSortLabel></MudTh>
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -310,6 +345,19 @@
                             </MudAvatar>
                             <span>@(string.IsNullOrEmpty(context.AssigneeName) ? "Не назначен" : context.AssigneeName)</span>
                         </div>
+                    </MudTd>
+                    <MudTd DataLabel="Прогресс">
+                        @if (taskSubTasksProgress.ContainsKey(context.Id))
+                        {
+                            var progress = taskSubTasksProgress[context.Id];
+                            <SubTaskProgressComponent TotalCount="@progress.TotalCount"
+                                                      CompletedCount="@progress.CompletedCount"
+                                                      ShowPercentage="false" />
+                        }
+                        else
+                        {
+                            <SubTaskProgressComponent TotalCount="0" CompletedCount="0" />
+                        }
                     </MudTd>
                     <MudTd DataLabel="Срок">
                         <div class="d-flex align-center">
@@ -372,15 +420,15 @@
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
         grid-gap: 16px;
     }
-    
+
     .task-card {
         transition: all 0.2s ease;
     }
-    
-    .task-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--mud-elevation-4);
-    }
+
+        .task-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--mud-elevation-4);
+        }
 </style>
 
 @code {
@@ -400,9 +448,9 @@
     [SupplyParameterFromQuery(Name = "department")]
     public Guid? DepartmentFilter { get; set; }
 
-    private string PageTitle => 
-        NavigationManager.Uri.Contains("/tasks/my") ? "Мои задачи" : 
-        NavigationManager.Uri.Contains("/tasks/overdue") ? "Просроченные задачи" : 
+    private string PageTitle =>
+        NavigationManager.Uri.Contains("/tasks/my") ? "Мои задачи" :
+        NavigationManager.Uri.Contains("/tasks/overdue") ? "Просроченные задачи" :
         "Задачи";
 
     private MudTable<TaskModel>? table;
@@ -410,17 +458,65 @@
     private bool isCardView = false;
     private List<TaskModel> tasks = new List<TaskModel>();
     private List<TaskModel> filteredTasks = new List<TaskModel>();
+    private List<TaskModel> sortedFilteredTasks = new List<TaskModel>();
     private List<UserModel> users = new List<UserModel>();
     private List<DepartmentModel> departments = new List<DepartmentModel>();
+    private Dictionary<Guid, SubTaskProgress> taskSubTasksProgress = new();
 
     private int? selectedStatusId;
     private int? selectedPriorityId;
     private Guid? selectedAssigneeId;
     private Guid? selectedDepartmentId;
 
+    // Сортировка для карточного вида
+    private string currentSortField = "CreatedAt";
+    private bool isDescending = true;
+
+    public class SubTaskProgress
+    {
+        public int TotalCount { get; set; }
+        public int CompletedCount { get; set; }
+        public int Percentage => TotalCount > 0 ? (int)((double)CompletedCount / TotalCount * 100) : 0;
+    }
+
     private void ToggleView()
     {
         isCardView = !isCardView;
+        if (isCardView)
+        {
+            ApplySortingForCardView();
+        }
+    }
+
+    private void OnSortChanged(string sortField)
+    {
+        currentSortField = sortField;
+        ApplySortingForCardView();
+    }
+
+    private void ToggleSortDirection()
+    {
+        isDescending = !isDescending;
+        ApplySortingForCardView();
+    }
+
+    private void ApplySortingForCardView()
+    {
+        if (!isCardView) return;
+
+        var query = filteredTasks.AsQueryable();
+
+        query = currentSortField switch
+        {
+            "CreatedAt" => isDescending ? query.OrderByDescending(t => t.CreatedAt) : query.OrderBy(t => t.CreatedAt),
+            "DueDate" => isDescending ? query.OrderByDescending(t => t.DueDate ?? DateTime.MaxValue) : query.OrderBy(t => t.DueDate ?? DateTime.MaxValue),
+            "PriorityId" => isDescending ? query.OrderByDescending(t => t.PriorityId) : query.OrderBy(t => t.PriorityId),
+            "StatusId" => isDescending ? query.OrderByDescending(t => t.StatusId) : query.OrderBy(t => t.StatusId),
+            "Title" => isDescending ? query.OrderByDescending(t => t.Title) : query.OrderBy(t => t.Title),
+            _ => query.OrderByDescending(t => t.CreatedAt)
+        };
+
+        sortedFilteredTasks = query.ToList();
     }
 
     private string GetTaskCountSuffix(int count)
@@ -432,7 +528,7 @@
             return "задачи";
         return "задач";
     }
-    
+
     private Color GetStatusColor(int statusId)
     {
         return statusId switch
@@ -568,6 +664,9 @@
                     .ToList();
             }
 
+            // Загружаем прогресс подзадач для всех задач
+            await LoadSubTasksProgressAsync();
+
             ApplyFilters();
         }
         catch (Exception ex)
@@ -577,6 +676,34 @@
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private async Task LoadSubTasksProgressAsync()
+    {
+        taskSubTasksProgress.Clear();
+
+        foreach (var task in tasks)
+        {
+            try
+            {
+                var subTasks = await SubTaskService.GetByParentTaskIdAsync(task.Id);
+                var subTasksList = subTasks.ToList();
+
+                if (subTasksList.Any())
+                {
+                    var completedCount = subTasksList.Count(st => st.StatusId == 5);
+                    taskSubTasksProgress[task.Id] = new SubTaskProgress
+                    {
+                        TotalCount = subTasksList.Count,
+                        CompletedCount = completedCount
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при загрузке подзадач для задачи {task.Id}: {ex.Message}");
+            }
         }
     }
 
@@ -602,6 +729,12 @@
         if (selectedDepartmentId.HasValue)
         {
             filteredTasks = filteredTasks.Where(t => t.DepartmentId == selectedDepartmentId.Value).ToList();
+        }
+
+        // Применяем сортировку для карточного вида
+        if (isCardView)
+        {
+            ApplySortingForCardView();
         }
 
         table?.ReloadServerData();
@@ -641,43 +774,34 @@
 
         var sortedTasks = filteredTasks;
 
-        // Сортировка
+        // Сортировка для таблицы
         if (!string.IsNullOrEmpty(state.SortLabel))
         {
-            Comparison<TaskModel>? comparison = null;
-            switch (state.SortLabel)
+            var sortField = state.SortLabel;
+            var sortedQuery = sortField switch
             {
-                case "Title":
-                    comparison = (a, b) => string.Compare(a.Title, b.Title, StringComparison.Ordinal);
-                    break;
-                case "StatusId":
-                    comparison = (a, b) => a.StatusId.CompareTo(b.StatusId);
-                    break;
-                case "PriorityId":
-                    comparison = (a, b) => a.PriorityId.CompareTo(b.PriorityId);
-                    break;
-                case "AssigneeName":
-                    comparison = (a, b) => string.Compare(a.AssigneeName ?? "", b.AssigneeName ?? "", StringComparison.Ordinal);
-                    break;
-                case "DueDate":
-                    comparison = (a, b) => Nullable.Compare(a.DueDate, b.DueDate);
-                    break;
-                case "CreatedAt":
-                    comparison = (a, b) => a.CreatedAt.CompareTo(b.CreatedAt);
-                    break;
-            }
+                "Title" => state.SortDirection == SortDirection.Descending
+                    ? sortedTasks.OrderByDescending(x => x.Title)
+                    : sortedTasks.OrderBy(x => x.Title),
+                "StatusId" => state.SortDirection == SortDirection.Descending
+                    ? sortedTasks.OrderByDescending(x => x.StatusId)
+                    : sortedTasks.OrderBy(x => x.StatusId),
+                "PriorityId" => state.SortDirection == SortDirection.Descending
+                    ? sortedTasks.OrderByDescending(x => x.PriorityId)
+                    : sortedTasks.OrderBy(x => x.PriorityId),
+                "AssigneeName" => state.SortDirection == SortDirection.Descending
+                    ? sortedTasks.OrderByDescending(x => x.AssigneeName ?? string.Empty)
+                    : sortedTasks.OrderBy(x => x.AssigneeName ?? string.Empty),
+                "DueDate" => state.SortDirection == SortDirection.Descending
+                    ? sortedTasks.OrderByDescending(x => x.DueDate ?? DateTime.MaxValue)
+                    : sortedTasks.OrderBy(x => x.DueDate ?? DateTime.MaxValue),
+                "CreatedAt" => state.SortDirection == SortDirection.Descending
+                    ? sortedTasks.OrderByDescending(x => x.CreatedAt)
+                    : sortedTasks.OrderBy(x => x.CreatedAt),
+                _ => sortedTasks.OrderByDescending(x => x.CreatedAt)
+            };
 
-            if (comparison != null)
-            {
-                if (state.SortDirection == SortDirection.Descending)
-                {
-                    sortedTasks = sortedTasks.OrderByDescending(x => x, Comparer<TaskModel>.Create(comparison)).ToList();
-                }
-                else
-                {
-                    sortedTasks = sortedTasks.OrderBy(x => x, Comparer<TaskModel>.Create(comparison)).ToList();
-                }
-            }
+            sortedTasks = sortedQuery.ToList();
         }
 
         // Пагинация
@@ -720,6 +844,12 @@
         {
             await LoadTasksAsync();
         }
+    }
+
+    private class StatusModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
     }
 
     private class PriorityModel

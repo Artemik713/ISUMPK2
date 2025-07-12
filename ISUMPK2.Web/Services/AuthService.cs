@@ -26,6 +26,19 @@ namespace ISUMPK2.Web.Services
             _localStorage = localStorage;
             _navigationManager = navigationManager;
         }
+
+        public async Task<string> GetTokenAsync()
+        {
+            try
+            {
+                return await _localStorage.GetItemAsync<string>("authToken") ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
         public async Task RefreshTokenIfNeededAsync()
         {
             try
@@ -79,12 +92,20 @@ namespace ISUMPK2.Web.Services
                 _navigationManager.NavigateTo("/account/login", true);
             }
         }
+
         public async Task<LoginResult> Login(LoginModel loginModel)
         {
+            Console.WriteLine($"Начало входа для пользователя: {loginModel.UserName}");
+
+            // Полная очистка всех данных предыдущей сессии
+            await ForceLogout();
+
             var response = await _httpClient.PostAsJsonAsync("api/auth/login", loginModel);
 
             if (!response.IsSuccessStatusCode)
             {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Ошибка входа: {response.StatusCode} - {errorContent}");
                 return new LoginResult { Successful = false, Error = "Неверное имя пользователя или пароль" };
             }
 
@@ -95,35 +116,89 @@ namespace ISUMPK2.Web.Services
                 return new LoginResult { Successful = false, Error = "Неверный ответ сервера" };
             }
 
+            Console.WriteLine($"Успешный вход. Пользователь: {userLoginResponse.UserName}, Роли: {string.Join(", ", userLoginResponse.Roles)}");
+
+            // Сохраняем новые данные
             await _localStorage.SetItemAsync("authToken", userLoginResponse.Token);
             await _localStorage.SetItemAsync("userId", userLoginResponse.Id);
             await _localStorage.SetItemAsync("userName", userLoginResponse.UserName);
             await _localStorage.SetItemAsync("userRoles", userLoginResponse.Roles);
             await _localStorage.SetItemAsync("tokenExpiration", userLoginResponse.TokenExpiration);
 
+            // Устанавливаем заголовок авторизации
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", userLoginResponse.Token);
+
             // Обновление состояния аутентификации
             _authenticationStateProvider.MarkUserAsAuthenticated(userLoginResponse);
             AuthenticationChanged?.Invoke(true);
 
-            // Установка заголовка авторизации для HTTP запросов
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", userLoginResponse.Token);
+            Console.WriteLine("Токен установлен, состояние обновлено");
 
             return new LoginResult { Successful = true };
         }
 
+        private async Task ForceLogout()
+        {
+            try
+            {
+                Console.WriteLine("Принудительная очистка сессии...");
+
+                // Очищаем все возможные ключи localStorage
+                var keysToRemove = new[] {
+            "authToken", "userId", "userName", "userRoles", "tokenExpiration",
+            "user", "token", "currentUser", "authData"
+        };
+
+                foreach (var key in keysToRemove)
+                {
+                    await _localStorage.RemoveItemAsync(key);
+                }
+
+                // Очищаем заголовки HTTP клиента
+                _httpClient.DefaultRequestHeaders.Clear();
+                _httpClient.DefaultRequestHeaders.Authorization = null;
+
+                // Уведомляем о выходе
+                _authenticationStateProvider.MarkUserAsLoggedOut();
+                AuthenticationChanged?.Invoke(false);
+
+                Console.WriteLine("Сессия очищена полностью");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при очистке сессии: {ex.Message}");
+            }
+        }
+
+        public async Task<bool> ChangePasswordAsync(string currentPassword, string newPassword)
+        {
+            var token = await _localStorage.GetItemAsync<string>("authToken");
+            if (string.IsNullOrEmpty(token))
+                return false;
+
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var changePasswordDto = new
+            {
+                CurrentPassword = currentPassword,
+                NewPassword = newPassword
+            };
+
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("api/auth/change-password", changePasswordDto);
+                return response.IsSuccessStatusCode;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         public async Task Logout()
         {
-            await _localStorage.RemoveItemAsync("authToken");
-            await _localStorage.RemoveItemAsync("userId");
-            await _localStorage.RemoveItemAsync("userName");
-            await _localStorage.RemoveItemAsync("userRoles");
-            await _localStorage.RemoveItemAsync("tokenExpiration");
-
-            ((ApiAuthenticationStateProvider)_authenticationStateProvider).MarkUserAsLoggedOut();
-            AuthenticationChanged?.Invoke(false);
-
-            _httpClient.DefaultRequestHeaders.Authorization = null;
+            await ForceLogout();
         }
 
         public async Task<bool> IsUserAuthenticated()

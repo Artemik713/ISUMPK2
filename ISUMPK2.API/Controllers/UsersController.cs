@@ -24,11 +24,54 @@ namespace ISUMPK2.API.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Administrator,GeneralDirector")]
+        [Authorize] // Любой авторизованный пользователь может получить список для чата
         public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsers()
         {
-            var users = await _userService.GetAllUsersAsync();
-            return Ok(users);
+            try
+            {
+                Console.WriteLine("=== UsersController.GetAllUsers ===");
+
+                // Получаем текущего пользователя
+                var currentUserIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                Console.WriteLine($"Current user ID string: {currentUserIdString}");
+
+                if (!Guid.TryParse(currentUserIdString, out var currentUserId))
+                {
+                    Console.WriteLine("Failed to parse current user ID");
+                    return Unauthorized();
+                }
+
+                Console.WriteLine($"Пользователь {currentUserId} запрашивает список всех пользователей для чата");
+
+                // ДЛЯ ЧАТА: Все авторизованные пользователи видят всех других пользователей
+                var users = await _userService.GetAllUsersAsync();
+
+                Console.WriteLine($"Возвращаем {users?.Count() ?? 0} пользователей");
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetAllUsers: {ex.Message}");
+                _logger.LogError(ex, "Ошибка при получении списка пользователей");
+                return StatusCode(500, new { message = "Ошибка сервера" });
+            }
+        }
+
+        // Добавьте отдельный endpoint для админских функций
+        [HttpGet("admin")]
+        [Authorize(Roles = "Administrator,GeneralDirector")]
+        public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsersForAdmin()
+        {
+            try
+            {
+                var users = await _userService.GetAllUsersAsync();
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении всех пользователей для админа");
+                return StatusCode(500, new { message = "Ошибка сервера" });
+            }
         }
 
         // В ISUMPK2.API/Controllers/UsersController.cs
@@ -138,24 +181,39 @@ namespace ISUMPK2.API.Controllers
             return Ok(user);
         }
 
-
-        // Добавленный метод для получения текущего пользователя
         [HttpGet("current")]
         [Authorize] // Доступен всем авторизованным
         public async Task<ActionResult<UserDto>> GetCurrentUser()
         {
             try
             {
+                // Добавляем отладочную информацию
+                _logger.LogInformation("=== ОТЛАДКА GetCurrentUser ===");
+                _logger.LogInformation($"User.Identity.IsAuthenticated: {User.Identity.IsAuthenticated}");
+                _logger.LogInformation($"User.Identity.Name: {User.Identity.Name}");
+
+                // Выводим все claims для отладки
+                foreach (var claim in User.Claims)
+                {
+                    _logger.LogInformation($"Claim: {claim.Type} = {claim.Value}");
+                }
+
                 var userId = GetCurrentUserId();
+                _logger.LogInformation($"Parsed userId: {userId}");
+
                 var user = await _userService.GetUserByIdAsync(userId);
                 if (user == null)
                 {
+                    _logger.LogWarning($"Пользователь с ID {userId} не найден в базе данных");
                     return NotFound("Пользователь не найден");
                 }
+
+                _logger.LogInformation($"Найден пользователь: {user.UserName}, роли: {string.Join(", ", user.Roles)}");
                 return Ok(user);
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex)
             {
+                _logger.LogWarning($"Неавторизованный доступ: {ex.Message}");
                 return Unauthorized("Пользователь не авторизован");
             }
             catch (Exception ex)
@@ -165,12 +223,19 @@ namespace ISUMPK2.API.Controllers
             }
         }
 
-        // Добавленный вспомогательный метод для получения ID текущего пользователя
         private Guid GetCurrentUserId()
         {
-            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // Пробуем разные варианты получения ID пользователя
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                              ?? User.FindFirst("nameid")?.Value
+                              ?? User.FindFirst("sub")?.Value
+                              ?? User.Identity.Name;
+
+            _logger.LogInformation($"Попытка парсинга userId из строки: '{userIdString}'");
+
             if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
             {
+                _logger.LogError($"Не удалось спарсить userId из строки: '{userIdString}'");
                 throw new UnauthorizedAccessException("Пользователь не авторизован или ID некорректный");
             }
             return userId;

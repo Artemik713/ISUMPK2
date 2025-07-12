@@ -153,9 +153,42 @@ namespace ISUMPK2.Web.Services
 
         public async Task<IEnumerable<MaterialTransactionDto>> GetTransactionsByDateRangeAsync(DateTime startDate, DateTime endDate)
         {
-            var transactions = await _httpClient.GetFromJsonAsync<IEnumerable<MaterialTransactionDto>>(
-                $"api/materials/transactions?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}", _jsonOptions);
-            return transactions ?? Enumerable.Empty<MaterialTransactionDto>();
+            try
+            {
+                // Нормализуем даты
+                startDate = startDate.Date;
+                endDate = endDate.Date.AddDays(1).AddTicks(-1);
+
+                // Корректный порядок дат
+                if (endDate < startDate)
+                {
+                    var temp = startDate;
+                    startDate = endDate;
+                    endDate = temp;
+                }
+
+                Console.WriteLine($"Запрос транзакций за период: {startDate:yyyy-MM-dd} - {endDate:yyyy-MM-dd}");
+
+                // Используем стандартный формат ISO для передачи дат
+                var url = $"api/materials/transactions?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Ошибка API: {response.StatusCode}, {errorContent}");
+                    return Enumerable.Empty<MaterialTransactionDto>();
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<IEnumerable<MaterialTransactionDto>>(_jsonOptions);
+                return result ?? Enumerable.Empty<MaterialTransactionDto>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Исключение при получении транзакций: {ex.Message}");
+                // Возвращаем пустую коллекцию вместо исключения
+                return Enumerable.Empty<MaterialTransactionDto>();
+            }
         }
 
         public async Task<IEnumerable<MaterialTransactionDto>> GetTransactionsByMaterialAsync(Guid materialId)

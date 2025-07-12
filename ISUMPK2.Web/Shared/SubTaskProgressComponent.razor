@@ -1,0 +1,44 @@
+﻿@using ISUMPK2.Web.Services
+@using MudBlazor
+
+@if (ShowProgress)
+{
+    <div class="subtask-progress-container">
+        @if (ShowLabel)
+        {
+            <div class="d-flex justify-space-between align-center mb-1">
+                <MudText Typo="Typo.caption">Прогресс:</MudText>
+                <MudText Typo="Typo.caption">@CompletedCount/@TotalCount подзадач</MudText>
+            </div>
+        }
+        <MudProgressLinear Color="@ProgressColor" Value="@Percentage" Size="@ProgressSize" Class="@Class" />
+        @if (ShowPercentage)
+        {
+            <MudText Typo="Typo.caption" Class="mt-1">@Percentage%</MudText>
+        }
+    </div>
+}
+else if (ShowNoSubTasksMessage)
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary">Нет подзадач</MudText>
+}
+
+@code {
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public int CompletedCount { get; set; }
+    [Parameter] public bool ShowLabel { get; set; } = true;
+    [Parameter] public bool ShowPercentage { get; set; } = false;
+    [Parameter] public bool ShowNoSubTasksMessage { get; set; } = true;
+    [Parameter] public Color ProgressColor { get; set; } = Color.Primary;
+    [Parameter] public Size ProgressSize { get; set; } = Size.Small;
+    [Parameter] public string Class { get; set; } = string.Empty;
+
+    private bool ShowProgress => TotalCount > 0;
+    private int Percentage => TotalCount > 0 ? (int)((double)CompletedCount / TotalCount * 100) : 0;
+}
+
+<style>
+    .subtask-progress-container {
+        min-width: 120px;
+    }
+</style>
