@@ -91,6 +91,7 @@ namespace ISUMPK2.Web
             builder.Services.AddScoped<IDepartmentService, DepartmentService>();
             builder.Services.AddScoped<IJwtTokenGenerator, WebAssemblyJwtTokenGenerator>();
             builder.Services.AddScoped<IPasswordHasher<User>, DummyPasswordHasher>();
+            builder.Services.AddScoped<IFileService, FileService>();
 
             // Настройка SignalR для уведомлений и чата
             builder.Services.AddScoped<INotificationHubService, NotificationHubService>();

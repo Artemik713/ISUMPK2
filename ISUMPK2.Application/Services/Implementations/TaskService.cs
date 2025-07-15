@@ -347,15 +347,111 @@ namespace ISUMPK2.Application.Services.Implementations
             if (user == null)
                 throw new ApplicationException($"User with ID {userId} not found.");
 
-            // Проверяем, имеет ли пользователь право изменять статус задачи
-            bool canUpdateStatus = task.AssigneeId == userId || task.CreatorId == userId;
-
-            // Проверяем роли пользователя
+            // Получаем роли пользователя
             var userRoles = await _userRepository.GetRolesAsync(userId);
-            bool isManager = userRoles.Any(r => r == "GeneralDirector" || r == "MetalShopManager" || r == "PaintShopManager");
+            bool isManager = userRoles.Any(r => r == "Administrator" || r == "GeneralDirector" || r == "MetalShopManager" || r == "PaintShopManager");
 
-            if (!canUpdateStatus && !isManager)
-                throw new ApplicationException("You don't have permission to update this task's status.");
+            // Проверяем права в зависимости от статуса
+            bool canUpdateStatus = false;
+            string errorMessage = "";
+
+            switch (statusDto.StatusId)
+            {
+                case 2: // "Взять в работу" - только исполнитель или менеджеры
+                    if (isManager)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else if (task.AssigneeId == userId)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else
+                    {
+                        errorMessage = "Только исполнитель может взять задачу в работу";
+                    }
+                    break;
+
+                case 3: // "На доработку" - только создатель или менеджеры
+                    if (isManager)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else if (task.CreatorId == userId)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else
+                    {
+                        errorMessage = "Только создатель задачи может отправить её на доработку";
+                    }
+                    break;
+
+                case 4: // "На проверку" - только исполнитель или менеджеры
+                    if (isManager)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else if (task.AssigneeId == userId)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else
+                    {
+                        errorMessage = "Только исполнитель может отправить задачу на проверку";
+                    }
+                    break;
+
+                case 5: // "Выполнено" - только создатель или менеджеры
+                    if (isManager)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else if (task.CreatorId == userId)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else
+                    {
+                        errorMessage = "Только создатель задачи может подтвердить её выполнение";
+                    }
+                    break;
+
+                case 6: // "Отклонено" - только создатель или менеджеры
+                    if (isManager)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else if (task.CreatorId == userId)
+                    {
+                        canUpdateStatus = true;
+                    }
+                    else
+                    {
+                        errorMessage = "Только создатель задачи может отклонить её";
+                    }
+                    break;
+
+                default:
+                    // Для остальных статусов проверяем общие права
+                    canUpdateStatus = task.AssigneeId == userId || task.CreatorId == userId || isManager;
+                    if (!canUpdateStatus)
+                    {
+                        errorMessage = "У вас нет прав для изменения статуса этой задачи";
+                    }
+                    break;
+            }
+
+            if (!canUpdateStatus)
+            {
+                throw new ApplicationException(errorMessage);
+            }
+
+            // Дополнительная проверка последовательности статусов
+            if (!IsValidStatusTransition(task.StatusId, statusDto.StatusId))
+            {
+                throw new ApplicationException($"Недопустимый переход статуса с '{GetStatusName(task.StatusId)}' на '{GetStatusName(statusDto.StatusId)}'");
+            }
 
             // Сохраняем предыдущий статус для уведомления
             var previousStatusId = task.StatusId;
@@ -363,6 +459,12 @@ namespace ISUMPK2.Application.Services.Implementations
             // Обновляем статус
             task.StatusId = statusDto.StatusId;
             task.UpdatedAt = DateTime.UtcNow;
+
+            // Если задача взята в работу, устанавливаем дату начала
+            if (task.StatusId == 2 && !task.StartDate.HasValue)
+            {
+                task.StartDate = DateTime.UtcNow;
+            }
 
             // Если задача выполнена и не указана дата завершения, устанавливаем её
             if (task.StatusId == 5 && !task.CompletedDate.HasValue)
@@ -396,7 +498,35 @@ namespace ISUMPK2.Application.Services.Implementations
             var updatedTask = await _taskRepository.GetByIdAsync(id);
             return MapTaskToDto(updatedTask);
         }
+        private bool IsValidStatusTransition(int currentStatus, int newStatus)
+        {
+            // Матрица допустимых переходов статусов
+            var validTransitions = new Dictionary<int, int[]>
+            {
+                { 1, new int[] { 2 } },                    // Создана -> В работе
+                { 2, new int[] { 3, 4 } },                 // В работе -> На доработке, На проверке
+                { 3, new int[] { 2, 4 } },                 // На доработке -> В работе, На проверке
+                { 4, new int[] { 3, 5, 6 } },              // На проверке -> На доработке, Выполнена, Отклонена
+                { 5, new int[] { } },                       // Выполнена -> (финальный статус)
+                { 6, new int[] { 1, 2 } }                   // Отклонена -> Создана, В работе
+            };
 
+            return validTransitions.ContainsKey(currentStatus) &&
+                   validTransitions[currentStatus].Contains(newStatus);
+        }
+        private string GetStatusName(int statusId)
+        {
+            return statusId switch
+            {
+                1 => "Создана",
+                2 => "В работе",
+                3 => "На доработке",
+                4 => "На проверке",
+                5 => "Выполнена",
+                6 => "Отклонена",
+                _ => "Неизвестный статус"
+            };
+        }
         public async Task DeleteTaskAsync(Guid id)
         {
             var task = await _taskRepository.GetByIdAsync(id);

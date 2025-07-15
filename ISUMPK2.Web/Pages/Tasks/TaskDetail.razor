@@ -1,4 +1,4 @@
-﻿@page "/tasks/{id:guid}"
+﻿@page "/tasks/{Id:guid}"
 @attribute [Authorize]
 @using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
@@ -56,13 +56,13 @@ else
                     <div class="d-flex flex-column gap-2 mt-3">
                         <div class="d-flex">
                             <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Статус:</MudText>
-                            <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), task.StatusBadgeColor, true))"
+                            <MudChip T="string" Color="@GetStatusColor(task.StatusId)"
                                      Size="Size.Small">@task.StatusName</MudChip>
                         </div>
 
                         <div class="d-flex">
                             <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Приоритет:</MudText>
-                            <MudChip T="string" Color="@((MudBlazor.Color)Enum.Parse(typeof(MudBlazor.Color), task.PriorityBadgeColor, true))"
+                            <MudChip T="string" Color="@GetPriorityColor(task.PriorityId)"
                                      Size="Size.Small">@task.PriorityName</MudChip>
                         </div>
 
@@ -87,7 +87,7 @@ else
                                 <MudText Typo="Typo.body2">
                                     @(task.DueDate.HasValue? task.DueDate.Value.ToString("dd.MM.yyyy") : "Не указан")
                                 </MudText>
-                                @if (task.IsOverdue)
+                                @if (IsTaskOverdue(task))
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" Class="ml-1" />
                                 }
@@ -100,36 +100,108 @@ else
                         </div>
                     </div>
 
-                    @if (task.StatusId != 5) // Если задача не выполнена
+                    @if (task.StatusId != 5 && task.StatusId != 6) // Если задача не выполнена и не отклонена
                     {
                         <MudDivider Class="my-3" />
-                        <div class="d-flex gap-2">
-                            @if (task.StatusId == 1)
+                        <div class="d-flex gap-2 flex-wrap">
+                            @* Кнопка "Взять в работу" - только для исполнителя *@
+                            @if (task.StatusId == 1 && CanExecutorTakeTask())
                             {
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                           OnClick="@(() => ShowUpdateStatusDialog(2))">
+                                           OnClick="@(() => UpdateTaskStatus(2))">
                                     Взять в работу
                                 </MudButton>
                             }
-                            @if (task.StatusId == 2 || task.StatusId == 3)
+
+                            @* Кнопка "На проверку" - только для исполнителя *@
+                            @if ((task.StatusId == 2 || task.StatusId == 3) && CanExecutorSendForReview())
                             {
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                           OnClick="@(() => ShowUpdateStatusDialog(4))">
-                                    На проверку
+                                           OnClick="@(() => UpdateTaskStatus(4))">
+                                    Отправить на проверку
                                 </MudButton>
                             }
+
+                            @* Кнопки "Выполнено" и "На доработку" - только для создателя *@
                             @if (task.StatusId == 4)
                             {
-                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                           OnClick="@(() => ShowUpdateStatusDialog(5))">
-                                    Выполнено
-                                </MudButton>
-                                <MudButton Variant="Variant.Filled" Color="Color.Warning" Size="Size.Small"
-                                           OnClick="@(() => ShowUpdateStatusDialog(3))">
-                                    На доработку
-                                </MudButton>
+                                @if (CanCreatorMarkComplete())
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                               OnClick="@(() => UpdateTaskStatus(5))">
+                                        Подтвердить выполнение
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Warning" Size="Size.Small"
+                                               OnClick="@(() => UpdateTaskStatus(3))">
+                                        Отправить на доработку
+                                    </MudButton>
+                                }
+                                else
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                                        Только создатель задачи может подтвердить её выполнение или отправить на доработку
+                                    </MudAlert>
+                                }
+                            }
+
+                            @* Информационные сообщения для других статусов *@
+                            @if (task.StatusId == 1 && !CanExecutorTakeTask())
+                            {
+                                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                                    @if (task.AssigneeId.HasValue)
+                                    {
+                                        <span>Только исполнитель (@task.AssigneeName) может взять задачу в работу</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Задача не назначена исполнителю</span>
+                                    }
+                                </MudAlert>
+                            }
+
+                            @if ((task.StatusId == 2 || task.StatusId == 3) && !CanExecutorSendForReview())
+                            {
+                                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                                    Только исполнитель (@task.AssigneeName) может отправить задачу на проверку
+                                </MudAlert>
                             }
                         </div>
+
+                        @* Дополнительная информация о правах *@
+                        <MudExpansionPanels Class="mt-3">
+                            <MudExpansionPanel Text="Информация о правах доступа">
+                                <div class="pa-2">
+                                    <MudText Typo="Typo.body2" Class="mb-2">
+                                        <strong>Ваша роль в задаче:</strong>
+                                        @if (currentUser?.Id == task.CreatorId)
+                                        {
+                                            <MudChip T="string" Color="Color.Primary" Size="Size.Small">Создатель</MudChip>
+                                        }
+                                        @if (currentUser?.Id == task.AssigneeId)
+                                        {
+                                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small">Исполнитель</MudChip>
+                                        }
+                                        @if (IsAdminOrManager())
+                                        {
+                                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Менеджер</MudChip>
+                                        }
+                                        @if (currentUser?.Id != task.CreatorId && currentUser?.Id != task.AssigneeId && !IsAdminOrManager())
+                                        {
+                                            <MudChip T="string" Color="Color.Default" Size="Size.Small">Наблюдатель</MudChip>
+                                        }
+                                    </MudText>
+
+                                    <MudText Typo="Typo.body2" Class="mb-2">
+                                        <strong>Права:</strong>
+                                    </MudText>
+                                    <ul style="margin: 8px 0; padding-left: 20px;">
+                                        <li>Исполнитель может: взять в работу, отправить на проверку</li>
+                                        <li>Создатель может: подтвердить выполнение, отправить на доработку</li>
+                                        <li>Менеджеры могут: выполнять любые действия</li>
+                                    </ul>
+                                </div>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
                     }
                 </MudPaper>
             </MudItem>
@@ -163,6 +235,19 @@ else
                 </MudPaper>
             </MudItem>
 
+            @if (IsWorkerOrAssignee())
+            {
+                <MudItem xs="12">
+                    <MudButton StartIcon="@Icons.Material.Filled.Warning"
+                               Color="Color.Error"
+                               Variant="Variant.Outlined"
+                               OnClick="@ReportEmergency"
+                               Class="ml-2">
+                        Сообщить о ЧС
+                    </MudButton>
+                </MudItem>
+            }
+
             <!-- Подзадачи -->
             <MudItem xs="12">
                 <MudPaper Elevation="0" Class="pa-4 border-solid border-1">
@@ -182,8 +267,6 @@ else
                                         <th>Статус</th>
                                         <th>Исполнитель</th>
                                         <th>Срок</th>
-                                        <!-- Удалить этот столбец -->
-                                        <!-- <th></th> -->
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -206,43 +289,6 @@ else
                         </div>
                     }
                 </MudPaper>
-            </MudItem>
-
-            <!-- Информация о продукте -->
-            <MudItem xs="12">
-                @if (task.ProductId.HasValue)
-                {
-                    <MudPaper Elevation="0" Class="pa-4 border-solid border-1">
-                        <div class="d-flex justify-space-between align-center mb-2">
-                            <MudText Typo="Typo.subtitle1">Информация о продукте</MudText>
-                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                                       Href="@($"/products/{task.ProductId}")">
-                                Открыть страницу продукта
-                            </MudButton>
-                        </div>
-
-                        <div class="d-flex flex-column gap-2 mt-3">
-                            <div class="d-flex">
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Продукт:</MudText>
-                                <MudText Typo="Typo.body2">
-                                    @(string.IsNullOrEmpty(task.ProductName) ? "Не указан" : task.ProductName)
-                                </MudText>
-                            </div>
-
-                            @if (task.Quantity.HasValue)
-                            {
-                                <div class="d-flex">
-                                    <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="width:120px">Количество:</MudText>
-                                    <MudText Typo="Typo.body2">@task.Quantity.Value шт.</MudText>
-                                </div>
-                            }
-                            @if (task != null)
-                            {
-                                <MudText Typo="Typo.caption" Class="mb-2">Debug: ProductId=@(task.ProductId?.ToString() ?? "null"), ProductName=@(task.ProductName ?? "null")</MudText>
-                            }
-                        </div>
-                    </MudPaper>
-                }
             </MudItem>
 
             <!-- Секция материалов -->
@@ -273,6 +319,7 @@ else
                     }
                 </MudPaper>
             </MudItem>
+
             <!-- Комментарии -->
             <MudItem xs="12">
                 <MudPaper Elevation="0" Class="pa-4 border-solid border-1">
@@ -326,23 +373,25 @@ else
 </style>
 
 @code {
-    [Parameter]
-    public Guid id { get; set; }
+    [Parameter] public Guid Id { get; set; }
+
+    private TaskDto task = new TaskDto();
+    private UserDto currentUser;
+    private bool isLoading = true;
+    private bool isProcessingStatus = false;
     private bool canEditTask = false;
     private List<string> userRoles = new List<string>();
+    private List<string> currentUserRoles = new List<string>();
     private Guid currentUserId;
-    private TaskModel? task;
-    private bool isLoading = true;
     private string newComment = "";
     private List<SubTaskModel> subTasks = new List<SubTaskModel>();
     private List<TaskMaterialModel> taskMaterials = new List<TaskMaterialModel>();
 
     protected override async Task OnInitializedAsync()
     {
-        // Получаем текущего пользователя и его роли
+        await LoadData();
         await GetCurrentUserInfo();
-        await LoadTaskAsync();
-        // В методе OnInitializedAsync в TaskDetail.razor
+
         if (task != null && task.Id != Guid.Empty)
         {
             try
@@ -359,7 +408,6 @@ else
                     UnitOfMeasure = m.UnitOfMeasure ?? "шт."
                 }).ToList() ?? new List<TaskMaterialModel>();
 
-                // Добавьте логирование для отладки
                 foreach (var material in taskMaterials)
                 {
                     Console.WriteLine($"Материал: {material.MaterialName}, Количество: {material.Quantity}");
@@ -372,14 +420,43 @@ else
                 taskMaterials = new List<TaskMaterialModel>();
             }
         }
-    }
 
+        await LoadSubTasksAsync();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (id != Guid.Empty)
+        if (Id != Guid.Empty)
         {
-            await LoadTaskAsync();
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            task = await TaskService.GetTaskByIdAsync(Id);
+            var userInfoResponse = await AuthService.GetUserInfoAsync();
+
+            if (task == null)
+            {
+                Snackbar.Add("Задача не найдена", Severity.Warning);
+                NavigationManager.NavigateTo("/tasks");
+                return;
+            }
+
+            await LoadAssigneeInfoAsync();
+            CheckEditPermissions();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке задачи: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
 
@@ -387,38 +464,39 @@ else
     {
         try
         {
-            // Получаем ID пользователя из localStorage
             var userIdString = await _localStorage.GetItemAsync<string>("userId");
             if (!string.IsNullOrEmpty(userIdString) && Guid.TryParse(userIdString, out Guid userId))
             {
                 currentUserId = userId;
 
-                // Получаем имя текущего пользователя из localStorage
                 var userName = await _localStorage.GetItemAsync<string>("userName") ?? "";
                 Console.WriteLine($"Имя пользователя: {userName}");
 
-                // Особая проверка для конкретных пользователей
                 if (userName.Equals("artemik713", StringComparison.OrdinalIgnoreCase))
                 {
                     userRoles = new List<string> { "MetalShopManager" };
+                    currentUserRoles = new List<string> { "MetalShopManager" };
                 }
                 else if (userName.Contains("admin", StringComparison.OrdinalIgnoreCase))
                 {
                     userRoles = new List<string> { "Administrator" };
+                    currentUserRoles = new List<string> { "Administrator" };
                 }
                 else if (userName.Contains("manager", StringComparison.OrdinalIgnoreCase) ||
                          userName.Contains("MetalShopManager", StringComparison.OrdinalIgnoreCase))
                 {
                     userRoles = new List<string> { "MetalShopManager" };
+                    currentUserRoles = new List<string> { "MetalShopManager" };
                 }
                 else if (userName.Contains("worker", StringComparison.OrdinalIgnoreCase))
                 {
                     userRoles = new List<string> { "Worker" };
+                    currentUserRoles = new List<string> { "Worker" };
                 }
                 else
                 {
-                    // По умолчанию - обычный пользователь
                     userRoles = new List<string> { "User" };
+                    currentUserRoles = new List<string> { "User" };
                 }
 
                 Console.WriteLine($"Назначены роли: {string.Join(", ", userRoles)}");
@@ -433,6 +511,7 @@ else
             Console.WriteLine($"Ошибка при получении данных пользователя: {ex.Message}");
         }
     }
+
     private void CheckEditPermissions()
     {
         if (task == null)
@@ -441,25 +520,16 @@ else
             return;
         }
 
-        // Выводим текущие роли для отладки
         Console.WriteLine($"Текущие роли: {string.Join(", ", userRoles)}");
 
-        // Проверяем конкретные роли
-        bool isAdmin = userRoles.Any(r =>
-            r == "Administrator" || r == "Admin");
-
-        bool isManager = userRoles.Any(r =>
-            r == "MetalShopManager" || r == "PaintShopManager" ||
-            r.Contains("Manager"));
-
+        bool isAdmin = userRoles.Any(r => r == "Administrator" || r == "Admin");
+        bool isManager = userRoles.Any(r => r == "MetalShopManager" || r == "PaintShopManager" || r.Contains("Manager"));
         bool isAdminOrManager = isAdmin || isManager;
         bool isCreator = task.CreatorId == currentUserId;
         bool isWorker = userRoles.Any(r => r == "Worker");
 
-        // Разрешаем редактирование для администраторов и менеджеров
         canEditTask = isAdminOrManager && !isWorker;
 
-        // Подробный лог для отладки
         Console.WriteLine($"Проверка прав: canEdit={canEditTask}, isAdmin={isAdmin}, " +
             $"isManager={isManager}, isCreator={isCreator}, isWorker={isWorker}");
     }
@@ -468,7 +538,7 @@ else
     {
         try
         {
-            var subTasksDto = await SubTaskService.GetByParentTaskIdAsync(id);
+            var subTasksDto = await SubTaskService.GetByParentTaskIdAsync(Id);
             subTasks = subTasksDto.Select(dto => new SubTaskModel
             {
                 Id = dto.Id,
@@ -508,53 +578,95 @@ else
         }
     }
 
-    private async Task LoadTaskAsync()
+    // Проверки прав доступа
+    private bool HasAccessToTask()
     {
-        isLoading = true;
-        await LoadSubTasksAsync();
+        if (currentUser == null) return false;
+        if (IsAdminOrManager()) return true;
+        return currentUser.Id == task.CreatorId || currentUser.Id == task.AssigneeId;
+    }
 
+    private bool IsAdminOrManager()
+    {
+        if (currentUser?.Roles == null) return false;
+        var adminRoles = new[] { "Administrator", "GeneralDirector", "MetalShopManager", "PaintShopManager" };
+        return currentUser.Roles.Any(role => adminRoles.Contains(role));
+    }
+
+    private bool CanExecutorTakeTask()
+    {
+        if (currentUser == null || task == null) return false;
+        if (IsAdminOrManager()) return true;
+        return currentUser.Id == task.AssigneeId;
+    }
+
+    private bool CanExecutorSendForReview()
+    {
+        if (currentUser == null || task == null) return false;
+        if (IsAdminOrManager()) return true;
+        return currentUser.Id == task.AssigneeId;
+    }
+
+    private bool CanCreatorMarkComplete()
+    {
+        if (currentUser == null || task == null) return false;
+        if (IsAdminOrManager()) return true;
+        return currentUser.Id == task.CreatorId;
+    }
+
+    private bool IsWorkerOrAssignee()
+    {
+        if (task == null) return false;
+        return task.AssigneeId == currentUserId || currentUserRoles.Contains("Worker");
+    }
+
+    // ЕДИНСТВЕННЫЙ метод для обновления статуса
+    private async Task UpdateTaskStatus(int newStatusId)
+    {
+        if (isProcessingStatus) return;
+
+        if (!ValidateStatusChange(newStatusId))
+        {
+            Snackbar.Add("У вас нет прав для выполнения этого действия", Severity.Warning);
+            return;
+        }
+
+        isProcessingStatus = true;
         try
         {
-            Console.WriteLine($"Загрузка задачи с ID: {id}");
-            var taskDto = await TaskService.GetTaskByIdAsync(id);
-
-            if (taskDto != null)
+            var statusDto = new TaskStatusUpdateDto
             {
-                task = taskDto.ToModel();
+                StatusId = newStatusId,
+                Comment = $"Статус изменен на: {GetStatusName(newStatusId)}"
+            };
 
-                // Проверяем данные о продукте
-                if (task.ProductId.HasValue)
-                {
-                    Console.WriteLine($"Задача связана с продуктом: ID={task.ProductId}, Название={task.ProductName}");
-                }
-                else
-                {
-                    Console.WriteLine("Задача не связана с продуктом");
-                }
-
-                await LoadAssigneeInfoAsync();
-
-                // Проверка прав на редактирование после загрузки задачи
-                CheckEditPermissions();
-            }
-            else
-            {
-                task = null;
-                Snackbar.Add("Задача не найдена", Severity.Error);
-            }
+            await TaskService.UpdateTaskStatusAsync(Id, currentUserId, statusDto);
+            Snackbar.Add("Статус задачи успешно обновлен", Severity.Success);
+            await LoadData();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Ошибка при загрузке задачи: {ex}");
-            Snackbar.Add($"Ошибка загрузки задачи: {ex.Message}", Severity.Error);
-            task = null;
+            Snackbar.Add($"Ошибка при обновлении статуса: {ex.Message}", Severity.Error);
         }
         finally
         {
-            isLoading = false;
+            isProcessingStatus = false;
         }
     }
 
+    private bool ValidateStatusChange(int newStatusId)
+    {
+        if (currentUser == null || task == null) return false;
+
+        switch (newStatusId)
+        {
+            case 2: return CanExecutorTakeTask();
+            case 4: return CanExecutorSendForReview();
+            case 5:
+            case 3: return CanCreatorMarkComplete();
+            default: return false;
+        }
+    }
 
     private async Task AddComment()
     {
@@ -563,15 +675,15 @@ else
         try
         {
             var commentDto = new TaskCommentCreateDto
-                {
-                    TaskId = id,
-                    Comment = newComment
-                };
+            {
+                TaskId = Id,
+                Comment = newComment
+            };
 
-            await TaskService.AddCommentAsync(id, commentDto);
+            await TaskService.AddCommentAsync(currentUserId, commentDto);
             newComment = "";
             Snackbar.Add("Комментарий добавлен", Severity.Success);
-            await LoadTaskAsync();
+            await LoadData();
         }
         catch (Exception ex)
         {
@@ -579,105 +691,55 @@ else
         }
     }
 
-    private async Task ShowUpdateStatusDialog(int newStatusId)
+    private async Task ReportEmergency()
     {
-        if (task == null) return;
-
-        try
+        var parameters = new DialogParameters
         {
-            var statusDto = new TaskStatusUpdateDto
-                {
-                // Предполагаем, что свойство называется StatusId вместо NewStatusId
-                    StatusId = newStatusId,
-                    Comment = $"Статус изменен на: {GetStatusName(newStatusId)}"
-                };
+            {"TaskId", task.Id}
+        };
 
-            // Добавляем проверку на null
-            await TaskService.UpdateTaskStatusAsync(id, task.CreatorId, statusDto);
-            Snackbar.Add("Статус задачи обновлен", Severity.Success);
-            await LoadTaskAsync();
-        }
-        catch (Exception ex)
+        var dialog = await DialogService.ShowAsync<EmergencyReportDialog>("Сообщить о ЧС на производстве", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is string emergencyDescription)
         {
-            Snackbar.Add($"Ошибка при обновлении статуса: {ex.Message}", Severity.Error);
+            NavigationManager.NavigateTo($"/chat?emergency={Uri.EscapeDataString(emergencyDescription)}");
+            Snackbar.Add("Перенаправление в чат для отправки экстренного сообщения", Severity.Info);
         }
     }
 
+    // Вспомогательные методы
+    private bool IsTaskOverdue(TaskDto task)
+    {
+        return task.DueDate.HasValue && task.DueDate.Value < DateTime.Now && task.StatusId != 5;
+    }
 
-    private string GetStatusName(int statusId)
+    private Color GetStatusColor(int statusId)
     {
         return statusId switch
         {
-            1 => "Создана",
-            2 => "В работе",
-            3 => "Требует уточнения",
-            4 => "На проверке",
-            5 => "Выполнена",
-            6 => "Отклонена",
-            _ => $"Статус {statusId}"
+            1 => Color.Default,  // Создана
+            2 => Color.Info,     // В работе
+            3 => Color.Warning,  // На доработке
+            4 => Color.Primary,  // На проверке
+            5 => Color.Success,  // Выполнена
+            6 => Color.Error,    // Отклонена
+            _ => Color.Default
         };
     }
-    private async Task AddSubTask()
-    {
-        var parameters = new DialogParameters
-    {
-        { "ParentTaskId", id },
-        { "Title", "Новая подзадача" }
-    };
 
-        var dialog = await DialogService.ShowAsync<SubTaskDialog>("Добавление подзадачи", parameters);
-        var result = await dialog.Result;
-
-        if (!result.Canceled)
+    private Color GetPriorityColor(int priorityId)
+    {
+        return priorityId switch
         {
-            await LoadSubTasksAsync();
-            Snackbar.Add("Подзадача добавлена", Severity.Success);
-        }
+            1 => Color.Default,  // Низкий
+            2 => Color.Info,     // Средний
+            3 => Color.Warning,  // Высокий
+            4 => Color.Error,    // Критический
+            _ => Color.Default
+        };
     }
 
-    private async Task EditSubTask(Guid subTaskId)
-    {
-        var subTask = subTasks.FirstOrDefault(s => s.Id == subTaskId);
-        if (subTask == null) return;
-
-        var parameters = new DialogParameters
-    {
-        { "SubTaskId", subTaskId },
-        { "ParentTaskId", id },
-        { "SubTask", subTask }
-    };
-
-        var dialog = await DialogService.ShowAsync<SubTaskDialog>("Редактирование подзадачи", parameters);
-        var result = await dialog.Result;
-
-        if (!result.Canceled)
-        {
-            await LoadSubTasksAsync();
-            Snackbar.Add("Подзадача обновлена", Severity.Success);
-        }
-    }
-
-    private async Task DeleteSubTask(Guid subTaskId)
-    {
-        var confirmed = await DialogService.ShowMessageBox(
-            "Удаление подзадачи",
-            "Вы уверены, что хотите удалить эту подзадачу?",
-            "Да", "Отмена");
-
-        if (confirmed == true)
-        {
-            try
-            {
-                await SubTaskService.DeleteSubTaskAsync(subTaskId);
-                await LoadSubTasksAsync();
-                Snackbar.Add("Подзадача удалена", Severity.Success);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Ошибка при удалении: {ex.Message}", Severity.Error);
-            }
-        }
-    }
     private Color GetSubTaskStatusColor(int statusId)
     {
         return statusId switch
@@ -692,9 +754,23 @@ else
         };
     }
 
+    private string GetStatusName(int statusId)
+    {
+        return statusId switch
+        {
+            1 => "Создана",
+            2 => "В работе",
+            3 => "На доработке",
+            4 => "На проверке",
+            5 => "Выполнена",
+            6 => "Отклонена",
+            _ => $"Статус {statusId}"
+        };
+    }
+
     private void EditTask()
     {
-        NavigationManager.NavigateTo($"/tasks/edit/{id}");
+        NavigationManager.NavigateTo($"/tasks/edit/{Id}");
     }
 
     private void GoBackToList()

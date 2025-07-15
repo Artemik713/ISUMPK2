@@ -1,14 +1,34 @@
 ﻿using ISUMPK2.Application.DTOs;
 using ISUMPK2.Web.Models;
 using System;
+using System.Linq;
 
 namespace ISUMPK2.Web.Extensions
 {
-    // Класс должен быть статическим для методов расширения
     public static class DtoExtensions
     {
-        // Метод расширения для преобразования TaskDto в TaskModel
-        // ISUMPK2.Web/Extensions/DtoExtensions.cs - измените метод ToModel для TaskDto
+        // Добавляем метод расширения для UserDto
+        public static UserModel ToModel(this UserDto dto)
+        {
+            if (dto == null) return null;
+
+            return new UserModel
+            {
+                Id = dto.Id,
+                FirstName = dto.FirstName,
+                LastName = dto.LastName,
+                UserName = dto.UserName,
+                Email = dto.Email,
+                PhoneNumber = dto.PhoneNumber,
+                DepartmentId = dto.DepartmentId,
+                DepartmentName = dto.DepartmentName,
+                Roles = dto.Roles ?? new List<string>(),
+                CreatedAt = dto.CreatedAt,
+                IsActive = dto.IsActive
+            };
+        }
+
+        // Остальные методы остаются без изменений...
         public static TaskModel ToModel(this TaskDto dto)
         {
             if (dto == null) return null;
@@ -40,15 +60,12 @@ namespace ISUMPK2.Web.Extensions
                 CreatedAt = dto.CreatedAt,
                 UpdatedAt = dto.UpdatedAt,
                 Comments = dto.Comments?.Select(c => c.ToModel()).ToList() ?? new List<TaskCommentModel>()
-                // Удаляем назначение вычисляемым свойствам, так как они сами вычисляют свои значения
             };
-            Console.WriteLine($"ToModel преобразование для задачи {dto.Id}: AssigneeId={dto.AssigneeId}, AssigneeName={dto.AssigneeName} -> {model.AssigneeName}");
 
+            Console.WriteLine($"ToModel преобразование для задачи {dto.Id}: AssigneeId={dto.AssigneeId}, AssigneeName={dto.AssigneeName} -> {model.AssigneeName}");
             return model;
         }
 
-
-        // Метод расширения для преобразования TaskCommentDto в TaskCommentModel
         public static TaskCommentModel ToModel(this TaskCommentDto dto)
         {
             if (dto == null) return null;
@@ -64,7 +81,6 @@ namespace ISUMPK2.Web.Extensions
             };
         }
 
-        // Метод расширения для преобразования MaterialDto в MaterialModel
         public static MaterialModel ToModel(this MaterialDto dto)
         {
             if (dto == null) return null;
@@ -89,7 +105,6 @@ namespace ISUMPK2.Web.Extensions
             };
         }
 
-        // Метод расширения для преобразования NotificationDto в NotificationModel
         public static NotificationModel ToModel(this NotificationDto dto)
         {
             if (dto == null) return null;
@@ -106,7 +121,6 @@ namespace ISUMPK2.Web.Extensions
                 CreatedAt = dto.CreatedAt
             };
         }
-        // Добавьте этот метод в класс DtoExtensions:
 
         public static DepartmentModel ToModel(this DepartmentDto dto)
         {
@@ -123,30 +137,29 @@ namespace ISUMPK2.Web.Extensions
                 UpdatedAt = dto.UpdatedAt
             };
         }
-        // Вспомогательный метод для определения цвета статуса задачи
+
         private static string GetStatusColor(int statusId)
         {
             return statusId switch
             {
-                1 => "Default", // Новая
-                2 => "Info",    // В работе
-                3 => "Info",    // Выполняется
-                4 => "Warning", // На проверке
-                5 => "Success", // Завершена
-                6 => "Error",   // Отменена
+                1 => "Default",
+                2 => "Info",
+                3 => "Info",
+                4 => "Warning",
+                5 => "Success",
+                6 => "Error",
                 _ => "Default"
             };
         }
 
-        // Вспомогательный метод для определения цвета приоритета задачи
         private static string GetPriorityColor(int priorityId)
         {
             return priorityId switch
             {
-                1 => "Default", // Низкий
-                2 => "Info",    // Средний
-                3 => "Warning", // Высокий
-                4 => "Error",   // Критический
+                1 => "Default",
+                2 => "Info",
+                3 => "Warning",
+                4 => "Error",
                 _ => "Default"
             };
         }

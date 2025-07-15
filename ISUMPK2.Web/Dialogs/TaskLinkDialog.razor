@@ -1,0 +1,133 @@
+﻿@using ISUMPK2.Application.Services
+@using ISUMPK2.Application.DTOs
+@using MudBlazor
+@inject ITaskService TaskService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-width: 600px;">
+            <MudText Typo="Typo.h6" Class="mb-4">Связать с задачей</MudText>
+
+            <MudTextField @bind-Value="searchText"
+                          Label="Поиск задач"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          OnTextChanged="@SearchTasks"
+                          Class="mb-4" />
+
+            @if (isLoading)
+            {
+                <div class="d-flex justify-center py-4">
+                    <MudProgressCircular Indeterminate="true" />
+                </div>
+            }
+            else if (filteredTasks.Any())
+            {
+                <MudList T="TaskDto" Clickable="true" Class="mud-height-full" Style="max-height: 400px; overflow-y: auto;">
+                    @foreach (var task in filteredTasks.Take(10))
+                    {
+                        <MudListItem T="TaskDto" OnClick="@(() => SelectTask(task))"
+                                     Style="@(selectedTask?.Id == task.Id ? "background-color: var(--mud-palette-action-selected);" : "")">
+                            <div class="d-flex flex-column">
+                                <MudText Typo="Typo.body1" Style="font-weight: 500;">@task.Title</MudText>
+                                <div class="d-flex align-center mt-1">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mr-2">@task.StatusName</MudChip>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@task.AssigneeName</MudText>
+                                </div>
+                                @if (!string.IsNullOrEmpty(task.Description))
+                                {
+                                    <MudText Typo="Typo.caption" Class="mt-1" Style="color: var(--mud-palette-text-secondary);">
+                                        @(task.Description.Length > 100 ? task.Description.Substring(0, 100) + "..." : task.Description)
+                                    </MudText>
+                                }
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="py-4">
+                    @(string.IsNullOrEmpty(searchText) ? "Введите текст для поиска задач" : "Задачи не найдены")
+                </MudText>
+            }
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(selectedTask == null)">
+            Связать
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? SelectedTaskId { get; set; }
+
+    private List<TaskDto> allTasks = new List<TaskDto>();
+    private List<TaskDto> filteredTasks = new List<TaskDto>();
+    private TaskDto selectedTask;
+    private string searchText = "";
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var tasks = await TaskService.GetAllTasksAsync();
+            allTasks = tasks.Where(t => t.StatusId != 5 && t.StatusId != 6).ToList(); // Исключаем завершенные и отмененные
+            filteredTasks = allTasks.Take(10).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки задач: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SearchTasks(string searchText)
+    {
+        this.searchText = searchText;
+
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            filteredTasks = allTasks.Take(10).ToList();
+        }
+        else
+        {
+            filteredTasks = allTasks
+                .Where(t => t.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                           t.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                           (t.AssigneeName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false))
+                .Take(10)
+                .ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private void SelectTask(TaskDto task)
+    {
+        selectedTask = task;
+        StateHasChanged();
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (selectedTask != null)
+        {
+            MudDialog.Close(DialogResult.Ok(selectedTask.Id));
+        }
+    }
+}
