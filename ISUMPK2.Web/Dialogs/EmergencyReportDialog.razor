@@ -1,0 +1,143 @@
+﻿@using MudBlazor
+@using Microsoft.AspNetCore.Components.Forms
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-width: 500px;">
+            <div class="d-flex align-center mb-4">
+                <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Large" Class="mr-3" />
+                <MudText Typo="Typo.h5" Color="Color.Error">Сообщение о ЧС</MudText>
+            </div>
+
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                Используйте эту форму только для сообщения о реальных чрезвычайных ситуациях,
+                требующих немедленного вмешательства руководства.
+            </MudAlert>
+
+            <MudSelect T="string" @bind-Value="emergencyType" Label="Тип ЧС" Required="true" Class="mb-3">
+                <MudSelectItem Value="@("accident")">Несчастный случай</MudSelectItem>
+                <MudSelectItem Value="@("equipment")">Авария оборудования</MudSelectItem>
+                <MudSelectItem Value="@("fire")">Пожар</MudSelectItem>
+                <MudSelectItem Value="@("leak")">Утечка/Выброс</MudSelectItem>
+                <MudSelectItem Value="@("safety")">Нарушение безопасности</MudSelectItem>
+                <MudSelectItem Value="@("other")">Другое</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField @bind-Value="description"
+                          Label="Описание ситуации"
+                          Lines="4"
+                          Required="true"
+                          RequiredError="Необходимо описать ситуацию"
+                          HelperText="Опишите что произошло, где и какие действия требуются"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="location"
+                          Label="Местоположение"
+                          Required="true"
+                          RequiredError="Укажите местоположение"
+                          HelperText="Цех, участок, номер оборудования"
+                          Class="mb-3" />
+
+            <MudCheckBox T="bool" @bind-Checked="requiresEvacuation"
+                         Label="Требуется эвакуация"
+                         Color="Color.Error"
+                         Class="mb-3" />
+
+            <MudCheckBox T="bool" @bind-Checked="medicalAssistance"
+                         Label="Требуется медицинская помощь"
+                         Color="Color.Error"
+                         Class="mb-3" />
+
+            <!-- Прикрепление фото -->
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Прикрепить фото (по возможности)</MudText>
+            <InputFile id="emergencyFileInput" OnChange="OnFileSelected" hidden multiple accept="image/*" />
+            <MudButton HtmlTag="label" for="emergencyFileInput"
+                       Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.CameraAlt"
+                       Size="Size.Small"
+                       Class="mb-3">
+                Добавить фото
+            </MudButton>
+
+            @if (selectedFiles.Any())
+            {
+                <div class="mb-3">
+                    @foreach (var file in selectedFiles)
+                    {
+                        <MudChip T="string" Size="Size.Small" OnClose="@(() => RemoveFile(file))" Class="mr-1 mb-1">
+                            @file.Name
+                        </MudChip>
+                    }
+                </div>
+            }
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Error"
+                   OnClick="Submit"
+                   Variant="Variant.Filled"
+                   Disabled="@(!IsValid())"
+                   StartIcon="@Icons.Material.Filled.Send">
+            Отправить экстренное сообщение
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
+
+    private string emergencyType = "";
+    private string description = "";
+    private string location = "";
+    private bool requiresEvacuation = false;
+    private bool medicalAssistance = false;
+    private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var files = e.GetMultipleFiles(3); // Максимум 3 файла для ЧС
+        selectedFiles.AddRange(files);
+        StateHasChanged();
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+        StateHasChanged();
+    }
+
+    private bool IsValid()
+    {
+        return !string.IsNullOrWhiteSpace(emergencyType) &&
+               !string.IsNullOrWhiteSpace(description) &&
+               !string.IsNullOrWhiteSpace(location);
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (IsValid())
+        {
+            var emergencyReport = $"{emergencyType.ToUpper()}\n" +
+                                $"📍 Местоположение: {location}\n" +
+                                $"📝 Описание: {description}";
+
+            if (requiresEvacuation)
+                emergencyReport += "\n🚨 ТРЕБУЕТСЯ ЭВАКУАЦИЯ";
+
+            if (medicalAssistance)
+                emergencyReport += "\n🚑 ТРЕБУЕТСЯ МЕДИЦИНСКАЯ ПОМОЩЬ";
+
+            if (selectedFiles.Any())
+                emergencyReport += $"\n📷 Прикреплено фото: {selectedFiles.Count} шт.";
+
+            MudDialog.Close(DialogResult.Ok(emergencyReport));
+        }
+    }
+}

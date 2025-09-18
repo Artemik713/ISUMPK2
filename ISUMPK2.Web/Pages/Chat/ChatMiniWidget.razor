@@ -1,0 +1,436 @@
+﻿@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using ISUMPK2.Web.Extensions
+@using ISUMPK2.Application.DTOs
+@using MudBlazor
+@inject IJSRuntime JSRuntime
+@inject IChatService ChatService
+@inject IUserService UserService
+@inject IChatHubService ChatHubService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<MudPaper Elevation="3" Class="@GetWidgetCssClass()"
+          Style="@GetWidgetStyle()">
+
+    @if (!isExpanded)
+    {
+        <!-- Свернутый вид - только кнопка -->
+        <MudFab Color="Color.Primary"
+                StartIcon="@Icons.Material.Filled.Chat"
+                Size="Size.Medium"
+                OnClick="ToggleExpanded"
+                Class="ma-2">
+        </MudFab>
+        @if (totalUnreadCount > 0)
+        {
+            <MudBadge Content="@totalUnreadCount" Color="Color.Error" Class="chat-badge" />
+        }
+    }
+    else
+    {
+        <!-- Развернутый вид чата -->
+        <div class="d-flex flex-column" style="height: 100%;">
+            <!-- Заголовок -->
+            <div class="d-flex justify-space-between align-center pa-2" style="background-color: var(--mud-palette-primary); color: white;">
+                <MudText Typo="Typo.subtitle1">Чат</MudText>
+                <div class="d-flex align-center">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(ChatHubService.IsConnected ? Color.Success : Color.Error)"
+                             Style="color: white; font-size: 10px;">
+                        @(ChatHubService.IsConnected ? "●" : "○")
+                    </MudChip>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                   Size="Size.Small"
+                                   Color="Color.Inherit"
+                                   OnClick="ToggleExpanded" />
+                </div>
+            </div>
+
+            <!-- Список пользователей или сообщения -->
+            @if (selectedRecipientId == null)
+            {
+                <!-- Список пользователей -->
+                <div class="flex-grow-1 overflow-auto pa-2">
+                    <MudTextField @bind-Value="userSearchText"
+                                  Label="Поиск"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Class="mb-2"
+                                  @bind-Value:after="ApplyUserFilter" />
+
+                    <MudList T="UserModel" Clickable="true" Dense="true">
+                        @foreach (var user in filteredUsers.Take(6))
+                        {
+                            <MudListItem T="UserModel" OnClick="@(() => SelectUser(user))">
+                                <div class="d-flex align-center justify-space-between">
+                                    <div class="d-flex align-center">
+                                        <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-2">
+                                            @GetUserInitial(user.FullName)
+                                        </MudAvatar>
+                                        <div>
+                                            <MudText Typo="Typo.body2">@user.FullName</MudText>
+                                        </div>
+                                    </div>
+                                    @if (unreadMessageCounts.ContainsKey(user.Id) && unreadMessageCounts[user.Id] > 0)
+                                    {
+                                        <MudBadge Content="@unreadMessageCounts[user.Id]" Color="Color.Primary" />
+                                    }
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               OnClick="@(() => NavigationManager.NavigateTo("/chat"))"
+                               Class="mt-2">
+                        Открыть полный чат
+                    </MudButton>
+                </div>
+            }
+            else
+            {
+                <!-- Переписка с выбранным пользователем -->
+                <div class="d-flex align-center pa-2" style="border-bottom: 1px solid var(--mud-palette-divider);">
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                                   Size="Size.Small"
+                                   OnClick="@(() => selectedRecipientId = null)" />
+
+                    @{
+                        var selectedUser = users.FirstOrDefault(u => u.Id == selectedRecipientId.Value);
+                    }
+                    @if (selectedUser != null)
+                    {
+                        <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-2">
+                            @GetUserInitial(selectedUser.FullName)
+                        </MudAvatar>
+                        <MudText Typo="Typo.body1">@selectedUser.FullName</MudText>
+                    }
+                </div>
+
+                <!-- Сообщения -->
+                <div class="flex-grow-1 overflow-auto pa-2" @ref="messagesContainer">
+                    @foreach (var message in currentMessages)
+                    {
+                        <div class="d-flex @(message.SenderId == currentUserId ? "justify-end" : "justify-start") mb-1">
+                            <MudPaper Class="pa-2"
+                                      Style="@GetMessageStyle(message)">
+                                @if (message.SenderId != currentUserId)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Primary">@message.SenderName</MudText>
+                                }
+                                <MudText Typo="Typo.body2">@message.Message</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-flex justify-end">
+                                    @message.CreatedAt.ToString("HH:mm")
+                                </MudText>
+                            </MudPaper>
+                        </div>
+                    }
+                </div>
+
+                <!-- Поле ввода сообщения -->
+                <div class="pa-2" style="border-top: 1px solid var(--mud-palette-divider);">
+                    <MudTextField @bind-Value="newMessage"
+                                  Label="Сообщение"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@Icons.Material.Filled.Send"
+                                  OnAdornmentClick="SendMessage"
+                                  OnKeyDown="OnMessageKeyDown"
+                                  Disabled="@(!ChatHubService.IsConnected)" />
+                </div>
+            }
+        </div>
+    }
+</MudPaper>
+
+<style>
+    .chat-mini-widget {
+        border-radius: 10px;
+        overflow: hidden;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        transition: all 0.3s ease;
+    }
+
+        .chat-mini-widget.collapsed {
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+        }
+
+        .chat-mini-widget.expanded {
+            width: 350px;
+            height: 400px;
+        }
+
+    .chat-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+    }
+</style>
+
+@code {
+    private bool isExpanded = false;
+    private bool isLoading = true;
+    private string userSearchText = "";
+    private string newMessage = "";
+    private Guid currentUserId;
+    private Guid? selectedRecipientId;
+    private int totalUnreadCount = 0;
+
+    private List<UserModel> users = new();
+    private List<UserModel> filteredUsers = new();
+    private List<ChatMessageModel> currentMessages = new();
+    private Dictionary<Guid, int> unreadMessageCounts = new();
+
+    private ElementReference messagesContainer;
+
+    private string GetWidgetCssClass()
+    {
+        return $"chat-mini-widget {(isExpanded ? "expanded" : "collapsed")}";
+    }
+
+    private string GetWidgetStyle()
+    {
+        return "";
+    }
+
+    private string GetUserInitial(string fullName)
+    {
+        return !string.IsNullOrEmpty(fullName) ? fullName.Substring(0, 1).ToUpper() : "?";
+    }
+
+    private string GetMessageStyle(ChatMessageModel message)
+    {
+        var baseStyle = "max-width: 80%;";
+        if (message.SenderId == currentUserId)
+        {
+            baseStyle += " background-color: var(--mud-palette-primary-lighten);";
+        }
+        return baseStyle;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var currentUser = await UserService.GetCurrentUserAsync();
+            currentUserId = currentUser.Id;
+
+            await LoadUsers();
+            await LoadUnreadCounts();
+
+            await ChatHubService.ConnectAsync();
+            ChatHubService.OnReceiveMessage += HandleReceiveMessage;
+            ChatHubService.OnMessageSent += HandleMessageSent;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка инициализации чата: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (selectedRecipientId.HasValue)
+        {
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task LoadUsers()
+    {
+        try
+        {
+            var usersDto = await UserService.GetAllUsersAsync();
+            users = usersDto.Select(dto => dto.ToModel()).Where(u => u.Id != currentUserId).ToList();
+            ApplyUserFilter();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки пользователей: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadUnreadCounts()
+    {
+        try
+        {
+            var messagesDto = await ChatService.GetMessagesForUserAsync(currentUserId);
+            var allMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+
+            unreadMessageCounts.Clear();
+            totalUnreadCount = 0;
+
+            foreach (var user in users)
+            {
+                var count = allMessages.Count(m => m.SenderId == user.Id && !m.IsRead);
+                unreadMessageCounts[user.Id] = count;
+                totalUnreadCount += count;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки счетчиков: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ApplyUserFilter()
+    {
+        if (string.IsNullOrWhiteSpace(userSearchText))
+        {
+            filteredUsers = users
+                .OrderByDescending(u => unreadMessageCounts.ContainsKey(u.Id) ? unreadMessageCounts[u.Id] : 0)
+                .ToList();
+        }
+        else
+        {
+            filteredUsers = users.Where(u => u.FullName.Contains(userSearchText, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(u => unreadMessageCounts.ContainsKey(u.Id) ? unreadMessageCounts[u.Id] : 0)
+                .ToList();
+        }
+    }
+
+    private void ToggleExpanded()
+    {
+        isExpanded = !isExpanded;
+        if (!isExpanded)
+        {
+            selectedRecipientId = null;
+            currentMessages.Clear();
+        }
+    }
+
+    private async Task SelectUser(UserModel user)
+    {
+        selectedRecipientId = user.Id;
+        await LoadConversation(user.Id);
+    }
+
+    private async Task LoadConversation(Guid userId)
+    {
+        try
+        {
+            var messagesDto = await ChatService.GetConversationAsync(currentUserId, userId);
+            currentMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+
+            // Отмечаем сообщения как прочитанные
+            var unreadMessages = currentMessages.Where(m => m.SenderId == userId && !m.IsRead).ToList();
+            foreach (var message in unreadMessages)
+            {
+                await ChatService.MarkAsReadAsync(message.Id);
+                message.IsRead = true;
+            }
+
+            // Обновляем счетчик
+            if (unreadMessages.Any())
+            {
+                var oldCount = unreadMessageCounts.ContainsKey(userId) ? unreadMessageCounts[userId] : 0;
+                unreadMessageCounts[userId] = 0;
+                totalUnreadCount -= oldCount;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки переписки: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage) || !selectedRecipientId.HasValue || !ChatHubService.IsConnected)
+            return;
+
+        try
+        {
+            await ChatHubService.SendMessageToUserAsync(selectedRecipientId.Value.ToString(), newMessage);
+            newMessage = "";
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка отправки: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OnMessageKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !string.IsNullOrWhiteSpace(newMessage))
+        {
+            await SendMessage();
+        }
+    }
+
+    private async void HandleReceiveMessage(ChatMessageModel message)
+    {
+        if (selectedRecipientId.HasValue && message.SenderId == selectedRecipientId.Value)
+        {
+            currentMessages.Add(message);
+            await ChatService.MarkAsReadAsync(message.Id);
+            message.IsRead = true;
+        }
+        else if (message.SenderId != currentUserId)
+        {
+            if (unreadMessageCounts.ContainsKey(message.SenderId))
+            {
+                unreadMessageCounts[message.SenderId]++;
+            }
+            else
+            {
+                unreadMessageCounts[message.SenderId] = 1;
+            }
+            totalUnreadCount++;
+        }
+
+        await InvokeAsync(StateHasChanged);
+        if (selectedRecipientId.HasValue && message.SenderId == selectedRecipientId.Value)
+        {
+            await ScrollToBottom();
+        }
+    }
+
+    private async void HandleMessageSent(ChatMessageModel message)
+    {
+        if (selectedRecipientId.HasValue &&
+            message.ReceiverId.HasValue &&
+            message.ReceiverId.Value == selectedRecipientId.Value)
+        {
+            currentMessages.Add(message);
+            await InvokeAsync(StateHasChanged);
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToBottom", messagesContainer);
+        }
+        catch
+        {
+            // Игнорируем ошибки
+        }
+    }
+
+    public void Dispose()
+    {
+        ChatHubService.OnReceiveMessage -= HandleReceiveMessage;
+        ChatHubService.OnMessageSent -= HandleMessageSent;
+    }
+}

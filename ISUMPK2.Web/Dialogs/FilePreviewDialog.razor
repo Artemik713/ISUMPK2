@@ -1,0 +1,269 @@
+﻿@using ISUMPK2.Web.Services
+@using ISUMPK2.Web.Models
+@using MudBlazor
+@inject IFileService FileService
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex flex-column align-center pa-4">
+            <!-- Заголовок с иконкой файла -->
+            <div class="d-flex align-center mb-3">
+                <MudIcon Icon="@GetFileIcon(FileName)" Size="Size.Large" Color="Color.Primary" Class="mr-3" />
+                <div>
+                    <MudText Typo="Typo.h6">@FileName</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@FileType • @FileSize</MudText>
+                </div>
+            </div>
+
+            <!-- Предпросмотр файла -->
+            <div class="file-preview-container mb-3" style="width: 100%; max-width: 500px;">
+                @if (IsImage(FileName))
+                {
+                    <!-- Предпросмотр изображений -->
+                    <MudPaper Class="pa-2" Elevation="1" Style="border-radius: 8px;">
+                        <MudImage Src="@FileService.GetPreviewUrl(FileName)" 
+                                  Alt="@FileName" 
+                                  Class="file-preview-image"
+                                  Style="width: 100%; height: auto; max-height: 300px; border-radius: 4px; cursor: pointer;"
+                                  @onclick="OpenFullSize" />
+                        <div class="d-flex justify-center mt-2">
+                            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.ZoomIn" 
+                                       OnClick="OpenFullSize" Variant="Variant.Text">
+                                Полный размер
+                            </MudButton>
+                        </div>
+                    </MudPaper>
+                }
+                else if (IsPdf(FileName))
+                {
+                    <!-- Предпросмотр PDF -->
+                    <MudPaper Class="pa-4" Elevation="1" Style="text-align: center; border-radius: 8px;">
+                        <MudIcon Icon="@Icons.Material.Filled.PictureAsPdf" Size="Size.Large" Color="Color.Error" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Class="mb-2">PDF Документ</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                            Нажмите "Открыть" для просмотра в новой вкладке
+                        </MudText>
+                        <MudButton Color="Color.Primary" StartIcon="@Icons.Material.Filled.OpenInNew" 
+                                   OnClick="OpenInNewTab">
+                            Открыть PDF
+                        </MudButton>
+                    </MudPaper>
+                }
+                else if (IsDocument(FileName))
+                {
+                    <!-- Предпросмотр документов -->
+                    <MudPaper Class="pa-4" Elevation="1" Style="text-align: center; border-radius: 8px;">
+                        <MudIcon Icon="@GetFileIcon(FileName)" Size="Size.Large" Color="Color.Info" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Class="mb-2">@GetDocumentTypeName(FileName)</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                            Документ готов к скачиванию
+                        </MudText>
+                    </MudPaper>
+                }
+                else
+                {
+                    <!-- Обычные файлы -->
+                    <MudPaper Class="pa-4" Elevation="1" Style="text-align: center; border-radius: 8px;">
+                        <MudIcon Icon="@GetFileIcon(FileName)" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Class="mb-2">@Path.GetFileNameWithoutExtension(FileName)</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                            @GetFileExtension(FileName).ToUpper() файл
+                        </MudText>
+                    </MudPaper>
+                }
+            </div>
+
+            <!-- Дополнительная информация о файле -->
+            @if (fileInfo != null)
+            {
+                <MudExpansionPanels>
+                    <MudExpansionPanel Text="Информация о файле">
+                        <div class="pa-2">
+                            <div class="d-flex justify-space-between mb-1">
+                                <MudText Typo="Typo.body2">Имя файла:</MudText>
+                                <MudText Typo="Typo.body2">@fileInfo.FileName</MudText>
+                            </div>
+                            <div class="d-flex justify-space-between mb-1">
+                                <MudText Typo="Typo.body2">Размер:</MudText>
+                                <MudText Typo="Typo.body2">@fileInfo.FormattedSize</MudText>
+                            </div>
+                            <div class="d-flex justify-space-between mb-1">
+                                <MudText Typo="Typo.body2">Тип:</MudText>
+                                <MudText Typo="Typo.body2">@fileInfo.ContentType</MudText>
+                            </div>
+                            <div class="d-flex justify-space-between mb-1">
+                                <MudText Typo="Typo.body2">Расширение:</MudText>
+                                <MudText Typo="Typo.body2">@fileInfo.Extension</MudText>
+                            </div>
+                            <div class="d-flex justify-space-between">
+                                <MudText Typo="Typo.body2">Создан:</MudText>
+                                <MudText Typo="Typo.body2">@fileInfo.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                            </div>
+                        </div>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Закрыть</MudButton>
+        
+        @if (IsImage(FileName))
+        {
+            <MudButton Color="Color.Secondary" StartIcon="@Icons.Material.Filled.ZoomIn" 
+                       OnClick="OpenFullSize">
+                Полный размер
+            </MudButton>
+        }
+        
+        @if (IsPdf(FileName) || IsDocument(FileName))
+        {
+            <MudButton Color="Color.Info" StartIcon="@Icons.Material.Filled.OpenInNew" 
+                       OnClick="OpenInNewTab">
+                Открыть
+            </MudButton>
+        }
+        
+        <MudButton Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download" 
+                   OnClick="DownloadFile">
+            Скачать
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .file-preview-image:hover {
+        opacity: 0.8;
+        transition: opacity 0.2s ease;
+    }
+    
+    .file-preview-container {
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string FileName { get; set; } = "";
+    [Parameter] public string FileSize { get; set; } = "";
+    [Parameter] public string FileType { get; set; } = "";
+
+    private FileInfoModel? fileInfo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Загружаем детальную информацию о файле
+        try
+        {
+            fileInfo = await FileService.GetFileInfoAsync(FileName);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки информации о файле: {ex.Message}");
+        }
+    }
+
+    private string GetFileIcon(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" => Icons.Material.Filled.Image,
+            ".pdf" => Icons.Material.Filled.PictureAsPdf,
+            ".doc" or ".docx" => Icons.Material.Filled.Description,
+            ".xls" or ".xlsx" => Icons.Material.Filled.TableChart,
+            ".ppt" or ".pptx" => Icons.Material.Filled.Slideshow,
+            ".txt" => Icons.Material.Filled.TextFields,
+            ".zip" or ".rar" or ".7z" => Icons.Material.Filled.Archive,
+            ".mp4" or ".avi" or ".mov" => Icons.Material.Filled.VideoFile,
+            ".mp3" or ".wav" or ".flac" => Icons.Material.Filled.AudioFile,
+            _ => Icons.Material.Filled.AttachFile
+        };
+    }
+
+    private bool IsImage(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" or ".svg";
+    }
+
+    private bool IsPdf(string fileName)
+    {
+        return Path.GetExtension(fileName).ToLowerInvariant() == ".pdf";
+    }
+
+    private bool IsDocument(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return extension is ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt";
+    }
+
+    private string GetDocumentTypeName(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return extension switch
+        {
+            ".doc" or ".docx" => "Word Документ",
+            ".xls" or ".xlsx" => "Excel Таблица",
+            ".ppt" or ".pptx" => "PowerPoint Презентация",
+            ".txt" => "Текстовый файл",
+            _ => "Документ"
+        };
+    }
+
+    private string GetFileExtension(string fileName)
+    {
+        var ext = Path.GetExtension(fileName);
+        return string.IsNullOrEmpty(ext) ? "Нет" : ext.TrimStart('.');
+    }
+
+    private async Task DownloadFile()
+    {
+        try
+        {
+            var fileUrl = FileService.GetFileUrl(FileName);
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileUrl, FileName);
+            Snackbar.Add($"Скачивание файла {FileName} начато", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка скачивания файла: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenInNewTab()
+    {
+        try
+        {
+            var fileUrl = FileService.GetFileUrl(FileName);
+            await JSRuntime.InvokeVoidAsync("window.open", fileUrl, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка открытия файла: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenFullSize()
+    {
+        try
+        {
+            if (IsImage(FileName))
+            {
+                var imageUrl = FileService.GetPreviewUrl(FileName);
+                await JSRuntime.InvokeVoidAsync("openImageInFullscreen", imageUrl, FileName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка открытия изображения: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

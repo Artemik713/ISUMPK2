@@ -1,11 +1,12 @@
 ﻿using ISUMPK2.Application.DTOs;
 using ISUMPK2.Application.Services;
+using ISUMPK2.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace ISUMPK2.API.Controllers
 {
@@ -67,16 +68,100 @@ namespace ISUMPK2.API.Controllers
         {
             try
             {
+                // Отладочный вывод полученных данных
+                var jsonOptions = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+                var jsonString = System.Text.Json.JsonSerializer.Serialize(productDto, jsonOptions);
+                Console.WriteLine($"Получены данные для обновления продукта {id}:");
+                Console.WriteLine(jsonString);
+
+                // Проверка важных полей
+                if (productDto == null)
+                {
+                    return BadRequest(new { message = "Данные продукта не предоставлены" });
+                }
+
+                if (string.IsNullOrEmpty(productDto.Name) || string.IsNullOrEmpty(productDto.Code))
+                {
+                    return BadRequest(new { message = "Код и название продукта обязательны" });
+                }
+
+                // Обновление продукта
                 var updatedProduct = await _productService.UpdateProductAsync(id, productDto);
                 if (updatedProduct == null)
                 {
-                    return NotFound();
+                    Console.WriteLine($"Продукт с ID {id} не найден");
+                    return NotFound(new { message = $"Продукт с ID {id} не найден" });
                 }
+
+                Console.WriteLine($"Продукт {updatedProduct.Name} успешно обновлен");
+
+                // Обработка материалов отдельным методом
+                try
+                {
+                    // Сохраняем связанные материалы, если они есть
+                    if (productDto.Materials != null && productDto.Materials.Any())
+                    {
+                        Console.WriteLine($"Обновление {productDto.Materials.Count} материалов для продукта {id}");
+                        await SaveProductMaterials(id, productDto.Materials);
+                    }
+                }
+                catch (Exception materialEx)
+                {
+                    // Не прерываем операцию из-за ошибки с материалами, но логируем
+                    Console.WriteLine($"Ошибка при обновлении материалов: {materialEx.Message}");
+                }
+
                 return Ok(updatedProduct);
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Ошибка при обновлении продукта {id}: {ex.Message}");
+                Console.WriteLine($"Трассировка стека: {ex.StackTrace}");
+                return BadRequest(new { message = $"Ошибка при обновлении продукта: {ex.Message}" });
+            }
+        }
+
+        [HttpPost("{id}/materials")]
+        public async Task<IActionResult> AddProductMaterial(Guid id, [FromBody] ProductMaterialCreateDto material)
+        {
+            try
+            {
+                // Создаем список с одним материалом и используем существующий метод
+                var materials = new List<ProductMaterialCreateDto> { material };
+                await _productService.UpdateProductMaterialsAsync(id, materials);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
                 return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id}/materials")]
+        public async Task<IActionResult> RemoveAllProductMaterials(Guid id)
+        {
+            try
+            {
+                // Передаем пустой список материалов, что эквивалентно удалению всех существующих
+                await _productService.UpdateProductMaterialsAsync(id, new List<ProductMaterialCreateDto>());
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        private async Task SaveProductMaterials(Guid productId, List<ProductMaterialCreateDto> materials)
+        {
+            try
+            {
+                // Используем сервис для обновления списка материалов
+                await _productService.UpdateProductMaterialsAsync(productId, materials);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при сохранении материалов: {ex.Message}");
+                throw;
             }
         }
 
@@ -95,7 +180,20 @@ namespace ISUMPK2.API.Controllers
             }
         }
 
+        [HttpGet("{id}/details")]
+        [Authorize]
+        public async Task<ActionResult<ProductDto>> GetProductDetails(Guid id)
+        {
+            var product = await _productService.GetByIdWithDetailsAsync(id);
+
+            if (product == null)
+                return NotFound();
+
+            return Ok(product);
+        }
+
         [HttpGet("{id}/materials")]
+        [Authorize]
         public async Task<ActionResult<IEnumerable<ProductMaterialDto>>> GetProductMaterials(Guid id)
         {
             var materials = await _productService.GetProductMaterialsAsync(id);

@@ -15,6 +15,8 @@ namespace ISUMPK2.Application.DTOs
         public Guid? DepartmentId { get; set; }
         public string DepartmentName { get; set; }
         public List<string> Roles { get; set; } = new List<string>();
+        public bool IsActive { get; set; } = true;
+        public string FullName => $"{FirstName} {LastName}".Trim();
         public DateTime CreatedAt { get; set; }
     }
 

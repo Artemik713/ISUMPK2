@@ -10,5 +10,7 @@ namespace ISUMPK2.Web.Services
         Task Logout();
         Task<bool> IsUserAuthenticated();
         Task<UserModel> GetUserInfoAsync();
+        Task<bool> ChangePasswordAsync(string currentPassword, string newPassword);
+        Task<string> GetTokenAsync();
     }
 }

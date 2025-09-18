@@ -16,25 +16,29 @@ using Swashbuckle.AspNetCore.SwaggerUI;
 using System.Text;
 using ISUMPK2.Domain.Entities;
 using ISUMPK2.Web.Services;
+using ISUMPK2.API.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Сервисы контроллеров
 builder.Services.AddControllers();
 
-// 2. Swagger/OpenAPI
+// 2. SignalR
+builder.Services.AddSignalR();
+
+// 3. Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "ISUMPK2 API",
         Version = "v1",
-        Description = "API для системы ИСУМПК2",
+        Description = "API для системы завода.\nВ случае проблемы свяжитесь с: houtuy96@gmail.com",
         Contact = new OpenApiContact
         {
-            Name = "Ваша команда",
-            Email = "contact@example.com"
+            Email = "houtuy96@gmail.com"
         }
     });
 
@@ -64,23 +68,32 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// 3. CORS
+// 4. CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        policy => policy.AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader());
+    options.AddPolicy("AllowBlazorClient", builder =>
+    {
+        builder.WithOrigins("https://localhost:7062", "http://localhost:7062") // Добавляем HTTP версию
+               .AllowAnyMethod()
+               .AllowAnyHeader()
+               .AllowCredentials()
+               .SetIsOriginAllowed(origin =>
+               {
+                   Console.WriteLine($"CORS запрос от: {origin}");
+                   return origin.StartsWith("https://localhost:7062") ||
+                          origin.StartsWith("http://localhost:7062");
+               });
+    });
 });
 
-// 4. Конфигурация базы данных
+// 5. Конфигурация базы данных
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 5. Добавление HttpContextAccessor (нужен для UserService)
+// 6. Добавление HttpContextAccessor (нужен для UserService)
 builder.Services.AddHttpContextAccessor();
 
-// 6. Регистрация сервисов репозиториев
+// 7. Регистрация сервисов репозиториев
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
 builder.Services.AddScoped<ITaskRepository, TaskRepository>();
@@ -89,25 +102,27 @@ builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IMaterialCategoryRepository, MaterialCategoryRepository>();
+builder.Services.AddScoped<ISubTaskRepository, SubTaskRepository>();
+builder.Services.AddScoped<IWorkTaskRepository, WorkTaskRepository>();
+builder.Services.AddScoped<ITaskMaterialRepository, TaskMaterialRepository>();
+builder.Services.AddScoped<IChatRepository, ChatRepository>();
 
-
-
-
-// 7. Регистрация служб приложения
+// 8. Регистрация служб приложения
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+builder.Services.AddScoped<ISubTaskService, SubTaskService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
-builder.Services.AddScoped<ISUMPK2.Application.Services.IMaterialService, MaterialService>();
+builder.Services.AddScoped<ITaskMaterialService, TaskMaterialService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ISUMPK2.Application.Services.INotificationService, ISUMPK2.Application.Services.Implementations.NotificationService>();
+builder.Services.AddScoped<ISUMPK2.Application.Services.IMaterialService, MaterialService>();
+builder.Services.AddScoped<IChatService, ChatService>();
 
-
-
-// 8. Регистрация служб аутентификации
+// 9. Регистрация служб аутентификации
 builder.Services.AddTransient<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 
-// 9. Настройка JWT аутентификации
+// 10. Настройка JWT аутентификации
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 builder.Services.AddAuthentication(options =>
 {
@@ -124,11 +139,51 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"])),
+        ClockSkew = TimeSpan.Zero // Убираем допуск по времени
+    };
+
+    // Добавляем отладку JWT
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) &&
+                (path.StartsWithSegments("/chatHub") || path.StartsWithSegments("/notificationHub")))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        },
+
+        // ДОБАВЛЯЕМ ОТЛАДКУ
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine($"JWT Аутентификация не удалась: {context.Exception.Message}");
+            return Task.CompletedTask;
+        },
+
+        OnTokenValidated = context =>
+        {
+            Console.WriteLine($"JWT токен валидирован для пользователя: {context.Principal.Identity.Name}");
+            foreach (var claim in context.Principal.Claims)
+            {
+                Console.WriteLine($"Claim: {claim.Type} = {claim.Value}");
+            }
+            return Task.CompletedTask;
+        },
+
+        OnChallenge = context =>
+        {
+            Console.WriteLine($"JWT Challenge: {context.Error} - {context.ErrorDescription}");
+            return Task.CompletedTask;
+        }
     };
 });
 
-// 10. Настройка авторизации
+// 11. Настройка авторизации
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -147,10 +202,15 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
-app.UseCors("AllowAll");
+app.UseCors("AllowBlazorClient");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Регистрация хабов SignalR
+app.MapHub<ChatHub>("/chatHub");
+app.MapHub<NotificationHub>("/notificationHub");
+
 app.MapControllers();
 
 app.Run();

@@ -72,6 +72,7 @@ public static class MappingExtensions
             UpdatedAt = dto.UpdatedAt
         };
     }
+
     public static UserModel ToModel(this UserDto dto)
     {
         if (dto == null) return null;
@@ -88,7 +89,7 @@ public static class MappingExtensions
             DepartmentId = dto.DepartmentId,
             DepartmentName = dto.DepartmentName,
             Roles = dto.Roles ?? new List<string>(),
-            CreatedAt = dto.CreatedAt,
+            CreatedAt = dto.CreatedAt
         };
     }
     public static MaterialModel ToModel(this MaterialDto dto)

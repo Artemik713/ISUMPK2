@@ -1,0 +1,1105 @@
+﻿@page "/analytics"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Models
+@using MudBlazor
+@using MudBlazor.Charts
+@using System.Globalization
+@inject IProductService ProductService
+@inject ITaskService TaskService
+@inject IMaterialService MaterialService
+@inject IDepartmentService DepartmentService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Аналитика - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <!-- Заголовок и фильтры -->
+    <MudPaper Elevation="0" Class="pa-4 mb-4">
+        <div class="d-flex justify-space-between align-center flex-wrap">
+            <div>
+                <MudText Typo="Typo.h4">Аналитика производства</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    Просмотр ключевых показателей и динамики производства
+                </MudText>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <!-- Быстрые кнопки выбора периода -->
+                <MudButtonGroup OverrideStyles="false">
+                    <MudButton OnClick="@(() => SetQuickDateRange(3))" Variant="Variant.Outlined"
+                               Color="@(IsQuickRangeSelected(3) ? Color.Primary : Color.Default)" Size="Size.Small">
+                        3 дня
+                    </MudButton>
+                    <MudButton OnClick="@(() => SetQuickDateRange(7))" Variant="Variant.Outlined"
+                               Color="@(IsQuickRangeSelected(7) ? Color.Primary : Color.Default)" Size="Size.Small">
+                        7 дней
+                    </MudButton>
+                    <MudButton OnClick="@(() => SetQuickDateRange(30))" Variant="Variant.Outlined"
+                               Color="@(IsQuickRangeSelected(30) ? Color.Primary : Color.Default)" Size="Size.Small">
+                        30 дней
+                    </MudButton>
+                </MudButtonGroup>
+
+                <MudDateRangePicker @bind-DateRange="dateRange" Label="Период" AutoClose="true" Class="mr-2">
+                    <PickerActions>
+                        <MudButton Class="mr-auto align-self-start" OnClick="@(() => SetDateRange(30))">Месяц</MudButton>
+                        <MudButton OnClick="@(() => SetDateRange(90))">3 месяца</MudButton>
+                        <MudButton OnClick="@(() => SetDateRange(365))">Год</MudButton>
+                        <MudButton Color="Color.Primary" OnClick="LoadData">Применить</MudButton>
+                    </PickerActions>
+                </MudDateRangePicker>
+
+                <MudSelect T="Guid?" @bind-Value="selectedDepartmentId" Label="Цех" Variant="Variant.Outlined"
+                           AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem Value="@((Guid?)null)">Все цеха</MudSelectItem>
+                    @foreach (var department in departments)
+                    {
+                        <MudSelectItem Value="@department.Id">@department.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+        </div>
+    </MudPaper>
+
+    @if (isLoading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-7" />
+    }
+    else
+    {
+        <!-- Ключевые показатели -->
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-4 mud-height-full analytics-card">
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.subtitle1">Выпущено продукции</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Color="Color.Primary" Size="Size.Medium" />
+                    </div>
+                    <MudText Typo="Typo.h3" Class="mb-2">@totalProductionCount.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @((MarkupString)GetComparisonText(totalProductionCount, previousProductionCount))
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-4 mud-height-full analytics-card">
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.subtitle1">Выполнено задач</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Medium" />
+                    </div>
+                    <MudText Typo="Typo.h3" Class="mb-2">@completedTasksCount.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @((MarkupString)GetComparisonText(completedTasksCount, previousCompletedTasksCount))
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-4 mud-height-full analytics-card">
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.subtitle1">Использовано материалов</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.Category" Color="Color.Info" Size="Size.Medium" />
+                    </div>
+                    <MudText Typo="Typo.h3" Class="mb-2">@usedMaterialsCount.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @((MarkupString)GetComparisonText(usedMaterialsCount, previousUsedMaterialsCount))
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-4 mud-height-full analytics-card">
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.subtitle1">Эффективность</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="@(efficiency >= previousEfficiency ? Color.Success : Color.Error)" Size="Size.Medium" />
+                    </div>
+                    <MudText Typo="Typo.h3" Class="mb-2">@efficiency.ToString("F1")%</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @((MarkupString)GetComparisonText(efficiency, previousEfficiency, true))
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Графики и таблицы -->
+        <div class="mt-6">
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                <MudTabPanel Text="Производство по дням">
+                    <MudPaper Elevation="0">
+                        <div class="mb-4">
+                            <MudText Typo="Typo.h6">@GetChartTitle()</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @GetChartDescription()
+                            </MudText>
+                        </div>
+
+                        <div class="chart-container">
+                            <MudChart ChartType="ChartType.Line"
+                                      ChartSeries="@dailyProductionSeries"
+                                      XAxisLabels="@dailyProductionLabels"
+                                      Width="100%"
+                                      Height="500px"
+                                      ChartOptions="@chartOptions">
+                                <CustomGraphics>
+                                    @if (dailyProductionSeries.Sum(s => s.Data.Sum()) == 0)
+                                    {
+                                        <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">
+                                            Нет данных за указанный период<br />
+                                            <small>Попробуйте создать тестовые данные или выбрать другой период</small>
+                                        </MudText>
+                                    }
+                                </CustomGraphics>
+                            </MudChart>
+                        </div>
+                    </MudPaper>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Производство по месяцам">
+                    <MudPaper Elevation="0">
+                        <div class="mb-4">
+                            <MudText Typo="Typo.h6">Производство по месяцам</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Динамика производства за последние 6 месяцев
+                            </MudText>
+                        </div>
+
+                        <div class="chart-container">
+                            <MudChart ChartType="ChartType.Bar"
+                                      ChartSeries="@monthlyProductionSeries"
+                                      XAxisLabels="@monthlyProductionLabels"
+                                      Width="100%"
+                                      Height="500px"
+                                      ChartOptions="@monthlyChartOptions">
+                                <CustomGraphics>
+                                    @if (monthlyProductionSeries.Sum(s => s.Data.Sum()) == 0)
+                                    {
+                                        <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">
+                                            Нет данных за указанный период<br />
+                                            <small>Данные по месяцам формируются из производственных транзакций</small>
+                                        </MudText>
+                                    }
+                                </CustomGraphics>
+                            </MudChart>
+                        </div>
+                    </MudPaper>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Анализ по типам продукции">
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4">
+                                <MudText Typo="Typo.h6" Class="mb-4">Распределение по типам продукции</MudText>
+                                <div class="chart-container">
+                                    <MudChart ChartType="ChartType.Pie" ChartSeries="@productTypeSeries" Width="100%" Height="400px">
+                                        <CustomGraphics>
+                                            @if (productTypeSeries.Sum(s => s.Data.Sum()) == 0)
+                                            {
+                                                <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                            }
+                                        </CustomGraphics>
+                                    </MudChart>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4">
+                                <MudText Typo="Typo.h6" Class="mb-4">Топ продуктов по объёму производства</MudText>
+                                <MudSimpleTable Elevation="0" Hover="true" Dense="true">
+                                    <thead>
+                                        <tr>
+                                            <th>Продукт</th>
+                                            <th>Код</th>
+                                            <th>Количество</th>
+                                            <th>Доля, %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in topProducts)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <MudLink Href="@($"/products/{product.Id}")" Underline="Underline.Hover">
+                                                        @product.Name
+                                                    </MudLink>
+                                                </td>
+                                                <td>@product.Code</td>
+                                                <td>@product.Quantity</td>
+                                                <td>@product.Percentage.ToString("F1")%</td>
+                                            </tr>
+                                        }
+                                        @if (topProducts.Count == 0)
+                                        {
+                                            <tr>
+                                                <td colspan="4" class="text-center">
+                                                    <MudText Color="Color.Secondary">Нет данных за указанный период</MudText>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Показатели задач">
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4 h-100">
+                                <MudText Typo="Typo.h6" Class="mb-4">Распределение задач по статусам</MudText>
+                                <div class="chart-container">
+                                    <MudChart ChartType="ChartType.Donut" ChartSeries="@taskStatusSeries" Width="100%" Height="400px">
+                                        <CustomGraphics>
+                                            @if (taskStatusSeries.Sum(s => s.Data.Sum()) == 0)
+                                            {
+                                                <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                            }
+                                        </CustomGraphics>
+                                    </MudChart>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Class="pa-4 h-100">
+                                <MudText Typo="Typo.h6" Class="mb-4">Выполнение задач по отделам</MudText>
+                                <div class="chart-container">
+                                    <MudChart ChartType="ChartType.Bar" ChartSeries="@departmentTasksSeries" XAxisLabels="@departmentTasksLabels" Width="100%" Height="400px">
+                                        <CustomGraphics>
+                                            @if (departmentTasksSeries.Sum(s => s.Data.Sum()) == 0)
+                                            {
+                                                <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                            }
+                                        </CustomGraphics>
+                                    </MudChart>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Расход материалов">
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudPaper Elevation="0" Class="pa-4 h-100">
+                                <MudText Typo="Typo.h6" Class="mb-4">Расход материалов по месяцам</MudText>
+                                <div class="chart-container">
+                                    <MudChart ChartType="ChartType.Bar" ChartSeries="@materialUsageSeries" XAxisLabels="@materialUsageLabels" Width="100%" Height="400px">
+                                        <CustomGraphics>
+                                            @if (materialUsageSeries.Sum(s => s.Data.Sum()) == 0)
+                                            {
+                                                <MudText Align="Align.Center" Color="Color.Secondary" Class="mt-16">Нет данных за указанный период</MudText>
+                                            }
+                                        </CustomGraphics>
+                                    </MudChart>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudPaper Elevation="0" Class="pa-4">
+                                <MudText Typo="Typo.h6" Class="mb-4">Топ используемых материалов</MudText>
+                                <MudSimpleTable Hover="true" Dense="true">
+                                    <thead>
+                                        <tr>
+                                            <th>Материал</th>
+                                            <th>Код</th>
+                                            <th>Израсходовано</th>
+                                            <th>Ед. измерения</th>
+                                            <th>На сумму, ₽</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var material in topMaterials)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <MudLink Href="@($"/materials/{material.Id}")" Underline="Underline.Hover">
+                                                        @material.Name
+                                                    </MudLink>
+                                                </td>
+                                                <td>@material.Code</td>
+                                                <td>@material.Quantity.ToString("F2")</td>
+                                                <td>@material.UnitOfMeasure</td>
+                                                <td>@material.TotalCost.ToString("C2")</td>
+                                            </tr>
+                                        }
+                                        @if (!topMaterials.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="5" class="text-center">
+                                                    <MudText Color="Color.Secondary">Нет данных за указанный период</MudText>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+            </MudTabs>
+        </div>
+    }
+</MudContainer>
+
+<style>
+    /* Улучшенные стили для графиков */
+    .chart-container {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        padding: 10px 0;
+    }
+
+        .chart-container .mud-chart {
+            margin: 0 auto;
+        }
+
+    .mud-chart-line .mud-chart-serie {
+        stroke-width: 3px;
+    }
+
+    .mud-chart .mud-chart-xaxis text {
+        font-size: 11px;
+        font-weight: 500;
+        fill: #555;
+    }
+
+    .mud-chart .mud-chart-yaxis text {
+        font-size: 10px;
+        fill: #666;
+    }
+
+    .mud-chart .mud-chart-legend text {
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    /* ИСПРАВЛЕНО: Адаптивность для мобильных устройств */
+    @@media (max-width: 768px) {
+        .mud-chart .mud-chart-xaxis text {
+            font-size: 9px;
+            transform: rotate(-30deg);
+            text-anchor: end !important;
+        }
+
+        .chart-container {
+            overflow-x: auto;
+            min-width: 300px;
+        }
+
+        .d-flex.gap-2.flex-wrap {
+            flex-direction: column;
+            gap: 8px !important;
+        }
+
+            .d-flex.gap-2.flex-wrap > * {
+                width: 100%;
+            }
+    }
+
+    @@media (max-width: 480px) {
+        .mud-chart .mud-chart-xaxis text {
+            font-size: 8px;
+            transform: rotate(-45deg);
+        }
+    }
+
+    /* ИСПРАВЛЕНО: Стили для карточек показателей */
+    .analytics-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .analytics-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+        }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private DateRange dateRange = new DateRange(DateTime.Now.AddDays(-7), DateTime.Now);
+    private Guid? selectedDepartmentId = null;
+    private List<DepartmentModel> departments = new();
+
+    // Данные для карточек
+    private int totalProductionCount = 0;
+    private int previousProductionCount = 0;
+    private int completedTasksCount = 0;
+    private int previousCompletedTasksCount = 0;
+    private int usedMaterialsCount = 0;
+    private int previousUsedMaterialsCount = 0;
+    private double efficiency = 0;
+    private double previousEfficiency = 0;
+
+    // Данные для графиков
+    private List<ChartSeries> dailyProductionSeries = new();
+    private string[] dailyProductionLabels = Array.Empty<string>();
+
+    private List<ChartSeries> monthlyProductionSeries = new();
+    private string[] monthlyProductionLabels = Array.Empty<string>();
+
+    private List<ChartSeries> productTypeSeries = new();
+    private List<ProductStatsModel> topProducts = new();
+
+    private List<ChartSeries> taskStatusSeries = new();
+
+    private List<ChartSeries> departmentTasksSeries = new();
+    private string[] departmentTasksLabels = Array.Empty<string>();
+
+    private List<ChartSeries> materialUsageSeries = new();
+    private string[] materialUsageLabels = Array.Empty<string>();
+
+    private List<MaterialUsageModel> topMaterials = new();
+
+    // Статусы задач для отображения в графиках
+    private Dictionary<int, string> taskStatuses = new Dictionary<int, string>
+    {
+        { 1, "Создана" },
+        { 2, "В работе" },
+        { 3, "Требует уточнения" },
+        { 4, "На проверке" },
+        { 5, "Выполнена" },
+        { 6, "Отклонена" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDepartments();
+        await LoadData();
+    }
+
+    private void SetQuickDateRange(int daysBack)
+    {
+        var today = DateTime.Now.Date;
+        dateRange = new DateRange(today.AddDays(-daysBack), today);
+
+        StateHasChanged();
+        _ = Task.Run(async () =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadData();
+                StateHasChanged();
+            });
+        });
+    }
+
+    private bool IsQuickRangeSelected(int daysBack)
+    {
+        var today = DateTime.Now.Date;
+        var expectedStart = today.AddDays(-daysBack);
+        var expectedEnd = today;
+
+        return dateRange.Start?.Date == expectedStart && dateRange.End?.Date == expectedEnd;
+    }
+
+    private string GetChartTitle()
+    {
+        var today = DateTime.Now.Date;
+        var start = dateRange.Start?.Date;
+        var end = dateRange.End?.Date;
+
+        if (start == today.AddDays(-3) && end == today)
+            return "Производство за 3 дня";
+
+        if (start == today.AddDays(-7) && end == today)
+            return "Производство за неделю";
+
+        if (start == today.AddDays(-30) && end == today)
+            return "Производство за месяц";
+
+        var days = (end - start)?.TotalDays ?? 0;
+
+        if (days <= 1)
+            return $"Производство за {start:dd.MM.yyyy}";
+        else if (days <= 7)
+            return $"Производство за {days:F0} дн.";
+        else if (days <= 31)
+            return $"Производство за {days:F0} дн.";
+        else if (days <= 93)
+            return $"Производство за {days / 30:F0} мес.";
+        else
+            return $"Производство за {days / 365:F1} г.";
+    }
+
+    private void SetDateRange(int days)
+    {
+        dateRange = new DateRange(DateTime.Now.AddDays(-days), DateTime.Now);
+    }
+
+    private async Task LoadDepartments()
+    {
+        try
+        {
+            var deptDtos = await DepartmentService.GetAllDepartmentsAsync();
+            departments = deptDtos.Select(d => new DepartmentModel
+            {
+                Id = d.Id,
+                Name = d.Name
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке списка отделов: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        try
+        {
+            var endDate = dateRange.End ?? DateTime.Now;
+            var startDate = dateRange.Start ?? DateTime.Now.AddDays(-1);
+
+            var periodLength = (endDate - startDate).TotalDays;
+            var previousStartDate = startDate.AddDays(-periodLength);
+            var previousEndDate = startDate.AddDays(-1);
+
+            await LoadKeyMetrics(startDate, endDate, previousStartDate, previousEndDate);
+            await PrepareProductionCharts(startDate, endDate);
+            await PrepareTaskCharts(startDate, endDate);
+            await PrepareMaterialsCharts(startDate, endDate);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при загрузке данных: {ex.Message}", Severity.Error);
+            Console.WriteLine($"Ошибка загрузки данных аналитики: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadKeyMetrics(DateTime startDate, DateTime endDate,
+                                     DateTime previousStartDate, DateTime previousEndDate)
+    {
+        try
+        {
+            var productTransactions = await ProductService.GetTransactionsByDateRangeAsync(startDate, endDate);
+            var previousProductTransactions = await ProductService.GetTransactionsByDateRangeAsync(
+                previousStartDate, previousEndDate);
+
+            totalProductionCount = (int)productTransactions
+                .Where(t => t.TransactionType == "Production")
+                .Sum(t => t.Quantity);
+
+            previousProductionCount = (int)previousProductTransactions
+                .Where(t => t.TransactionType == "Production")
+                .Sum(t => t.Quantity);
+
+            var tasks = await TaskService.GetTasksByDueDateRangeAsync(startDate, endDate);
+            var previousTasks = await TaskService.GetTasksByDueDateRangeAsync(previousStartDate, previousEndDate);
+
+            completedTasksCount = tasks.Count(t => t.StatusId == 5);
+            previousCompletedTasksCount = previousTasks.Count(t => t.StatusId == 5);
+
+            try
+            {
+                var materialTransactions = await MaterialService.GetTransactionsByDateRangeAsync(startDate, endDate);
+                var previousMaterialTransactions = await MaterialService.GetTransactionsByDateRangeAsync(
+                    previousStartDate, previousEndDate);
+
+                usedMaterialsCount = materialTransactions
+                    .Where(t => t.TransactionType == "Issue")
+                    .Select(t => t.MaterialId)
+                    .Distinct()
+                    .Count();
+
+                previousUsedMaterialsCount = previousMaterialTransactions
+                    .Where(t => t.TransactionType == "Issue")
+                    .Select(t => t.MaterialId)
+                    .Distinct()
+                    .Count();
+            }
+            catch (Exception materialEx)
+            {
+                Console.WriteLine($"Ошибка загрузки материалов: {materialEx.Message}");
+                usedMaterialsCount = 0;
+                previousUsedMaterialsCount = 0;
+            }
+
+            int totalTasks = tasks.Count();
+            int totalPreviousTasks = previousTasks.Count();
+
+            efficiency = totalTasks > 0
+                ? (double)completedTasksCount / totalTasks * 100
+                : 0;
+
+            previousEfficiency = totalPreviousTasks > 0
+                ? (double)previousCompletedTasksCount / totalPreviousTasks * 100
+                : 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке ключевых показателей: {ex.Message}");
+            throw;
+        }
+    }
+
+    // ИСПРАВЛЕНО: Упрощенная логика для избежания проблем с компиляцией
+    private async Task PrepareProductionCharts(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            var productTransactions = await ProductService.GetTransactionsByDateRangeAsync(startDate, endDate);
+            var productionTransactions = productTransactions.Where(t => t.TransactionType == "Production").ToList();
+
+            var allProducts = await ProductService.GetAllProductsAsync();
+            var productTypesDict = allProducts.GroupBy(p => p.ProductTypeId)
+                .ToDictionary(g => g.Key, g => g.First().ProductTypeName);
+
+            // Умное управление количеством меток на оси X
+            var originalDays = (int)(endDate - startDate).TotalDays + 1;
+            int maxLabels = originalDays <= 7 ? originalDays :
+                           originalDays <= 30 ? Math.Min(10, originalDays) : 8;
+            int skipInterval = Math.Max(1, originalDays / maxLabels);
+
+            var dateLabels = new List<string>();
+            var dateValues = new List<DateTime>();
+            var today = DateTime.Now.Date;
+
+            for (int i = 0; i < originalDays; i += skipInterval)
+            {
+                var currentDate = startDate.AddDays(i);
+                dateValues.Add(currentDate);
+
+                string label = originalDays <= 7 ?
+                    (currentDate.Date == today.AddDays(-1) ? "Вчера" :
+                     currentDate.Date == today ? "Сегодня" :
+                     currentDate.ToString("dd.MM")) :
+                    currentDate.ToString("dd.MM");
+
+                dateLabels.Add(label);
+            }
+
+            dailyProductionLabels = dateLabels.ToArray();
+            int days = dateLabels.Count;
+
+            var departmentProductionByDay = new Dictionary<string, double[]>();
+
+            foreach (var transaction in productionTransactions)
+            {
+                string departmentName = "Другое";
+                var product = allProducts.FirstOrDefault(p => p.Id == transaction.ProductId);
+                if (product != null && !string.IsNullOrEmpty(product.DepartmentName))
+                {
+                    departmentName = product.DepartmentName;
+                }
+
+                if (!departmentProductionByDay.ContainsKey(departmentName))
+                {
+                    departmentProductionByDay[departmentName] = new double[days];
+                }
+
+                var transactionDate = transaction.CreatedAt.Date;
+                var closestDateIndex = -1;
+                var minDiff = TimeSpan.MaxValue;
+
+                for (int i = 0; i < dateValues.Count; i++)
+                {
+                    var diff = Math.Abs((transactionDate - dateValues[i]).TotalDays);
+                    if (diff < minDiff.TotalDays)
+                    {
+                        minDiff = TimeSpan.FromDays(diff);
+                        closestDateIndex = i;
+                    }
+                }
+
+                if (closestDateIndex >= 0 && closestDateIndex < days)
+                {
+                    departmentProductionByDay[departmentName][closestDateIndex] += (double)transaction.Quantity;
+                }
+            }
+
+            if (departmentProductionByDay.Count == 0)
+            {
+                departmentProductionByDay["Нет данных"] = new double[days];
+            }
+
+            dailyProductionSeries = departmentProductionByDay
+                .Select(kvp => new ChartSeries
+                {
+                    Name = kvp.Key,
+                    Data = kvp.Value
+                })
+                .ToList();
+
+            // Месячный график
+            var currentMonth = DateTime.Now;
+            var months = new List<DateTime>();
+
+            for (int i = 5; i >= 0; i--)
+            {
+                months.Add(new DateTime(currentMonth.Year, currentMonth.Month, 1).AddMonths(-i));
+            }
+
+            monthlyProductionLabels = months.Select(m => m.ToString("MMM yyyy", new CultureInfo("ru-RU"))).ToArray();
+
+            var departmentProductionByMonth = new Dictionary<string, double[]>();
+
+            foreach (var transaction in productionTransactions)
+            {
+                string departmentName = "Другое";
+                var product = allProducts.FirstOrDefault(p => p.Id == transaction.ProductId);
+                if (product != null && !string.IsNullOrEmpty(product.DepartmentName))
+                {
+                    departmentName = product.DepartmentName;
+                }
+
+                if (!departmentProductionByMonth.ContainsKey(departmentName))
+                {
+                    departmentProductionByMonth[departmentName] = new double[6];
+                }
+
+                var transactionMonth = new DateTime(transaction.CreatedAt.Year, transaction.CreatedAt.Month, 1);
+                var monthIndex = months.FindIndex(m => m == transactionMonth);
+
+                if (monthIndex >= 0 && monthIndex < 6)
+                {
+                    departmentProductionByMonth[departmentName][monthIndex] += (double)transaction.Quantity;
+                }
+            }
+
+            if (departmentProductionByMonth.Count == 0)
+            {
+                departmentProductionByMonth["Нет данных"] = new double[6];
+            }
+
+            monthlyProductionSeries = departmentProductionByMonth
+                .Select(kvp => new ChartSeries
+                {
+                    Name = kvp.Key,
+                    Data = kvp.Value
+                })
+                .ToList();
+
+            // Диаграмма типов продукции
+            var productionByType = productionTransactions
+                .Join(allProducts,
+                    t => t.ProductId,
+                    p => p.Id,
+                    (t, p) => new { Transaction = t, Product = p })
+                .GroupBy(x => x.Product.ProductTypeId)
+                .Select(g => new
+                {
+                    TypeId = g.Key,
+                    TypeName = productTypesDict.ContainsKey(g.Key) ? productTypesDict[g.Key] : "Без категории",
+                    Quantity = g.Sum(x => x.Transaction.Quantity)
+                })
+                .OrderByDescending(x => x.Quantity)
+                .ToList();
+
+            productTypeSeries = productionByType
+                .Select(x => new ChartSeries
+                {
+                    Name = x.TypeName,
+                    Data = new double[] { (double)x.Quantity }
+                })
+                .ToList();
+
+            // Топ продуктов
+            var productionByProduct = productionTransactions
+                .GroupBy(t => t.ProductId)
+                .Select(g => new
+                {
+                    ProductId = g.Key,
+                    ProductName = g.First().ProductName ?? "Неизвестный продукт",
+                    Quantity = g.Sum(t => t.Quantity)
+                })
+                .OrderByDescending(x => x.Quantity)
+                .Take(10)
+                .ToList();
+
+            var totalProduction = (double)productionByProduct.Sum(p => p.Quantity);
+
+            topProducts = productionByProduct
+                .Join(allProducts,
+                    pb => pb.ProductId,
+                    p => p.Id,
+                    (pb, p) => new ProductStatsModel
+                    {
+                        Id = pb.ProductId,
+                        Name = pb.ProductName,
+                        Code = p.Code ?? "Н/Д",
+                        Quantity = (int)pb.Quantity,
+                        Percentage = totalProduction > 0 ? (double)pb.Quantity / totalProduction * 100 : 0
+                    })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при подготовке графиков производства: {ex}");
+
+            dailyProductionLabels = new string[] { "День 1", "День 2", "День 3", "День 4" };
+            dailyProductionSeries = new List<ChartSeries>
+            {
+                new ChartSeries { Name = "Нет данных", Data = new double[] { 0, 0, 0, 0 } }
+            };
+
+            monthlyProductionLabels = new string[] { "Янв", "Фев", "Мар", "Апр", "Май", "Июн" };
+            monthlyProductionSeries = new List<ChartSeries>
+            {
+                new ChartSeries { Name = "Нет данных", Data = new double[] { 0, 0, 0, 0, 0, 0 } }
+            };
+
+            topProducts = new List<ProductStatsModel>();
+            productTypeSeries = new List<ChartSeries>();
+        }
+    }
+
+    private async Task PrepareTaskCharts(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            var tasks = await TaskService.GetTasksByDueDateRangeAsync(startDate, endDate);
+
+            var tasksByStatus = tasks
+                .GroupBy(t => t.StatusId)
+                .Select(g => new
+                {
+                    StatusId = g.Key,
+                    StatusName = taskStatuses.ContainsKey(g.Key) ? taskStatuses[g.Key] : $"Статус {g.Key}",
+                    Count = g.Count()
+                })
+                .OrderBy(x => x.StatusId)
+                .ToList();
+
+            taskStatusSeries = tasksByStatus
+                .Select(x => new ChartSeries
+                {
+                    Name = x.StatusName,
+                    Data = new double[] { x.Count }
+                })
+                .ToList();
+
+            var departmentsWithTasks = tasks
+                .Where(t => t.DepartmentId.HasValue)
+                .GroupBy(t => t.DepartmentName ?? "Без отдела")
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.ToList()
+                );
+
+            departmentTasksLabels = departmentsWithTasks.Keys.ToArray();
+
+            var statusesToShow = new[] { 5, 2, 3 };
+
+            departmentTasksSeries = statusesToShow.Select(statusId =>
+            {
+                string statusName = taskStatuses.ContainsKey(statusId) ? taskStatuses[statusId] : $"Статус {statusId}";
+                var data = departmentTasksLabels.Select(dept =>
+                {
+                    if (!departmentsWithTasks.ContainsKey(dept)) return 0.0;
+                    return (double)departmentsWithTasks[dept].Count(t => t.StatusId == statusId);
+                }).ToArray();
+
+                return new ChartSeries
+                {
+                    Name = statusName,
+                    Data = data
+                };
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при подготовке графиков задач: {ex}");
+            throw;
+        }
+    }
+
+    private async Task PrepareMaterialsCharts(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            try
+            {
+                var materialTransactions = await MaterialService.GetTransactionsByDateRangeAsync(startDate, endDate);
+                var consumptionTransactions = materialTransactions
+                    .Where(t => t.TransactionType == "Issue")
+                    .ToList();
+
+                var allMaterials = await MaterialService.GetAllMaterialsAsync();
+
+                DateTime firstDay = new DateTime(startDate.Year, startDate.Month, 1);
+                DateTime lastDay = new DateTime(endDate.Year, endDate.Month, DateTime.DaysInMonth(endDate.Year, endDate.Month));
+                int monthsCount = ((lastDay.Year - firstDay.Year) * 12) + lastDay.Month - firstDay.Month + 1;
+
+                materialUsageLabels = Enumerable.Range(0, monthsCount)
+                    .Select(i => firstDay.AddMonths(i).ToString("MM.yyyy"))
+                    .ToArray();
+
+                var topMaterialIds = consumptionTransactions
+                    .GroupBy(t => t.MaterialId)
+                    .Select(g => new { MaterialId = g.Key, TotalUsage = g.Sum(t => t.Quantity) })
+                    .OrderByDescending(x => x.TotalUsage)
+                    .Take(3)
+                    .Select(x => x.MaterialId)
+                    .ToList();
+
+                var materialNames = allMaterials
+                    .Where(m => topMaterialIds.Contains(m.Id))
+                    .ToDictionary(m => m.Id, m => m.Name);
+
+                var topMaterialsUsageByMonth = topMaterialIds.ToDictionary(
+                    id => id,
+                    id => new double[monthsCount]
+                );
+
+                double[] otherMaterialsUsage = new double[monthsCount];
+
+                foreach (var transaction in consumptionTransactions)
+                {
+                    int monthIndex = ((transaction.CreatedAt.Year - firstDay.Year) * 12) + transaction.CreatedAt.Month - firstDay.Month;
+                    if (monthIndex >= 0 && monthIndex < monthsCount)
+                    {
+                        if (topMaterialIds.Contains(transaction.MaterialId))
+                        {
+                            topMaterialsUsageByMonth[transaction.MaterialId][monthIndex] += (double)transaction.Quantity;
+                        }
+                        else
+                        {
+                            otherMaterialsUsage[monthIndex] += (double)transaction.Quantity;
+                        }
+                    }
+                }
+
+                materialUsageSeries = topMaterialsUsageByMonth
+                    .Select(kvp => new ChartSeries
+                    {
+                        Name = materialNames.ContainsKey(kvp.Key) ? materialNames[kvp.Key] : $"Материал {kvp.Key}",
+                        Data = kvp.Value
+                    })
+                    .ToList();
+
+                if (otherMaterialsUsage.Sum() > 0)
+                {
+                    materialUsageSeries.Add(new ChartSeries
+                    {
+                        Name = "Другие материалы",
+                        Data = otherMaterialsUsage
+                    });
+                }
+
+                var materialUsageSummary = consumptionTransactions
+                    .GroupBy(t => t.MaterialId)
+                    .Select(g => new
+                    {
+                        MaterialId = g.Key,
+                        TotalQuantity = g.Sum(t => t.Quantity)
+                    })
+                    .OrderByDescending(x => x.TotalQuantity)
+                    .Take(10)
+                    .ToList();
+
+                topMaterials = materialUsageSummary
+                    .Join(allMaterials,
+                        u => u.MaterialId,
+                        m => m.Id,
+                        (u, m) => new MaterialUsageModel
+                        {
+                            Id = m.Id,
+                            Name = m.Name,
+                            Code = m.Code,
+                            Quantity = u.TotalQuantity,
+                            UnitOfMeasure = m.UnitOfMeasure ?? "шт.",
+                            TotalCost = u.TotalQuantity * m.Price
+                        })
+                    .ToList();
+            }
+            catch (Exception materialEx)
+            {
+                Console.WriteLine($"Ошибка загрузки материалов: {materialEx.Message}");
+                materialUsageSeries = new List<ChartSeries>();
+                materialUsageLabels = Array.Empty<string>();
+                topMaterials = new List<MaterialUsageModel>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при подготовке графиков материалов: {ex}");
+            materialUsageSeries = new List<ChartSeries>();
+            materialUsageLabels = Array.Empty<string>();
+            topMaterials = new List<MaterialUsageModel>();
+        }
+    }
+
+    private string GetComparisonText(double current, double previous, bool isPercent = false)
+    {
+        if (previous == 0)
+            return "Нет данных для сравнения";
+
+        var diff = current - previous;
+        var percentDiff = (diff / previous) * 100;
+        var icon = diff >= 0 ? "↑" : "↓";
+        var color = diff >= 0 ? "text-success" : "text-danger";
+
+        return $"<span class=\"{color}\">{icon} {Math.Abs(percentDiff):F1}%</span> {(isPercent ? "п.п." : "к предыдущему периоду")}";
+    }
+
+    private Guid? _previousSelectedDepartmentId = null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && _previousSelectedDepartmentId != selectedDepartmentId)
+        {
+            _previousSelectedDepartmentId = selectedDepartmentId;
+            await LoadData();
+            StateHasChanged();
+        }
+    }
+
+    private string GetChartDescription()
+    {
+        var start = dateRange.Start?.Date;
+        var end = dateRange.End?.Date;
+        var days = Math.Floor((end - start)?.TotalDays ?? 0);
+
+        return $"Период: {start:dd.MM.yyyy} - {end:dd.MM.yyyy} ({days} дн.)";
+    }
+
+    // ИСПРАВЛЕНО: Убрали несуществующее свойство DisableLegend
+    private ChartOptions chartOptions = new()
+    {
+        YAxisTicks = 6,
+        YAxisFormat = "F0",
+        InterpolationOption = InterpolationOption.Straight,
+        LineStrokeWidth = 3,
+        MaxNumYAxisTicks = 8,
+        XAxisLines = true,
+        YAxisLines = true,
+        ChartPalette = new string[] { "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b" }
+    };
+
+    private ChartOptions monthlyChartOptions = new()
+    {
+        YAxisTicks = 8,
+        YAxisFormat = "F0",
+        LineStrokeWidth = 2,
+        MaxNumYAxisTicks = 10,
+        XAxisLines = true,
+        YAxisLines = true,
+        ChartPalette = new string[] { "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b" }
+    };
+
+    public class ProductStatsModel
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+        public string Code { get; set; }
+        public int Quantity { get; set; }
+        public double Percentage { get; set; }
+    }
+
+    public class MaterialUsageModel
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+        public string Code { get; set; }
+        public decimal Quantity { get; set; }
+        public string UnitOfMeasure { get; set; }
+        public decimal TotalCost { get; set; }
+    }
+}

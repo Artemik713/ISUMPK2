@@ -30,6 +30,37 @@ namespace ISUMPK2.Application.DTOs
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public List<TaskCommentDto> Comments { get; set; } = new List<TaskCommentDto>();
+
+        // Добавляем недостающие свойства для UI
+        public bool IsOverdue => DueDate.HasValue && DueDate.Value < DateTime.Now && StatusId != 5;
+        public string StatusBadgeColor => GetStatusBadgeColor(StatusId);
+        public string PriorityBadgeColor => GetPriorityBadgeColor(PriorityId);
+
+        private static string GetStatusBadgeColor(int statusId)
+        {
+            return statusId switch
+            {
+                1 => "Default",  // Создана
+                2 => "Info",     // В работе
+                3 => "Warning",  // На доработке
+                4 => "Primary",  // На проверке
+                5 => "Success",  // Выполнена
+                6 => "Error",    // Отклонена
+                _ => "Default"
+            };
+        }
+
+        private static string GetPriorityBadgeColor(int priorityId)
+        {
+            return priorityId switch
+            {
+                1 => "Default",  // Низкий
+                2 => "Info",     // Средний
+                3 => "Warning",  // Высокий
+                4 => "Error",    // Критический
+                _ => "Default"
+            };
+        }
     }
 
     public class TaskCreateDto
@@ -45,6 +76,7 @@ namespace ISUMPK2.Application.DTOs
         public decimal? EstimatedHours { get; set; }
         public Guid? ProductId { get; set; }
         public decimal? Quantity { get; set; }
+        public List<TaskMaterialCreateDto> Materials { get; set; } = new List<TaskMaterialCreateDto>();
     }
 
     public class TaskUpdateDto

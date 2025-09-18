@@ -1,0 +1,588 @@
+﻿@using ISUMPK2.Web.Models
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Extensions
+@using MudBlazor
+@inject ITaskService TaskService
+@inject NavigationManager NavigationManager
+
+@if (task != null)
+{
+    <MudCard Class="task-card-modern" Elevation="0">
+        <!-- Заголовок с градиентом -->
+        <div class="task-header @GetStatusClass(task.StatusId)">
+            <div class="d-flex justify-space-between align-center">
+                <div class="task-title-section">
+                    <MudText Typo="Typo.h6" Class="task-title">@task.Title</MudText>
+                    @if (!string.IsNullOrEmpty(task.ProductName))
+                    {
+                        <div class="product-info">
+                            <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" />
+                            <MudText Typo="Typo.body2">@task.ProductName</MudText>
+                        </div>
+                    }
+                </div>
+                <MudChip Class="@GetStatusChipFullClass(task.StatusId)" Size="Size.Small" T="string">
+                    @task.StatusName
+                </MudChip>
+            </div>
+        </div>
+
+        <MudCardContent Class="task-content">
+            @if (!string.IsNullOrEmpty(task.Description))
+            {
+                <div class="task-description">
+                    <MudText Typo="Typo.body2">
+                        @(task.Description.Length > 120 ? task.Description.Substring(0, 120) + "..." : task.Description)
+                    </MudText>
+                </div>
+            }
+
+            <!-- Информационные блоки -->
+            <div class="info-grid">
+                <!-- Исполнитель -->
+                <div class="info-item">
+                    <div class="info-icon assignee">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                    </div>
+                    <div class="info-content">
+                        <MudText Typo="Typo.caption" Class="info-label">Исполнитель</MudText>
+                        <MudText Typo="Typo.body2" Class="info-value">@(task.AssigneeName ?? "Не назначен")</MudText>
+                    </div>
+                </div>
+
+                <!-- Приоритет -->
+                <div class="info-item">
+                    <div class="info-icon priority @GetPriorityClass(task.PriorityId)">
+                        <MudIcon Icon="@Icons.Material.Filled.Flag" Size="Size.Small" />
+                    </div>
+                    <div class="info-content">
+                        <MudText Typo="Typo.caption" Class="info-label">Приоритет</MudText>
+                        <MudText Typo="Typo.body2" Class="info-value">@task.PriorityName</MudText>
+                    </div>
+                </div>
+
+                @if (task.DueDate.HasValue)
+                {
+                    <!-- Срок выполнения -->
+                    <div class="info-item">
+                        <div class="info-icon deadline @(task.IsOverdue ? "overdue" : "")">
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
+                        </div>
+                        <div class="info-content">
+                            <MudText Typo="Typo.caption" Class="info-label">Срок выполнения</MudText>
+                            <MudText Typo="Typo.body2" Class="@GetDueDateClass(task.IsOverdue)">
+                                @task.DueDate.Value.ToString("dd.MM.yyyy")
+                                @if (task.IsOverdue)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Color="Color.Error" />
+                                }
+                            </MudText>
+                        </div>
+                    </div>
+                }
+
+                @if (task.Quantity.HasValue)
+                {
+                    <!-- Количество -->
+                    <div class="info-item">
+                        <div class="info-icon quantity">
+                            <MudIcon Icon="@Icons.Material.Filled.Numbers" Size="Size.Small" />
+                        </div>
+                        <div class="info-content">
+                            <MudText Typo="Typo.caption" Class="info-label">Количество</MudText>
+                            <MudText Typo="Typo.body2" Class="info-value">@task.Quantity.Value</MudText>
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(task.DepartmentName))
+                {
+                    <!-- Отдел -->
+                    <div class="info-item">
+                        <div class="info-icon department">
+                            <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Small" />
+                        </div>
+                        <div class="info-content">
+                            <MudText Typo="Typo.caption" Class="info-label">Отдел</MudText>
+                            <MudText Typo="Typo.body2" Class="info-value">@task.DepartmentName</MudText>
+                        </div>
+                    </div>
+                }
+            </div>
+        </MudCardContent>
+
+        <MudCardActions Class="task-actions">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="@NavigateToTask"
+                       StartIcon="@Icons.Material.Filled.OpenInNew"
+                       Class="open-task-btn">
+                Открыть задачу
+            </MudButton>
+            @if (OnClose.HasDelegate)
+            {
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           OnClick="@(() => OnClose.InvokeAsync())"
+                           Class="close-btn">
+                    Закрыть
+                </MudButton>
+            }
+        </MudCardActions>
+    </MudCard>
+}
+else
+{
+    <MudCard Class="task-card-modern loading-card" Elevation="0">
+        <MudCardContent>
+            <div class="loading-content">
+                @if (isLoading)
+                {
+                    <div class="loading-state">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Medium" />
+                        <MudText Typo="Typo.body2" Class="mt-3">Загрузка задачи...</MudText>
+                    </div>
+                }
+                else if (hasError)
+                {
+                    <div class="error-state">
+                        <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error" Size="Size.Large" />
+                        <MudText Typo="Typo.h6" Class="mt-2" Color="Color.Error">Ошибка загрузки</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@errorMessage</MudText>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <MudIcon Icon="@Icons.Material.Filled.Assignment" Color="Color.Secondary" Size="Size.Large" />
+                        <MudText Typo="Typo.h6" Class="mt-2">Задача не найдена</MudText>
+                    </div>
+                }
+            </div>
+        </MudCardContent>
+    </MudCard>
+}
+
+<style>
+    .task-card-modern {
+        max-width: 500px;
+        margin: 0 auto;
+        border-radius: 16px !important;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+        background: white;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .task-header {
+        padding: 20px 24px 16px;
+        position: relative;
+        overflow: hidden;
+    }
+
+        .task-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.1;
+            z-index: 0;
+        }
+
+        .task-header.status-created::before {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+        }
+
+        .task-header.status-progress::before {
+            background: linear-gradient(135deg, #00BCD4, #0097A7);
+        }
+
+        .task-header.status-review::before {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+        }
+
+        .task-header.status-verification::before {
+            background: linear-gradient(135deg, #9C27B0, #7B1FA2);
+        }
+
+        .task-header.status-completed::before {
+            background: linear-gradient(135deg, #4CAF50, #388E3C);
+        }
+
+        .task-header.status-rejected::before {
+            background: linear-gradient(135deg, #F44336, #D32F2F);
+        }
+
+    .task-title-section {
+        position: relative;
+        z-index: 1;
+    }
+
+    .task-title {
+        font-weight: 600 !important;
+        color: #1a1a1a;
+        margin-bottom: 8px !important;
+        line-height: 1.3;
+    }
+
+    .product-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #666;
+        margin-top: 4px;
+    }
+
+    .status-chip {
+        position: relative;
+        z-index: 1;
+        font-weight: 600 !important;
+        border-radius: 12px !important;
+        padding: 0 12px !important;
+    }
+
+    .chip-created {
+        background: #E3F2FD !important;
+        color: #1976D2 !important;
+    }
+
+    .chip-progress {
+        background: #E0F2F1 !important;
+        color: #00796B !important;
+    }
+
+    .chip-review {
+        background: #FFF3E0 !important;
+        color: #F57C00 !important;
+    }
+
+    .chip-verification {
+        background: #F3E5F5 !important;
+        color: #7B1FA2 !important;
+    }
+
+    .chip-completed {
+        background: #E8F5E8 !important;
+        color: #2E7D32 !important;
+    }
+
+    .chip-rejected {
+        background: #FFEBEE !important;
+        color: #C62828 !important;
+    }
+
+    .task-content {
+        padding: 0 24px 20px !important;
+    }
+
+    .task-description {
+        margin-bottom: 20px;
+        padding: 16px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        border-left: 4px solid #2196F3;
+    }
+
+    .info-grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .info-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px;
+        background: white;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        transition: all 0.2s ease;
+    }
+
+        .info-item:hover {
+            border-color: #2196F3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+    .info-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        flex-shrink: 0;
+    }
+
+        .info-icon.assignee {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+        }
+
+        .info-icon.priority.priority-low {
+            background: linear-gradient(135deg, #4CAF50, #388E3C);
+        }
+
+        .info-icon.priority.priority-medium {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+        }
+
+        .info-icon.priority.priority-high {
+            background: linear-gradient(135deg, #FF5722, #D84315);
+        }
+
+        .info-icon.priority.priority-critical {
+            background: linear-gradient(135deg, #F44336, #C62828);
+        }
+
+        .info-icon.deadline {
+            background: linear-gradient(135deg, #9C27B0, #7B1FA2);
+        }
+
+            .info-icon.deadline.overdue {
+                background: linear-gradient(135deg, #F44336, #C62828);
+            }
+
+        .info-icon.quantity {
+            background: linear-gradient(135deg, #607D8B, #455A64);
+        }
+
+        .info-icon.department {
+            background: linear-gradient(135deg, #795548, #5D4037);
+        }
+
+    .info-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .info-label {
+        color: #666 !important;
+        font-weight: 500 !important;
+        margin-bottom: 2px !important;
+        font-size: 0.75rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        color: #1a1a1a !important;
+        font-weight: 500 !important;
+        word-break: break-word;
+    }
+
+    .text-danger {
+        color: #f44336 !important;
+    }
+
+    .task-actions {
+        padding: 16px 24px 20px !important;
+        background: #fafafa;
+        gap: 12px;
+    }
+
+    .open-task-btn {
+        border-radius: 10px !important;
+        padding: 8px 20px !important;
+        font-weight: 600 !important;
+        background: linear-gradient(135deg, #2196F3, #1976D2) !important;
+        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3) !important;
+        transition: all 0.2s ease !important;
+    }
+
+        .open-task-btn:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4) !important;
+        }
+
+    .close-btn {
+        border-radius: 10px !important;
+        padding: 8px 16px !important;
+        color: #666 !important;
+    }
+
+    .loading-card {
+        min-height: 200px;
+    }
+
+    .loading-content {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 160px;
+        text-align: center;
+    }
+
+    .loading-state, .error-state, .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #666;
+    }
+
+    /* Мобильная адаптация */
+    @@media (max-width: 600px) {
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .task-card-modern {
+            margin: 0 8px;
+        }
+
+        .task-header, .task-content, .task-actions {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public Guid? TaskId { get; set; }
+    [Parameter] public TaskModel? Task { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private TaskModel? task;
+    private bool isLoading = false;
+    private bool hasError = false;
+    private string errorMessage = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Task != null)
+        {
+            task = Task;
+        }
+        else if (TaskId.HasValue)
+        {
+            await LoadTask();
+        }
+    }
+
+    private async Task LoadTask()
+    {
+        isLoading = true;
+        hasError = false;
+        StateHasChanged();
+
+        try
+        {
+            var taskDto = await TaskService.GetTaskByIdAsync(TaskId.Value);
+
+            if (taskDto != null)
+            {
+                task = taskDto.ToModel();
+            }
+            else
+            {
+                hasError = true;
+                errorMessage = "Задача не найдена";
+            }
+        }
+        catch (Exception ex)
+        {
+            hasError = true;
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void NavigateToTask()
+    {
+        if (task != null)
+        {
+            if (OnClose.HasDelegate)
+            {
+                OnClose.InvokeAsync(); // Закрываем диалог
+            }
+            NavigationManager.NavigateTo($"/tasks/{task.Id}");
+        }
+    }
+
+    private string GetStatusClass(int statusId)
+    {
+        return statusId switch
+        {
+            1 => "status-created",
+            2 => "status-progress",
+            3 => "status-review",
+            4 => "status-verification",
+            5 => "status-completed",
+            6 => "status-rejected",
+            _ => "status-created"
+        };
+    }
+
+    private string GetStatusChipClass(int statusId)
+    {
+        return statusId switch
+        {
+            1 => "chip-created",
+            2 => "chip-progress",
+            3 => "chip-review",
+            4 => "chip-verification",
+            5 => "chip-completed",
+            6 => "chip-rejected",
+            _ => "chip-created"
+        };
+    }
+
+    // ИСПРАВЛЕНО: Новый метод для полного класса чипа
+    private string GetStatusChipFullClass(int statusId)
+    {
+        return $"status-chip {GetStatusChipClass(statusId)}";
+    }
+
+    private string GetPriorityClass(int priorityId)
+    {
+        return priorityId switch
+        {
+            1 => "priority-low",
+            2 => "priority-medium",
+            3 => "priority-high",
+            4 => "priority-critical",
+            _ => "priority-medium"
+        };
+    }
+
+    // ИСПРАВЛЕНО: Новый метод для класса даты выполнения
+    private string GetDueDateClass(bool isOverdue)
+    {
+        return isOverdue ? "info-value text-danger" : "info-value";
+    }
+
+    private Color GetStatusColor(int statusId)
+    {
+        return statusId switch
+        {
+            1 => Color.Primary,
+            2 => Color.Info,
+            3 => Color.Warning,
+            4 => Color.Secondary,
+            5 => Color.Success,
+            6 => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private Color GetPriorityColor(int priorityId)
+    {
+        return priorityId switch
+        {
+            1 => Color.Info,
+            2 => Color.Success,
+            3 => Color.Warning,
+            4 => Color.Error,
+            _ => Color.Default
+        };
+    }
+}

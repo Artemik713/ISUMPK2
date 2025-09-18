@@ -1,0 +1,133 @@
+﻿@using MudBlazor
+@using ISUMPK2.Application.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-height: 500px; overflow-y: auto">
+            <MudText Typo="Typo.h6" Class="mb-3">Сообщить о форс-мажоре</MudText>
+            
+            <MudForm @ref="form">
+                <MudSelect T="string" @bind-Value="model.IssueType" Label="Тип проблемы" Required="true" RequiredError="Выберите тип проблемы">
+                    <MudSelectItem Value="@("equipment")">Поломка оборудования</MudSelectItem>
+                    <MudSelectItem Value="@("material")">Проблемы с материалом</MudSelectItem>
+                    <MudSelectItem Value="@("safety")">Нарушение техники безопасности</MudSelectItem>
+                    <MudSelectItem Value="@("health")">Травма/проблема со здоровьем</MudSelectItem>
+                    <MudSelectItem Value="@("other")">Другое</MudSelectItem>
+                </MudSelect>
+                
+                <MudTextField @bind-Value="model.Title" Label="Краткое описание" Required="true" 
+                           RequiredError="Введите краткое описание" Class="mt-3"/>
+                
+                <MudTextField @bind-Value="model.Description" Label="Подробное описание" Lines="5" 
+                           Required="true" RequiredError="Введите подробное описание" Class="mt-3"/>
+                
+                <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Добавить фото (необязательно)</MudText>
+                
+                <InputFile id="fileInput" OnChange="OnInputFileChange" hidden multiple />
+                <MudButton HtmlTag="label" for="fileInput" Variant="Variant.Filled" Color="Color.Secondary"
+                        StartIcon="@Icons.Material.Filled.CloudUpload" Size="Size.Small">
+                    Загрузить фото
+                </MudButton>
+                
+                @if (uploadedFiles.Any())
+                {
+                    <MudList T="IBrowserFile" Dense="true" Class="mt-2 pa-0" Clickable="false">
+                        @foreach (var file in uploadedFiles)
+                        {
+                            <MudListItem T="IBrowserFile">
+                                <div class="d-flex justify-space-between align-center">
+                                    <MudText Typo="Typo.body2">@file.Name (@(file.Size / 1024) KB)</MudText>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                   OnClick="@(() => RemoveFile(file))" />
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+                
+                <MudCheckBox T="bool" @bind-Checked="model.IsUrgent" Label="Требует немедленного вмешательства" 
+                          Color="Color.Error" Class="mt-3"/>
+            </MudForm>
+        </MudContainer>
+    </DialogContent>
+    
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Error" OnClick="Submit" Variant="Variant.Filled" Disabled="@(!IsValid())">
+            Отправить отчет
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
+    
+    private MudForm form;
+    private IssueReportModel model = new IssueReportModel();
+    private List<IBrowserFile> uploadedFiles = new List<IBrowserFile>();
+    
+    private async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        // Исправление для обработки файлов
+        int maxAllowedFiles = 5;
+        int remainingFiles = maxAllowedFiles - uploadedFiles.Count;
+
+        // В .NET используем GetMultipleFiles() без параметров
+        var files = e.GetMultipleFiles();
+        int filesToLoad = Math.Min(files.Count, remainingFiles);
+
+        for (int i = 0; i < filesToLoad; i++)
+        {
+            var file = files[i];
+
+            if (file.Size > 3 * 1024 * 1024) // 3MB max
+            {
+                Snackbar.Add($"Файл {file.Name} слишком большой (макс. 3MB)", Severity.Warning);
+                continue;
+            }
+
+            uploadedFiles.Add(file);
+        }
+
+        if (files.Count > remainingFiles)
+        {
+            Snackbar.Add($"Вы можете загрузить максимум {maxAllowedFiles} файлов", Severity.Warning);
+        }
+    }
+    
+    private void RemoveFile(IBrowserFile file)
+    {
+        uploadedFiles.Remove(file);
+    }
+    
+    private bool IsValid()
+    {
+        return !string.IsNullOrEmpty(model.IssueType) && 
+               !string.IsNullOrEmpty(model.Title) && 
+               !string.IsNullOrEmpty(model.Description);
+    }
+    
+    private void Cancel() => MudDialog.Cancel();
+    
+    private async Task Submit()
+    {
+        // Здесь логика отправки отчета о проблеме на сервер
+        // Включая загрузку файлов, если они есть
+        
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+    
+    public class IssueReportModel
+    {
+        public Guid TaskId { get; set; }
+        public string IssueType { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public bool IsUrgent { get; set; }
+        public DateTime ReportedAt { get; set; } = DateTime.Now;
+    }
+}

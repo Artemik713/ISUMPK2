@@ -1,0 +1,37 @@
+﻿@using ISUMPK2.Web.Models
+@using MudBlazor
+
+<MudList T="NotificationModel" Clickable="true">
+    @foreach (var notification in Notifications)
+    {
+        <MudListItem OnClick="@(() => OnNotificationClicked(notification))">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@(notification.IsRead ? Icons.Material.Outlined.Notifications : Icons.Material.Filled.Notifications)"
+                         Color="@(notification.IsRead ? Color.Default : Color.Primary)" Class="mr-3" />
+                <div class="flex-grow-1">
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body1" Style="@(notification.IsRead ? "" : "font-weight: bold")">@notification.Title</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@notification.CreatedAt.ToString("dd.MM.yyyy HH:mm")</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Style="@(notification.IsRead ? "color: var(--mud-palette-text-secondary)" : "")">
+                        @(notification.Message?.Length > 100 ? notification.Message.Substring(0, 100) + "..." : notification.Message)
+                    </MudText>
+                </div>
+            </div>
+        </MudListItem>
+        <MudDivider />
+    }
+</MudList>
+
+@code {
+    [Parameter]
+    public List<NotificationModel> Notifications { get; set; } = new List<NotificationModel>();
+    
+    [Parameter]
+    public EventCallback<NotificationModel> OnNotificationClick { get; set; }
+    
+    private async Task OnNotificationClicked(NotificationModel notification)
+    {
+        await OnNotificationClick.InvokeAsync(notification);
+    }
+}

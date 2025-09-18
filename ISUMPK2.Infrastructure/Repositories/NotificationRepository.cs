@@ -24,6 +24,14 @@ namespace ISUMPK2.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<Notification>> GetReadNotificationsForUserAsync(Guid userId)
+        {
+            return await _dbSet
+                .Where(n => n.UserId == userId && n.IsRead)
+                .Include(n => n.Task)
+                .OrderByDescending(n => n.CreatedAt)
+                .ToListAsync();
+        }
         public async Task MarkAsReadAsync(Guid notificationId)
         {
             var notification = await _dbSet.FindAsync(notificationId);

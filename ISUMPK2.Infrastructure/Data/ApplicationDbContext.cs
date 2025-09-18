@@ -30,14 +30,17 @@ namespace ISUMPK2.Infrastructure.Data
             public DbSet<ProductTransaction> ProductTransactions { get; set; }
             public DbSet<Notification> Notifications { get; set; }
             public DbSet<ChatMessage> ChatMessages { get; set; }
+            public DbSet<MaterialCategory> MaterialCategories { get; set; }
+            public DbSet<SubTask> SubTasks { get; set; }
+            public DbSet<TaskMaterial> TaskMaterials { get; set; }
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
 
-            protected override void OnModelCreating(ModelBuilder modelBuilder)
-            {
-                base.OnModelCreating(modelBuilder);
+            // Настройка для WorkTask
+            modelBuilder.Entity<WorkTask>()
+                .ToTable("Tasks");
 
-                // Настройка для WorkTask
-                modelBuilder.Entity<WorkTask>()
-                    .ToTable("Tasks"); ;
             // UserRole - составной первичный ключ
             modelBuilder.Entity<UserRole>()
                 .HasKey(ur => new { ur.UserId, ur.RoleId });
@@ -125,6 +128,7 @@ namespace ISUMPK2.Infrastructure.Data
                 .HasOne(cm => cm.Department)
                 .WithMany(d => d.ChatMessages)
                 .HasForeignKey(cm => cm.DepartmentId);
+
             // Настройка десятичных свойств для Material
             modelBuilder.Entity<Material>()
                 .Property(m => m.CurrentStock)
@@ -138,10 +142,37 @@ namespace ISUMPK2.Infrastructure.Data
                 .Property(m => m.Price)
                 .HasPrecision(18, 2);
 
-            // Настройка десятичных свойств для MaterialTransaction
-            modelBuilder.Entity<MaterialTransaction>()
-                .Property(mt => mt.Quantity)
-                .HasPrecision(18, 2);
+            // ИСПРАВЛЕНО: Настройка MaterialTransaction
+            modelBuilder.Entity<MaterialTransaction>(entity =>
+            {
+                entity.ToTable("MaterialTransactions");
+
+                // Настройка свойств
+                entity.Property(mt => mt.Quantity)
+                    .HasPrecision(18, 2);
+
+                entity.Property(mt => mt.TransactionType)
+                    .HasMaxLength(50);
+
+                entity.Property(mt => mt.Notes)
+                    .HasMaxLength(1000);
+
+                // Настройка связей без конфликтов
+                entity.HasOne(mt => mt.Material)
+                    .WithMany(m => m.Transactions)
+                    .HasForeignKey(mt => mt.MaterialId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(mt => mt.User)
+                    .WithMany()
+                    .HasForeignKey(mt => mt.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(mt => mt.Task)
+                    .WithMany()
+                    .HasForeignKey(mt => mt.TaskId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
 
             // Настройка десятичных свойств для Product
             modelBuilder.Entity<Product>()
@@ -175,11 +206,62 @@ namespace ISUMPK2.Infrastructure.Data
                 .Property(t => t.Quantity)
                 .HasPrecision(18, 2);
 
+            modelBuilder.Entity<MaterialCategory>()
+                .ToTable("MaterialCategories");
+
+            // Настройка иерархического отношения (самореферентная связь)
+            modelBuilder.Entity<MaterialCategory>()
+                .HasOne(mc => mc.ParentCategory)
+                .WithMany(mc => mc.Subcategories)
+                .HasForeignKey(mc => mc.ParentCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Настройка связи между Material и MaterialCategory
+            modelBuilder.Entity<Material>()
+                .HasOne(m => m.Category)
+                .WithMany(mc => mc.Materials)
+                .HasForeignKey(m => m.CategoryId);
+
+            modelBuilder.Entity<SubTask>()
+                .HasOne(s => s.ParentTask)
+                .WithMany(t => t.SubTasks)
+                .HasForeignKey(s => s.ParentTaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SubTask>()
+                .HasOne(s => s.Assignee)
+                .WithMany()
+                .HasForeignKey(s => s.AssigneeId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<SubTask>()
+                .HasOne(s => s.Status)
+                .WithMany()
+                .HasForeignKey(s => s.StatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<TaskMaterial>()
+                .HasOne(tm => tm.WorkTask)
+                .WithMany(t => t.TaskMaterials)
+                .HasForeignKey(tm => tm.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<TaskMaterial>()
+                .HasOne(tm => tm.Material)
+                .WithMany()
+                .HasForeignKey(tm => tm.MaterialId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Настройка для десятичного поля
+            modelBuilder.Entity<TaskMaterial>()
+                .Property(tm => tm.Quantity)
+                .HasPrecision(18, 2);
         }
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            var entries = ChangeTracker.Entries<BaseEntity>();
+            var entries = ChangeTracker.Entries<BaseEntity>()
+                .Where(e => e.Entity.GetType() != typeof(MaterialTransaction)); // Временно исключаем MaterialTransaction
 
             foreach (var entry in entries)
             {
@@ -192,6 +274,18 @@ namespace ISUMPK2.Infrastructure.Data
                 else if (entry.State == EntityState.Modified)
                 {
                     entry.Entity.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            // Отдельная обработка для MaterialTransaction
+            var materialTransactionEntries = ChangeTracker.Entries<MaterialTransaction>();
+            foreach (var entry in materialTransactionEntries)
+            {
+                if (entry.State == EntityState.Added)
+                {
+                    entry.Entity.Id = entry.Entity.Id == Guid.Empty ? Guid.NewGuid() : entry.Entity.Id;
+                    entry.Entity.CreatedAt = DateTime.UtcNow;
+                    // UpdatedAt будет установлен базой данных через DEFAULT
                 }
             }
 

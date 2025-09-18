@@ -1,47 +1,105 @@
 ﻿@using ISUMPK2.Application.DTOs
 @using ISUMPK2.Application.Services
+@using ISUMPK2.Application.Constants
 @using MudBlazor
-@inject IDepartmentService DepartmentService
+@inject IMaterialService MaterialService
 @inject MudBlazor.ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
         <MudForm @ref="form">
-            <MudTextField @bind-Value="model.Name" Label="Название отдела"
-                          Required="true" RequiredError="Название обязательно" />
-            
-            <MudTextField @bind-Value="model.Description" Label="Описание" 
-                          Lines="3" Class="mt-3" />
-            
-            <MudSelect @bind-Value="model.HeadId" Label="Руководитель" Class="mt-3">
-                @foreach (var user in Users)
-                {
-                    <MudSelectItem Value="@user.Id">@($"{user.LastName} {user.FirstName}")</MudSelectItem>
-                }
-            </MudSelect>
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="model.Code" Label="Код материала"
+                                  Required="true" RequiredError="Код обязателен" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="model.Name" Label="Название"
+                                  Required="true" RequiredError="Название обязательно" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="model.Description" Label="Описание"
+                                  Lines="3" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="model.UnitOfMeasure" Label="Единица измерения" Required="true">
+                        @foreach (var unit in UnitOfMeasure.AvailableUnits)
+                        {
+                            <MudSelectItem Value="@unit">@unit</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="model.Price" Label="Цена"
+                                     Min="0" Step="0.01M" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="model.CurrentStock" Label="Текущий запас"
+                                     Min="0" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="model.MinimumStock" Label="Минимальный запас"
+                                     Min="0" Required="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="model.Manufacturer" Label="Производитель" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="model.PartNumber" Label="Артикул" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="model.Specifications" Label="Технические характеристики"
+                                  Lines="3" />
+                </MudItem>
+            </MudGrid>
         </MudForm>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Отмена</MudButton>
-        <MudButton Color="Color.Primary" OnClick="Submit">Сохранить</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="isSubmitting">
+            @if (isSubmitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Сохранение...</MudText>
+            }
+            else
+            {
+                <MudText>Сохранить</MudText>
+            }
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] MudDialogInstance MudDialog { get; set; }
-    [Parameter] public DepartmentDto Department { get; set; }
-    [Parameter] public IEnumerable<UserDto> Users { get; set; } = new List<UserDto>();
-    
+    [Parameter] public MaterialDto Material { get; set; }
+
     private MudForm form;
-    private DepartmentUpdateDto model = new DepartmentUpdateDto();
+    private MaterialUpdateDto model = new MaterialUpdateDto();
+    private bool isSubmitting = false;
 
     protected override void OnInitialized()
     {
-        if (Department != null)
+        if (Material != null)
         {
-            model.Name = Department.Name;
-            model.Description = Department.Description;
-            model.HeadId = Department.HeadId;
+            model.Code = Material.Code;
+            model.Name = Material.Name;
+            model.Description = Material.Description;
+            model.UnitOfMeasure = Material.UnitOfMeasure;
+            model.CurrentStock = Material.CurrentStock;
+            model.MinimumStock = Material.MinimumStock;
+            model.Price = Material.Price;
+            model.Manufacturer = Material.Manufacturer;
+            model.PartNumber = Material.PartNumber;
+            model.Specifications = Material.Specifications;
         }
     }
 
@@ -49,17 +107,23 @@
 
     private async Task Submit()
     {
-        form.Validate();
+        await form.Validate();
         if (form.IsValid)
         {
+            isSubmitting = true;
             try
             {
-                await DepartmentService.UpdateDepartmentAsync(Department.Id, model);
-                MudDialog.Close(DialogResult.Ok(true));
+                var updatedMaterial = await MaterialService.UpdateMaterialAsync(Material.Id, model);
+                Snackbar.Add("Материал успешно обновлен", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(updatedMaterial));
             }
             catch (Exception ex)
             {
-                Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+                Snackbar.Add($"Ошибка при обновлении материала: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                isSubmitting = false;
             }
         }
     }

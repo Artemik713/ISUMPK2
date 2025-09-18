@@ -1,0 +1,25 @@
+﻿@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex flex-column align-center">
+            <MudText Typo="Typo.h6" Class="mb-3">@ImageName</MudText>
+            <MudImage Src="@ImageUrl" Alt="@ImageName" Style="max-width: 100%; max-height: 70vh;" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Color="Color.Primary">Закрыть</MudButton>
+        <MudButton Href="@ImageUrl" Target="_blank" Color="Color.Secondary">Открыть в новой вкладке</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public string ImageUrl { get; set; }
+    [Parameter] public string ImageName { get; set; }
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+}

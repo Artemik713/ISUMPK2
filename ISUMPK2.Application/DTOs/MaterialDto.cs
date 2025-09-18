@@ -50,8 +50,11 @@ namespace ISUMPK2.Application.DTOs
         public string Description { get; set; }
         public string UnitOfMeasure { get; set; }
         public decimal MinimumStock { get; set; }
-        public decimal Price { get; set; }
         public decimal CurrentStock { get; set; }
+        public decimal Price { get; set; }
+        public string Manufacturer { get; set; }
+        public string PartNumber { get; set; }
+        public string Specifications { get; set; }
     }
 
     public class MaterialTransactionDto
@@ -75,6 +78,12 @@ namespace ISUMPK2.Application.DTOs
         public decimal Quantity { get; set; }
         public string TransactionType { get; set; }
         public Guid? TaskId { get; set; }
-        public string Notes { get; set; }
+
+        private string _notes = string.Empty;
+        public string Notes
+        {
+            get => _notes;
+            set => _notes = value ?? string.Empty;
+        }
     }
 }

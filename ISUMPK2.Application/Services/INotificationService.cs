@@ -7,8 +7,10 @@ namespace ISUMPK2.Application.Services
 {
     public interface INotificationService
     {
+        
         Task<NotificationDto> GetNotificationByIdAsync(Guid id);
         Task<IEnumerable<NotificationDto>> GetAllNotificationsForUserAsync(Guid userId);
+        Task<IEnumerable<NotificationDto>> GetReadNotificationsForUserAsync(Guid userId);
         Task<IEnumerable<NotificationDto>> GetUnreadNotificationsForUserAsync(Guid userId);
         Task<int> GetUnreadNotificationsCountForUserAsync(Guid userId);
         Task<NotificationDto> CreateNotificationAsync(NotificationCreateDto notificationDto);

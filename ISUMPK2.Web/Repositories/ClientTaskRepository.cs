@@ -1,4 +1,5 @@
-﻿using ISUMPK2.Domain.Entities;
+﻿using ISUMPK2.Application.DTOs;
+using ISUMPK2.Domain.Entities;
 using ISUMPK2.Domain.Repositories;
 using System;
 using System.Collections.Generic;
@@ -107,6 +108,95 @@ namespace ISUMPK2.Web.Repositories
             var response = await HttpClient.PutAsJsonAsync($"{ApiEndpoint}/{entity.Id}", entity);
             response.EnsureSuccessStatusCode();
         }
+        public async Task<WorkTask> GetTaskWithMaterialsAsync(Guid taskId)
+        {
+            try
+            {
+                // Сначала получаем базовую информацию о задаче
+                var task = await GetByIdAsync(taskId);
 
+                if (task == null)
+                {
+                    return null;
+                }
+
+                // Затем запрашиваем материалы для задачи
+                var response = await HttpClient.GetFromJsonAsync<IEnumerable<TaskMaterialDto>>($"{ApiEndpoint}/{taskId}/materials");
+
+                // Если response пустой, вернем задачу без материалов
+                if (response == null)
+                {
+                    task.TaskMaterials = new List<TaskMaterial>();
+                    return task;
+                }
+
+                // Создаем коллекцию материалов для задачи
+                task.TaskMaterials = new List<TaskMaterial>();
+
+                // Заполняем коллекцию материалов
+                foreach (var materialDto in response)
+                {
+                    var taskMaterial = new TaskMaterial
+                    {
+                        Id = materialDto.Id,
+                        TaskId = taskId,
+                        MaterialId = materialDto.MaterialId,
+                        Quantity = materialDto.Quantity,
+                        // Заполняем навигационное свойство Material, если оно используется
+                        Material = new Material
+                        {
+                            Id = materialDto.MaterialId,
+                            Name = materialDto.MaterialName,
+                            Code = materialDto.MaterialCode,
+                            UnitOfMeasure = materialDto.UnitOfMeasure
+                        }
+                    };
+
+                    task.TaskMaterials.Add(taskMaterial);
+                }
+
+                return task;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при получении задачи с материалами: {ex.Message}");
+                throw;
+            }
+        }
+        public async Task AddMaterialToTaskAsync(Guid taskId, TaskMaterial taskMaterial)
+        {
+            var response = await HttpClient.PostAsJsonAsync(
+                $"{ApiEndpoint}/{taskId}/materials",
+                taskMaterial);
+            response.EnsureSuccessStatusCode();
+        }
+
+        public async Task UpdateTaskMaterialAsync(Guid taskId, TaskMaterial taskMaterial)
+        {
+            var response = await HttpClient.PutAsJsonAsync(
+                $"{ApiEndpoint}/{taskId}/materials/{taskMaterial.Id}",
+                taskMaterial);
+            response.EnsureSuccessStatusCode();
+        }
+
+        public async Task RemoveTaskMaterialAsync(Guid taskId, Guid taskMaterialId)
+        {
+            var response = await HttpClient.DeleteAsync(
+                $"{ApiEndpoint}/{taskId}/materials/{taskMaterialId}");
+            response.EnsureSuccessStatusCode();
+        }
+
+        public async Task<IEnumerable<TaskMaterial>> GetTaskMaterialsAsync(Guid taskId)
+        {
+            try
+            {
+                return await HttpClient.GetFromJsonAsync<IEnumerable<TaskMaterial>>(
+                    $"{ApiEndpoint}/{taskId}/materials");
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return new List<TaskMaterial>();
+            }
+        }
     }
 }

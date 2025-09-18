@@ -36,6 +36,98 @@ namespace ISUMPK2.API.Controllers
             return Ok(categories);
         }
 
+        [HttpPut("{id}/stock")]
+        public async Task<IActionResult> UpdateStock(Guid id, [FromQuery] decimal quantity, [FromQuery] bool isAddition)
+        {
+            try
+            {
+                await _materialService.UpdateStockAsync(id, quantity, isAddition);
+                return Ok();
+            }
+            catch (ApplicationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+
+        [HttpGet("transactions")]
+        [Authorize]
+        public async Task<ActionResult<IEnumerable<MaterialTransactionDto>>> GetTransactionsByDateRange(
+            [FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+        {
+            try
+            {
+                // Логирование для диагностики
+                _logger.LogInformation("Получен запрос на транзакции за период: {StartDate:yyyy-MM-dd} - {EndDate:yyyy-MM-dd}",
+                    startDate, endDate);
+
+                // Преобразуем в локальную дату, если это требуется
+                startDate = startDate.Date;
+                endDate = endDate.Date.AddDays(1).AddTicks(-1); // До конца дня
+
+                // Проверка корректности диапазона
+                if (endDate < startDate)
+                {
+                    return BadRequest(new { message = "Дата окончания не может быть раньше даты начала" });
+                }
+
+                var transactions = await _materialService.GetTransactionsByDateRangeAsync(startDate, endDate);
+                return Ok(transactions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении транзакций по диапазону дат");
+                return StatusCode(500, new { message = "Внутренняя ошибка сервера" });
+            }
+        }
+        // Убедитесь, что этот метод существует в API контроллере
+        [HttpPost("{materialId}/transactions")]
+        [Authorize]
+        public async Task<IActionResult> AddMaterialTransaction(Guid materialId, [FromBody] MaterialTransactionCreateDto transactionDto)
+        {
+            if (materialId != transactionDto.MaterialId)
+            {
+                return BadRequest("ID материала в пути и в модели данных не совпадают");
+            }
+
+            try
+            {
+                // Устанавливаем значение по умолчанию для Notes
+                if (string.IsNullOrEmpty(transactionDto.Notes))
+                {
+                    transactionDto.Notes = "-";
+                }
+
+                // Получаем ID пользователя из токена
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                // Если найти не удалось, возвращаем явную ошибку для диагностики
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _logger.LogWarning("User ID not found in token. Claims: {Claims}",
+                        string.Join(", ", User.Claims.Select(c => $"{c.Type}: {c.Value}")));
+                    return Unauthorized("ID пользователя не найден в токене авторизации");
+                }
+
+                if (!Guid.TryParse(userId, out var userGuid))
+                {
+                    _logger.LogWarning("Cannot parse user ID '{UserId}' as GUID", userId);
+                    return BadRequest("ID пользователя не является действительным GUID");
+                }
+
+                _logger.LogInformation("Adding material transaction for material {MaterialId} by user {UserId}",
+                    materialId, userGuid);
+
+                var result = await _materialService.AddTransactionAsync(userGuid, transactionDto);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при добавлении транзакции материала: {Message}", ex.Message);
+                return StatusCode(500, ex.Message);
+            }
+        }
+
         [HttpGet("categories/top-level")]
         [Authorize]
         public async Task<ActionResult<IEnumerable<MaterialCategoryDto>>> GetTopLevelCategories()
@@ -80,6 +172,21 @@ namespace ISUMPK2.API.Controllers
             return CreatedAtAction(nameof(GetCategoryById), new { id = createdCategory.Id }, createdCategory);
         }
 
+        [HttpPost]
+        [Authorize(Roles = "Administrator,GeneralDirector,Storekeeper")]
+        public async Task<ActionResult<MaterialDto>> CreateMaterial([FromBody] MaterialCreateDto materialDto)
+        {
+            try
+            {
+                var createdMaterial = await _materialService.CreateMaterialAsync(materialDto);
+                return CreatedAtAction(nameof(GetMaterialById), new { id = createdMaterial.Id }, createdMaterial);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating material");
+                return StatusCode(500, "Внутренняя ошибка при создании материала");
+            }
+        }
         [HttpPut("categories/{id}")]
         [Authorize(Roles = "Administrator,GeneralDirector,Storekeeper")]
         public async Task<ActionResult<MaterialCategoryDto>> UpdateCategory(Guid id, [FromBody] MaterialCategoryDto categoryDto)
@@ -97,6 +204,25 @@ namespace ISUMPK2.API.Controllers
         {
             await _materialService.DeleteCategoryAsync(id);
             return NoContent();
+        }
+
+        [HttpPut("{id}")]
+        [Authorize(Roles = "Administrator,GeneralDirector,Storekeeper")]
+        public async Task<ActionResult<MaterialDto>> UpdateMaterial(Guid id, [FromBody] MaterialUpdateDto materialDto)
+        {
+            try
+            {
+                var updatedMaterial = await _materialService.UpdateMaterialAsync(id, materialDto);
+                if (updatedMaterial == null)
+                    return NotFound();
+
+                return Ok(updatedMaterial);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating material");
+                return StatusCode(500, "Внутренняя ошибка при обновлении материала");
+            }
         }
 
         [HttpGet("search")]

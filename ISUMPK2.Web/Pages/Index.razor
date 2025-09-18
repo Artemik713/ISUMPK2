@@ -1,9 +1,11 @@
 ﻿@page "/"
+@using ISUMPK2.Web.Dialogs
 @using MudBlazor
 @using System.Collections.Generic
 @using ISUMPK2.Web.Services
 @inject NavigationManager NavigationManager
 @inject IAuthService AuthService
+@inject IDialogService DialogService
 @implements IDisposable
 
 <PageTitle>УралТехПром - Главная</PageTitle>
@@ -30,9 +32,10 @@ else {
                                    OnClick="@(() => NavigationManager.NavigateTo("/login"))">
                             Войти в систему
                         </MudButton>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large">
-                            Узнать больше
-                        </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+                                       OnClick="ShowAboutDialog">
+                                Узнать больше
+                            </MudButton>
                     </div>
                 </div>
                 <div class="logo-container">
@@ -143,10 +146,51 @@ else {
         z-index: 1;
     }
 
-        .feature-card:hover {
+    .feature-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+
+    /* Стили для кнопок на главной странице */
+    .buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+
+    .btn-primary, .btn-secondary {
+        padding: 0.75rem 1.5rem;
+        border-radius: 4px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: background-color 0.3s, transform 0.2s;
+    }
+
+    .btn-primary {
+        background-color: #6366F1;
+        color: white;
+        border: none;
+    }
+
+    .btn-secondary {
+        background-color: white;
+        color: #6366F1;
+        border: 1px solid #6366F1;
+    }
+
+        .btn-primary:hover, .btn-secondary:hover {
+            transform: translateY(-2px);
         }
+
+    .btn-primary:hover {
+        background-color: #4F46E5;
+    }
+
+    .btn-secondary:hover {
+        background-color: #F9FAFB;
+    }
 
     /* Медиа-запрос для мобильных устройств */
     @@media (max-width: 768px) {
@@ -171,9 +215,10 @@ else {
             border-radius: 0;
         }
 
-            .page-container::before {
+        .page-container::before {
                 border-radius: 0;
-            }
+        }
+
     }
 </style>
 
@@ -244,6 +289,19 @@ else {
         }
     };
 
+    private async Task ShowAboutDialog()
+    {
+        var parameters = new DialogParameters();
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseButton = true,
+            Position = DialogPosition.Center
+        };
+
+        await DialogService.ShowAsync<AboutSystemDialog>("О системе", parameters, options);
+    }
     private class FeatureInfo
     {
         public string Title { get; set; }

@@ -1,0 +1,89 @@
+﻿@page "/about"
+@using MudBlazor
+@using ISUMPK2.Web.Shared
+
+<PageTitle>О системе - ИСУ ПМК</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
+    <MudText Typo="Typo.h3" Class="mb-4">О системе управления производством металлоконструкций</MudText>
+    
+    <MudPaper Elevation="3" Class="pa-4 mb-4">
+        <MudText Typo="Typo.h5" Class="mb-3">Возможности системы</MudText>
+        <MudText>
+            Информационная система управления производством металлоконструкций (ИСУ ПМК) – это комплексное решение 
+            для автоматизации всех аспектов производственного процесса на предприятиях металлообрабатывающей отрасли.
+        </MudText>
+        
+        <MudDivider Class="my-4" />
+        
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <MudIcon Icon="@Icons.Material.Filled.Task" Color="Color.Primary" Class="mr-2" />
+                        <MudText Typo="Typo.h6">Управление задачами</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText>
+                            Полнофункциональная система управления задачами с назначением исполнителей, 
+                            отслеживанием статусов, установкой приоритетов и сроков выполнения.
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Color="Color.Secondary" Class="mr-2" />
+                        <MudText Typo="Typo.h6">Контроль материалов</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText>
+                            Автоматизированный учет поступления, расхода и остатков материалов. 
+                            Система автоматически оповещает о критическом снижении запасов.
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <MudIcon Icon="@Icons.Material.Filled.ProductionQuantityLimits" Color="Color.Success" Class="mr-2" />
+                        <MudText Typo="Typo.h6">Учет продукции</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText>
+                            Контроль всего жизненного цикла продукции: от планирования производства 
+                            до отгрузки готовых изделий заказчику.
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <MudIcon Icon="@Icons.Material.Filled.Analytics" Color="Color.Warning" Class="mr-2" />
+                        <MudText Typo="Typo.h6">Аналитика</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText>
+                            Детальная статистика и аналитические отчеты по всем аспектам производственного процесса. 
+                            Визуализация данных в виде графиков и диаграмм.
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+        
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">
+            Начать работу с системой
+        </MudButton>
+    </MudPaper>
+    
+    <MudText Align="Align.Center" Typo="Typo.caption" Class="mt-4">
+        © @DateTime.Now.Year УралТехПром. Все права защищены.
+    </MudText>
+</MudContainer>

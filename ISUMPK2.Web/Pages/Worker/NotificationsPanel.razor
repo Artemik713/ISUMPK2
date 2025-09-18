@@ -1,0 +1,187 @@
+﻿@using ISUMPK2.Application.Services
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@using System.Security.Claims
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<MudPaper Class="pa-4" Elevation="2">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-2" />
+            <MudText Typo="Typo.h6">Уведомления</MudText>
+        </div>
+        <MudTooltip Text="Отметить все как прочитанные">
+            <MudIconButton Icon="@Icons.Material.Filled.DoneAll" Color="Color.Default" 
+                         OnClick="MarkAllAsRead" />
+        </MudTooltip>
+    </div>
+    
+    @if (isLoading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-2" />
+    }
+    else if (!notifications.Any())
+    {
+        <MudAlert Severity="Severity.Info" Class="my-2">Нет новых уведомлений</MudAlert>
+    }
+    else
+    {
+        <MudList Clickable="true" Dense="true" DisablePadding="true" T="NotificationModel">
+            @foreach (var notification in notifications.OrderByDescending(n => n.CreatedAt))
+            {
+                <MudListItem OnClick="() => HandleNotificationClick(notification)"
+                             Class="@(notification.IsRead ? "notification-item" : "notification-item unread")"
+                             T="NotificationModel">
+                    <div>
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.subtitle2" Class="@(!notification.IsRead ? "font-weight-bold" : "")">
+                                @notification.Title
+                            </MudText>
+                            <MudText Typo="Typo.caption">@notification.CreatedAt.ToString("dd.MM HH:mm")</MudText>
+                        </div>
+                        <MudText Typo="Typo.body2" Class="notification-message">
+                            @notification.Message
+                        </MudText>
+                        @if (notification.TaskId.HasValue)
+                        {
+                            <MudChip Size="Size.Small" Color="Color.Primary" Class="mt-1" T="string">
+                                Задача: @notification.TaskTitle
+                            </MudChip>
+                        }
+                    </div>
+                </MudListItem>
+                <MudDivider />
+            }
+        </MudList>
+    }
+</MudPaper>
+
+<style>
+    .notification-item {
+        padding: 8px 0;
+        transition: background-color 0.2s;
+    }
+    
+    .notification-item:hover {
+        background-color: var(--mud-palette-action-default-hover);
+    }
+    
+    .unread {
+        border-left: 3px solid var(--mud-palette-primary);
+        padding-left: 8px;
+    }
+    
+    .notification-message {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+</style>
+
+@code {
+    private List<NotificationModel> notifications = new List<NotificationModel>();
+    private bool isLoading = true;
+    private Guid _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetCurrentUserIdAsync();
+        await LoadNotifications();
+    }
+
+    private async Task GetCurrentUserIdAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Предполагаем, что ID пользователя хранится в определенном claim
+        // Имя claim может отличаться в зависимости от вашей системы аутентификации
+        var userIdClaim = user.FindFirst("sub") ?? user.FindFirst(ClaimTypes.NameIdentifier);
+
+        if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out Guid userId))
+        {
+            _currentUserId = userId;
+        }
+        else
+        {
+            // Обработка случая, когда ID пользователя не найден
+            Snackbar.Add("Не удалось определить текущего пользователя", Severity.Warning);
+        }
+    }
+
+    private async Task LoadNotifications()
+    {
+        isLoading = true;
+        try
+        {
+            var result = await NotificationService.GetAllNotificationsForUserAsync(_currentUserId);
+            // Преобразуем DTO в модели представления
+            notifications = result.Select(dto => new NotificationModel
+            {
+                Id = dto.Id,
+                UserId = dto.UserId,
+                Title = dto.Title,
+                Message = dto.Message,
+                IsRead = dto.IsRead,
+                TaskId = dto.TaskId,
+                TaskTitle = dto.TaskTitle,
+                CreatedAt = dto.CreatedAt
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки уведомлений: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleNotificationClick(NotificationModel notification)
+    {
+        try
+        {
+            if (!notification.IsRead)
+            {
+                await NotificationService.MarkAsReadAsync(notification.Id);
+                notification.IsRead = true;
+            }
+
+            // Навигация к задаче, если уведомление связано с задачей
+            if (notification.TaskId.HasValue)
+            {
+                NavigationManager.NavigateTo($"/tasks/{notification.TaskId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        try
+        {
+            await NotificationService.MarkAllAsReadForUserAsync(_currentUserId);
+            foreach (var notification in notifications)
+            {
+                notification.IsRead = true;
+            }
+            Snackbar.Add("Все уведомления отмечены как прочитанные", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка: {ex.Message}", Severity.Error);
+        }
+    }
+}

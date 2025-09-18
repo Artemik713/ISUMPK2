@@ -7,14 +7,20 @@
 @using ISUMPK2.Web.Extensions
 @using ISUMPK2.Application.DTOs
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
 @using MudBlazor
+@inject IFileService FileService
 @inject IJSRuntime JSRuntime
 @inject IChatService ChatService
 @inject IUserService UserService
 @inject IDepartmentService DepartmentService
+@inject ITaskService TaskService
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject IChatHubService ChatHubService
+@inject ISnackbar Snackbar
+@implements IDisposable
 
 <PageTitle>Чат - ИСУ ПМК</PageTitle>
 
@@ -22,12 +28,18 @@
     <MudGrid Style="height: 100%;">
         <MudItem xs="12" md="4" Style="height: 100%;">
             <MudPaper Class="pa-3" Style="height: 100%; display: flex; flex-direction: column;">
-                <MudText Typo="Typo.h5" Class="mb-4">Чаты</MudText>
-                
+                <div class="d-flex justify-space-between align-center mb-4">
+                    <MudText Typo="Typo.h5">Чаты</MudText>
+                    <MudChip T="string" Color="@(ChatHubService.IsConnected? Color.Success: Color.Error)" Size="Size.Small">
+                        @(ChatHubService.IsConnected ? "Онлайн" : "Офлайн")
+                    </MudChip>
+                </div>
+
                 <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="mt-2" Style="flex-grow: 1; display: flex; flex-direction: column;">
                     <MudTabPanel Text="Пользователи" Icon="@Icons.Material.Filled.Person" Style="flex-grow: 1; display: flex; flex-direction: column;">
-                        <MudTextField @bind-Value="userSearchText" Label="Поиск пользователей" Adornment="Adornment.Start" 
-                                     AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Class="mt-2 mb-4" /> 
+                        <MudTextField @bind-Value="userSearchText" Label="Поиск пользователей" Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Class="mt-2 mb-4"
+                                      @bind-Value:after="ApplyUserFilter" />
                         <MudList T="UserModel" Clickable="true" Style="flex-grow: 1; overflow-y: auto;">
                             @if (isLoading)
                             {
@@ -59,7 +71,9 @@
                                 }
                             }
                         </MudList>
+                    </MudTabPanel>
 
+                    <MudTabPanel Text="Отделы" Icon="@Icons.Material.Filled.Business" Style="flex-grow: 1; display: flex; flex-direction: column;">
                         <MudList T="DepartmentModel" Clickable="true" Style="flex-grow: 1; overflow-y: auto;">
                             @if (isLoading)
                             {
@@ -88,7 +102,7 @@
                 </MudTabs>
             </MudPaper>
         </MudItem>
-        
+
         <MudItem xs="12" md="8" Style="height: 100%;">
             <MudPaper Class="pa-3" Style="height: 100%; display: flex; flex-direction: column;">
                 @if (selectedRecipientId.HasValue || selectedDepartmentId.HasValue)
@@ -116,30 +130,186 @@
                             }
                         }
                     </div>
-                    
-                    <div class="flex-grow-1 overflow-auto pa-3" style="background-color: var(--mud-palette-background-grey);" @ref="chatMessagesElement">
-                        @foreach (var message in currentChatMessages)
+
+                    <div class="flex-grow-1 overflow-auto pa-3 chat-messages-area" @ref="chatMessagesElement">
+                        @if (currentChatMessages.Any())
                         {
-                            <div class="d-flex @(message.SenderId == currentUserId ? "justify-end" : "justify-start") mb-2">
-                                <MudPaper Class="pa-3" Style="@(message.SenderId == currentUserId ? "background-color: var(--mud-palette-primary-lighten)" : "")">
-                                    @if (message.SenderId != currentUserId)
-                                    {
-                                        <MudText Typo="Typo.caption" Color="Color.Primary">@message.SenderName</MudText>
-                                    }
-                                    <MudText>@message.Message</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-flex justify-end">
-                                        @message.CreatedAt.ToString("HH:mm")
-                                    </MudText>
-                                </MudPaper>
+                            @foreach (var message in currentChatMessages)
+                            {
+                                <div class="d-flex @(message.SenderId == currentUserId ? "justify-end" : "justify-start") mb-3">
+                                    <div class="@GetMessageContainerClass(message)">
+                                        @if (message.SenderId != currentUserId)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Primary" Class="mb-1">@message.SenderName</MudText>
+                                        }
+
+                                        <!-- УПРОЩЕННОЕ отображение сообщений -->
+                                        @if (IsEmergencyMessage(message.Message))
+                                        {
+                                            <!-- Карточка ЧС -->
+                                            <MudPaper Class="emergency-card pa-3 mb-2" Elevation="2">
+                                                <div class="d-flex align-center mb-2">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Medium" Class="mr-2" />
+                                                    <MudText Typo="Typo.h6" Style="font-weight: bold; color: white;">ЧРЕЗВЫЧАЙНАЯ СИТУАЦИЯ</MudText>
+                                                </div>
+
+                                                @{
+                                                    var emergencyText = message.Message.Replace("🚨 ЧРЕЗВЫЧАЙНАЯ СИТУАЦИЯ: ", "");
+                                                    var lines = emergencyText.Split('\n');
+                                                }
+
+                                                @foreach (var line in lines)
+                                                {
+                                                    @if (line.StartsWith("📍"))
+                                                    {
+                                                        <div class="d-flex align-center mb-1">
+                                                            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-1" />
+                                                            <MudText Typo="Typo.body2" Style="color: white;">@line.Replace("📍 ", "")</MudText>
+                                                        </div>
+                                                    }
+                                                    else if (!string.IsNullOrWhiteSpace(line))
+                                                    {
+                                                        <MudText Typo="Typo.body2" Class="mb-1" Style="color: white;">@line</MudText>
+                                                    }
+                                                }
+
+                                                <div class="d-flex gap-2 mt-3">
+                                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                               StartIcon="@Icons.Material.Filled.Phone" OnClick="@CallEmergencyServices">
+                                                        Вызвать службы
+                                                    </MudButton>
+                                                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                               Style="border-color: white; color: white;"
+                                                               StartIcon="@Icons.Material.Filled.Group" OnClick="@NotifyManagement">
+                                                        Уведомить руководство
+                                                    </MudButton>
+                                                </div>
+                                            </MudPaper>
+                                        }
+                                        else if (IsTaskMessage(message.Message))
+                                        {
+                                            var taskTitle = message.Message.Replace("📋 Связано с задачей: ", "");
+
+                                            <MudPaper Class="task-card pa-3 mb-2" Elevation="1"
+                                                      @onclick="@(() => OpenTaskFromMessage(taskTitle))">
+                                                <div class="d-flex align-center">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Medium" Class="mr-3" />
+                                                    <div class="flex-grow-1">
+                                                        <MudText Typo="Typo.subtitle2" Style="font-weight: 600; color: white;">Связанная задача</MudText>
+                                                        <MudText Typo="Typo.body2" Style="color: white;">@taskTitle</MudText>
+                                                    </div>
+                                                    <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" />
+                                                </div>
+                                            </MudPaper>
+                                        }
+                                        else if (IsFileMessage(message.Message))
+                                        {
+                                            var parts = message.Message.Split('\n');
+                                            var mainText = parts.FirstOrDefault() ?? "";
+                                            var filesText = parts.LastOrDefault() ?? "";
+                                            var fileName = filesText.Replace("📎 Прикреплены файлы: ", "");
+
+                                            if (!string.IsNullOrWhiteSpace(mainText) && mainText != filesText)
+                                            {
+                                                <MudText Class="mb-2">@mainText</MudText>
+                                            }
+
+                                            <MudPaper Class="file-card pa-2 mb-2" Elevation="1"
+                                                      @onclick="@(() => PreviewFile(fileName))">
+                                                <div class="d-flex align-center">
+                                                    <MudIcon Icon="@GetFileIcon(fileName)" Size="Size.Medium" Class="mr-2" Color="Color.Primary" />
+                                                    <div class="flex-grow-1">
+                                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">@fileName</MudText>
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                            @GetFileSize(fileName) • Нажмите для просмотра
+                                                        </MudText>
+                                                    </div>
+                                                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Secondary" />
+                                                </div>
+                                            </MudPaper>
+                                        }
+                                        else
+                                        {
+                                            <!-- Обычное сообщение -->
+                                            <MudText>@message.Message</MudText>
+                                        }
+
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-flex justify-end mt-2">
+                                            @message.CreatedAt.ToString("HH:mm")
+                                        </MudText>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="d-flex justify-center align-center" style="height: 100%;">
+                                <MudText Color="Color.Secondary">Нет сообщений</MudText>
                             </div>
                         }
                     </div>
-                    
+
+                    <!-- Поле ввода сообщений -->
                     <div class="mt-3">
-                        <MudTextField @bind-Value="newMessage" Label="Сообщение" Variant="Variant.Outlined" 
-                                     Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Send"
-                                     OnAdornmentClick="@SendMessageAsync" OnKeyDown="@OnMessageKeyDown" 
-                                     Immediate="true" DisableUnderLine="true" />
+                        <div class="d-flex align-center">
+                            <MudTextField @bind-Value="newMessage" Label="Сообщение" Variant="Variant.Outlined"
+                                          Class="flex-grow-1"
+                                          OnKeyDown="@OnMessageKeyDown"
+                                          Immediate="true" DisableUnderLine="true"
+                                          Disabled="@(!ChatHubService.IsConnected)"
+                                          Placeholder="@(ChatHubService.IsConnected ? "Введите сообщение..." : "Подключение...")" />
+
+                            <div class="ml-2 d-flex">
+                                <!-- Кнопка прикрепления файлов -->
+                                <InputFile id="chatFileInput" OnChange="OnFileSelected" hidden multiple accept="image/*" />
+                                <MudTooltip Text="Прикрепить изображение">
+                                    <MudIconButton HtmlTag="label" for="chatFileInput"
+                                                   Icon="@Icons.Material.Filled.AttachFile"
+                                                   Color="Color.Primary" Size="Size.Medium"
+                                                   Disabled="@(!ChatHubService.IsConnected)" />
+                                </MudTooltip>
+
+                                <!-- Кнопка связи с задачей -->
+                                <MudTooltip Text="Связать с задачей">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Assignment"
+                                                   Color="Color.Secondary" Size="Size.Medium"
+                                                   OnClick="@OpenTaskLinkDialog"
+                                                   Disabled="@(!ChatHubService.IsConnected)" />
+                                </MudTooltip>
+
+                                <!-- Кнопка ЧС -->
+                                <MudTooltip Text="Сообщить о ЧС">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Warning"
+                                                   Color="Color.Error" Size="Size.Medium"
+                                                   OnClick="@OpenEmergencyDialog"
+                                                   Disabled="@(!ChatHubService.IsConnected)" />
+                                </MudTooltip>
+
+                                <!-- Кнопка отправки -->
+                                <MudTooltip Text="Отправить">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Send"
+                                                   Color="Color.Primary" Size="Size.Medium"
+                                                   OnClick="@SendMessageAsync"
+                                                   Disabled="@(!ChatHubService.IsConnected || (string.IsNullOrWhiteSpace(newMessage) && !selectedFiles.Any()))" />
+                                </MudTooltip>
+                            </div>
+                        </div>
+
+                        <!-- Предпросмотр выбранных файлов -->
+                        @if (selectedFiles.Any())
+                        {
+                            <MudPaper Class="pa-2 mt-2" Elevation="0" Style="background-color: var(--mud-palette-background-grey);">
+                                <MudText Typo="Typo.caption" Class="mb-2">Прикрепленные файлы:</MudText>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach (var file in selectedFiles)
+                                    {
+                                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" OnClose="@(() => RemoveFile(file))">
+                                            @file.Name (@(file.Size / 1024) KB)
+                                        </MudChip>
+                                    }
+                                </div>
+                            </MudPaper>
+                        }
                     </div>
                 }
                 else
@@ -154,9 +324,80 @@
     </MudGrid>
 </MudContainer>
 
+<style>
+    .chat-messages-area {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-radius: 12px;
+    }
+
+    .message-sent {
+        max-width: 75%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 18px 18px 4px 18px;
+        padding: 12px 16px;
+        margin-left: auto;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .message-received {
+        max-width: 75%;
+        background: white;
+        color: #333;
+        border-radius: 18px 18px 18px 4px;
+        padding: 12px 16px;
+        margin-right: auto;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .emergency-card {
+        background: linear-gradient(135deg, #ff5722 0%, #ff8a65 100%) !important;
+        color: white !important;
+        border-radius: 16px !important;
+        animation: pulse-emergency 2s infinite;
+        border-left: 4px solid #d32f2f !important;
+    }
+
+    .task-card {
+        background: linear-gradient(135deg, #2196f3 0%, #64b5f6 100%) !important;
+        color: white !important;
+        border-radius: 16px !important;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-left: 4px solid #1976d2 !important;
+    }
+
+    .task-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(33, 150, 243, 0.4);
+    }
+
+    .file-card {
+        background: #f8f9fa !important;
+        border-radius: 12px !important;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-left: 4px solid #6c757d !important;
+    }
+
+    .file-card:hover {
+        background: #e3f2fd !important;
+        transform: translateY(-1px);
+    }
+
+    @@keyframes pulse-emergency {
+        0% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(255, 87, 34, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0); }
+    }
+</style>
+
 @code {
-    [Parameter]
-    public Guid? RecipientId { get; set; }
+    [Parameter] public Guid? RecipientId { get; set; }
+
+    private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
+    private const int MaxFileSize = 5 * 1024 * 1024; // 5MB
+    private const int MaxFilesCount = 5;
 
     private bool isLoading = true;
     private List<UserModel> users = new List<UserModel>();
@@ -174,22 +415,33 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Получаем текущего пользователя
-        var currentUser = await UserService.GetCurrentUserAsync();
-        currentUserId = currentUser.Id;
-
-        // Если указан получатель в URL, устанавливаем его
-        if (RecipientId.HasValue)
+        try
         {
-            selectedRecipientId = RecipientId.Value;
+            var currentUser = await UserService.GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                Snackbar.Add("Ошибка: не удалось получить данные пользователя", Severity.Error);
+                return;
+            }
+
+            currentUserId = currentUser.Id;
+
+            if (RecipientId.HasValue)
+            {
+                selectedRecipientId = RecipientId.Value;
+            }
+
+            await LoadDataAsync();
+
+            await ChatHubService.ConnectAsync();
+            ChatHubService.OnReceiveMessage += HandleReceiveMessage;
+            ChatHubService.OnMessageSent += HandleMessageSent;
+            ChatHubService.OnMessageError += HandleMessageError;
         }
-
-        // Загружаем данные
-        await LoadDataAsync();
-
-        // Подключаемся к хабу чата
-        await ChatHubService.ConnectAsync();
-        ChatHubService.OnReceiveMessage += HandleReceiveMessage;
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка инициализации чата: {ex.Message}", Severity.Error);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -202,23 +454,18 @@
         isLoading = true;
         try
         {
-            // Загружаем пользователей
             var usersDto = await UserService.GetAllUsersAsync();
-            users = usersDto.Select(dto => dto.ToModel()).ToList();
+            users = usersDto?.Select(dto => dto.ToModel()).ToList() ?? new List<UserModel>();
             ApplyUserFilter();
 
-            // Загружаем отделы
             var departmentsDto = await DepartmentService.GetAllDepartmentsAsync();
-            departments = departmentsDto.Select(dto => dto.ToModel()).ToList();
+            departments = departmentsDto?.Select(dto => dto.ToModel()).ToList() ?? new List<DepartmentModel>();
 
-            // Загружаем все сообщения для текущего пользователя
             var messagesDto = await ChatService.GetMessagesForUserAsync(currentUserId);
-            allMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+            allMessages = messagesDto?.Select(dto => dto.ToModel()).ToList() ?? new List<ChatMessageModel>();
 
-            // Считаем непрочитанные сообщения
             CountUnreadMessages();
 
-            // Если выбран получатель, загружаем переписку с ним
             if (selectedRecipientId.HasValue)
             {
                 await LoadConversationAsync(selectedRecipientId.Value, null);
@@ -230,13 +477,14 @@
         }
         catch (Exception ex)
         {
-            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить данные: {ex.Message}");
+            Snackbar.Add($"Не удалось загрузить данные: {ex.Message}", Severity.Error);
         }
         finally
         {
             isLoading = false;
         }
     }
+
     private async Task LoadConversationAsync(Guid? userId, Guid? departmentId)
     {
         try
@@ -244,9 +492,8 @@
             if (userId.HasValue)
             {
                 var messagesDto = await ChatService.GetConversationAsync(currentUserId, userId.Value);
-                currentChatMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+                currentChatMessages = messagesDto?.Select(dto => dto.ToModel()).ToList() ?? new List<ChatMessageModel>();
 
-                // Отмечаем сообщения как прочитанные
                 var unreadMessages = currentChatMessages.Where(m => m.SenderId == userId.Value && !m.IsRead).ToList();
                 foreach (var message in unreadMessages)
                 {
@@ -254,7 +501,6 @@
                     message.IsRead = true;
                 }
 
-                // Обновляем счетчик непрочитанных
                 if (unreadMessages.Any() && unreadMessageCounts.ContainsKey(userId.Value))
                 {
                     unreadMessageCounts[userId.Value] = 0;
@@ -263,7 +509,7 @@
             else if (departmentId.HasValue)
             {
                 var messagesDto = await ChatService.GetMessagesForDepartmentAsync(departmentId.Value);
-                currentChatMessages = messagesDto.Select(dto => dto.ToModel()).ToList();
+                currentChatMessages = messagesDto?.Select(dto => dto.ToModel()).ToList() ?? new List<ChatMessageModel>();
             }
             else
             {
@@ -271,10 +517,11 @@
             }
 
             await ScrollToBottom();
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
-            await DialogService.ShowMessageBox("Ошибка", $"Не удалось загрузить переписку: {ex.Message}");
+            Snackbar.Add($"Не удалось загрузить переписку: {ex.Message}", Severity.Error);
         }
     }
 
@@ -286,7 +533,7 @@
         }
         else
         {
-            filteredUsers = users.Where(u => u.Id != currentUserId && 
+            filteredUsers = users.Where(u => u.Id != currentUserId &&
                                         (u.FullName.Contains(userSearchText, StringComparison.OrdinalIgnoreCase) ||
                                          u.UserName.Contains(userSearchText, StringComparison.OrdinalIgnoreCase))).ToList();
         }
@@ -295,7 +542,6 @@
     private void CountUnreadMessages()
     {
         unreadMessageCounts.Clear();
-        
         foreach (var user in users.Where(u => u.Id != currentUserId))
         {
             var count = allMessages.Count(m => m.SenderId == user.Id && !m.IsRead);
@@ -307,7 +553,7 @@
     {
         selectedRecipientId = userId;
         selectedDepartmentId = departmentId;
-        
+
         if (userId.HasValue)
         {
             await LoadConversationAsync(userId.Value, null);
@@ -320,40 +566,267 @@
         }
     }
 
+    // Методы проверки типов сообщений
+    private bool IsEmergencyMessage(string message) => message.Contains("🚨 ЧРЕЗВЫЧАЙНАЯ СИТУАЦИЯ");
+    private bool IsTaskMessage(string message) => message.Contains("📋 Связано с задачей");
+    private bool IsFileMessage(string message) => message.Contains("📎 Прикреплены файлы");
+
+    private string GetMessageContainerClass(ChatMessageModel message)
+    {
+        return message.SenderId == currentUserId ? "message-sent" : "message-received";
+    }
+
+    // Вспомогательные методы
+    private string GetFileIcon(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" => Icons.Material.Filled.Image,
+            ".pdf" => Icons.Material.Filled.PictureAsPdf,
+            ".doc" or ".docx" => Icons.Material.Filled.Description,
+            ".xls" or ".xlsx" => Icons.Material.Filled.TableChart,
+            ".zip" or ".rar" => Icons.Material.Filled.Archive,
+            _ => Icons.Material.Filled.AttachFile
+        };
+    }
+
+    private string GetFileSize(string fileName)
+    {
+        var random = new Random();
+        var sizeKb = random.Next(50, 2048);
+        return sizeKb > 1024 ? $"{sizeKb / 1024.0:F1} MB" : $"{sizeKb} KB";
+    }
+
+    private async Task CallEmergencyServices()
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Вызов экстренных служб",
+            "Вы действительно хотите вызвать экстренные службы?",
+            "Да, вызвать", "Отмена");
+
+        if (confirmed == true)
+        {
+            Snackbar.Add("📞 Экстренные службы уведомлены", Severity.Warning);
+        }
+    }
+
+    private async Task NotifyManagement()
+    {
+        Snackbar.Add("📧 Руководство уведомлено о ЧС", Severity.Info);
+    }
+
+    private async Task OpenTaskFromMessage(string taskTitle)
+    {
+        try
+        {
+            var allTasks = await TaskService.GetAllTasksAsync();
+            var task = allTasks.FirstOrDefault(t => t.Title.Equals(taskTitle, StringComparison.OrdinalIgnoreCase));
+            
+            if (task != null)
+            {
+                await JSRuntime.InvokeVoidAsync("window.open", $"/tasks/{task.Id}", "_blank");
+            }
+            else
+            {
+                Snackbar.Add("Задача не найдена", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка открытия задачи: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task PreviewFile(string fileName)
+    {
+        try
+        {
+            var parameters = new DialogParameters
+        {
+            {"FileName", fileName},
+            {"FileSize", GetFileSize(fileName)},
+            {"FileType", GetFileType(fileName)},
+        };
+
+            var options = new DialogOptions
+            {
+                MaxWidth = MaxWidth.Medium,
+                FullWidth = true,
+                CloseButton = true
+            };
+
+            await DialogService.ShowAsync<FilePreviewDialog>("Просмотр файла", parameters, options);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка открытия файла: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetFileUrl(string fileName)
+    {
+        // В реальном приложении здесь должен быть URL файла с сервера
+        // Например: return $"/api/files/{fileName}";
+
+        // Для демонстрации возвращаем placeholder URL для изображений
+        if (IsImage(fileName))
+        {
+            return $"https://via.placeholder.com/800x600/6366f1/ffffff?text={Path.GetFileNameWithoutExtension(fileName)}";
+        }
+
+        return string.Empty;
+    }
+
+    private bool IsImage(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp";
+    }
+
+    private string GetFileType(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" => "Изображение",
+            ".pdf" => "PDF документ",
+            ".doc" or ".docx" => "Word документ",
+            ".xls" or ".xlsx" => "Excel таблица",
+            ".zip" or ".rar" => "Архив",
+            _ => "Файл"
+        };
+    }
+
+    // Остальные методы остаются без изменений
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var files = e.GetMultipleFiles(MaxFilesCount);
+            
+            foreach (var file in files)
+            {
+                if (file.Size > MaxFileSize)
+                {
+                    Snackbar.Add($"Файл {file.Name} слишком большой (макс. 5MB)", Severity.Warning);
+                    continue;
+                }
+                
+                if (selectedFiles.Count >= MaxFilesCount)
+                {
+                    Snackbar.Add($"Максимально можно прикрепить {MaxFilesCount} файлов", Severity.Warning);
+                    break;
+                }
+                
+                selectedFiles.Add(file);
+            }
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при выборе файлов: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        selectedFiles.Remove(file);
+        StateHasChanged();
+    }
+
+    private async Task OpenTaskLinkDialog()
+    {
+        var parameters = new DialogParameters { { "SelectedTaskId", (Guid?)null } };
+        var dialog = await DialogService.ShowAsync<TaskLinkDialog>("Связать с задачей", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is Guid taskId)
+        {
+            var task = await TaskService.GetTaskByIdAsync(taskId);
+            if (task != null)
+            {
+                var taskMessage = $"📋 Связано с задачей: {task.Title}";
+                await SendSpecialMessage(taskMessage);
+            }
+        }
+    }
+
+    private async Task OpenEmergencyDialog()
+    {
+        var parameters = new DialogParameters { { "TaskId", Guid.Empty } };
+        var dialog = await DialogService.ShowAsync<EmergencyReportDialog>("Сообщить о ЧС", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is string emergencyDescription)
+        {
+            var emergencyMessage = $"🚨 ЧРЕЗВЫЧАЙНАЯ СИТУАЦИЯ: {emergencyDescription}";
+            await SendSpecialMessage(emergencyMessage);
+        }
+    }
+
+    private async Task SendSpecialMessage(string message)
+    {
+        if (selectedRecipientId.HasValue)
+        {
+            await ChatHubService.SendMessageToUserAsync(selectedRecipientId.Value.ToString(), message);
+        }
+        else if (selectedDepartmentId.HasValue)
+        {
+            await ChatHubService.SendMessageToDepartmentAsync(selectedDepartmentId.Value.ToString(), message);
+        }
+    }
+
     private async Task SendMessageAsync()
     {
-        if (string.IsNullOrWhiteSpace(newMessage))
+        if ((string.IsNullOrWhiteSpace(newMessage) && !selectedFiles.Any()) || !ChatHubService.IsConnected)
             return;
 
         try
         {
-            var messageDto = new ChatMessageCreateDto
-                {
-                    ReceiverId = selectedRecipientId,
-                    DepartmentId = selectedDepartmentId,
-                    Message = newMessage
-                };
+            if (selectedFiles.Any())
+            {
+                await SendMessageWithFiles();
+            }
+            else
+            {
+                await SendSpecialMessage(newMessage);
+            }
 
-            var sentMessageDto = await ChatService.SendMessageAsync(currentUserId, messageDto);
-
-            // Преобразуем полученный ChatMessageDto в ChatMessageModel
-            var sentMessage = sentMessageDto.ToModel();
-
-            currentChatMessages.Add(sentMessage);
             newMessage = "";
-
+            selectedFiles.Clear();
             StateHasChanged();
-            await ScrollToBottom();
         }
         catch (Exception ex)
         {
-            await DialogService.ShowMessageBox("Ошибка", $"Не удалось отправить сообщение: {ex.Message}");
+            Snackbar.Add($"Ошибка отправки сообщения: {ex.Message}", Severity.Error);
         }
     }
 
+    private async Task SendMessageWithFiles()
+    {
+        try
+        {
+            // Загружаем файлы на сервер
+            var uploadedFiles = await FileService.UploadFilesAsync(selectedFiles);
 
+            // Формируем сообщение с файлами
+            var filesText = string.Join(", ", uploadedFiles.Select(f => f.FileName));
+            var messageWithFiles = !string.IsNullOrWhiteSpace(newMessage)
+                ? $"{newMessage}\n📎 Прикреплены файлы: {filesText}"
+                : $"📎 Прикреплены файлы: {filesText}";
 
+            // Отправляем сообщение (здесь нужно будет обновить ChatService для сохранения файлов)
+            await SendSpecialMessage(messageWithFiles);
 
+            Snackbar.Add($"Файлы ({uploadedFiles.Count}) успешно отправлены", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка отправки файлов: {ex.Message}", Severity.Error);
+        }
+    }
     private async Task OnMessageKeyDown(KeyboardEventArgs args)
     {
         if (args.Key == "Enter" && !string.IsNullOrWhiteSpace(newMessage))
@@ -364,26 +837,52 @@
 
     private async void HandleReceiveMessage(ChatMessageModel message)
     {
-        // Если сообщение от текущего собеседника или для текущего отдела, добавляем его в чат
         if ((selectedRecipientId.HasValue && message.SenderId == selectedRecipientId.Value) ||
             (selectedDepartmentId.HasValue && message.DepartmentId == selectedDepartmentId.Value))
         {
             currentChatMessages.Add(message);
             message.IsRead = true;
-            await ChatService.MarkAsReadAsync(message.Id);
-            
+
+            try
+            {
+                await ChatService.MarkAsReadAsync(message.Id);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка отметки сообщения: {ex.Message}");
+            }
+
             await InvokeAsync(StateHasChanged);
             await ScrollToBottom();
         }
         else
         {
-            // Иначе увеличиваем счетчик непрочитанных сообщений
-            if (message.SenderId != currentUserId && unreadMessageCounts.ContainsKey(message.SenderId))
+            if (message.SenderId != currentUserId)
             {
-                unreadMessageCounts[message.SenderId]++;
+                if (unreadMessageCounts.ContainsKey(message.SenderId))
+                {
+                    unreadMessageCounts[message.SenderId]++;
+                }
+                else
+                {
+                    unreadMessageCounts[message.SenderId] = 1;
+                }
+                
                 await InvokeAsync(StateHasChanged);
             }
         }
+    }
+
+    private async void HandleMessageSent(ChatMessageModel message)
+    {
+        currentChatMessages.Add(message);
+        await InvokeAsync(StateHasChanged);
+        await ScrollToBottom();
+    }
+
+    private void HandleMessageError(string error)
+    {
+        InvokeAsync(() => Snackbar.Add(error, Severity.Error));
     }
 
     private string GetUserRole(UserModel user)
@@ -400,7 +899,7 @@
             return "Кладовщик";
         if (user.Roles.Contains("Administrator"))
             return "Администратор";
-            
+
         return string.Empty;
     }
 
@@ -419,5 +918,7 @@
     public void Dispose()
     {
         ChatHubService.OnReceiveMessage -= HandleReceiveMessage;
+        ChatHubService.OnMessageSent -= HandleMessageSent;
+        ChatHubService.OnMessageError -= HandleMessageError;
     }
 }

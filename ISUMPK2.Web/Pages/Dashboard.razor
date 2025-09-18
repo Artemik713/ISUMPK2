@@ -174,19 +174,18 @@
                 .ToList();
 
             // Получаем уведомления с маппингом
-            notifications = (await NotificationService.GetAllNotificationsForUserAsync(userId))
-                .Where(dto => !dto.IsRead)
+            notifications = (await NotificationService.GetUnreadNotificationsForUserAsync(userId))
                 .Select(dto => new NotificationModel
-                    {
-                        Id = dto.Id,
-                        UserId = dto.UserId,
-                        Title = dto.Title,
-                        Message = dto.Message,
-                        IsRead = dto.IsRead,
-                        TaskId = dto.TaskId,
-                        TaskTitle = dto.TaskTitle,
-                        CreatedAt = dto.CreatedAt
-                    })
+                {
+                    Id = dto.Id,
+                    UserId = dto.UserId,
+                    Title = dto.Title,
+                    Message = dto.Message,
+                    IsRead = dto.IsRead,
+                    TaskId = dto.TaskId,
+                    TaskTitle = dto.TaskTitle,
+                    CreatedAt = dto.CreatedAt
+                })
                 .ToList();
         }
         catch (Exception ex)
@@ -197,6 +196,9 @@
 
     private async Task HandleNotificationClick(NotificationModel notification)
     {
+        Console.WriteLine($"Загружено уведомлений: {notifications.Count}");
+        foreach (var n in notifications)
+            Console.WriteLine($"{n.Title} | {n.Message} | {n.CreatedAt}");
         if (!notification.IsRead)
         {
             await NotificationService.MarkAsReadAsync(notification.Id);
@@ -218,5 +220,6 @@
 
             await DialogService.ShowAsync<NotificationDialog>("Уведомление", parameters);
         }
+
     }
 }

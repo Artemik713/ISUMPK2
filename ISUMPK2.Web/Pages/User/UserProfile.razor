@@ -1,0 +1,249 @@
+﻿@page "/profile"
+@attribute [Authorize]
+@using ISUMPK2.Application.DTOs
+@using ISUMPK2.Application.Services
+@using ISUMPK2.Web.Extensions
+@using ISUMPK2.Web.Services
+@using MudBlazor
+@inject IAuthService AuthService
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Профиль пользователя - ИСУ ПМК</PageTitle>
+
+@if (isLoading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (currentUser == null)
+{
+    <MudAlert Severity="Severity.Error">
+        Не удалось загрузить данные пользователя
+        <MudButton Variant="Variant.Text" OnClick="LoadUserData" Class="ml-2">Повторить</MudButton>
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+        <MudPaper Elevation="0" Class="pa-0">
+            <!-- Заголовок профиля -->
+            <div class="d-flex align-center mb-6 position-relative">
+                <MudAvatar Size="Size.Large" Color="Color.Primary" Class="mr-4" Style="height: 100px; width: 100px;">
+                    @(currentUser.FirstName?.Length > 0 ? currentUser.FirstName[0].ToString().ToUpper() : "")
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h4">@fullName</MudText>
+                    <MudText Typo="Typo.body1">@userRole</MudText>
+                </div>
+            </div>
+
+            <!-- Информация профиля -->
+            <MudCard Elevation="0" Outlined="true" Class="mb-4">
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">Личная информация</MudText>
+                            <MudList T="string" Clickable="false" Dense="true">
+                                <MudListItem T="string" Icon="@Icons.Material.Filled.Person">
+                                    <div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Имя пользователя</MudText>
+                                        <MudText>@currentUser.UserName</MudText>
+                                    </div>
+                                </MudListItem>
+                                <MudListItem T="string" Icon="@Icons.Material.Filled.Email">
+                                    <div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Email</MudText>
+                                        <MudText>@(string.IsNullOrEmpty(currentUser.Email) ? "Не указан" : currentUser.Email)</MudText>
+                                    </div>
+                                </MudListItem>
+                                <MudListItem T="string" Icon="@Icons.Material.Filled.Phone">
+                                    <div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Телефон</MudText>
+                                        <MudText>@(string.IsNullOrEmpty(currentUser.PhoneNumber) ? "Не указан" : currentUser.PhoneNumber)</MudText>
+                                    </div>
+                                </MudListItem>
+                            </MudList>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">Рабочая информация</MudText>
+                            <MudList T="string" Clickable="false" Dense="true">
+                                <MudListItem T="string" Icon="@Icons.Material.Filled.Work">
+                                    <div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Должность</MudText>
+                                        <MudText>@userRole</MudText>
+                                    </div>
+                                </MudListItem>
+                                <MudListItem T="string" Icon="@Icons.Material.Filled.Business">
+                                    <div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Подразделение</MudText>
+                                        <MudText>@(string.IsNullOrEmpty(currentUser.DepartmentName) ? "Не указан" : currentUser.DepartmentName)</MudText>
+                                    </div>
+                                </MudListItem>
+                                <MudListItem T="string" Icon="@Icons.Material.Filled.DateRange">
+                                    <div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Дата регистрации</MudText>
+                                        <MudText>@currentUser.CreatedAt.ToString("dd.MM.yyyy")</MudText>
+                                    </div>
+                                </MudListItem>
+                            </MudList>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Статистика и дополнительная информация -->
+            <MudText Typo="Typo.h6" Class="mb-3">Активность</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-4 mud-height-full" Style="border: 1px solid var(--mud-palette-lines-default);">
+                        <MudText Typo="Typo.h4" Align="Align.Center" Style="color: var(--mud-palette-primary)">
+                            @taskCount
+                        </MudText>
+                        <MudText Typo="Typo.body1" Align="Align.Center">Задач выполнено</MudText>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-4 mud-height-full" Style="border: 1px solid var(--mud-palette-lines-default);">
+                        <MudText Typo="Typo.h4" Align="Align.Center" Style="color: var(--mud-palette-info)">
+                            @activeTaskCount
+                        </MudText>
+                        <MudText Typo="Typo.body1" Align="Align.Center">Активных задач</MudText>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-4 mud-height-full" Style="border: 1px solid var(--mud-palette-lines-default);">
+                        <MudText Typo="Typo.h4" Align="Align.Center" Style="color: var(--mud-palette-tertiary)">
+                            @productCount
+                        </MudText>
+                        <MudText Typo="Typo.body1" Align="Align.Center">Произведено</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <!-- Кнопки действий -->
+            <div class="d-flex justify-center mt-6">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="@(() => NavigationManager.NavigateTo("/account/settings"))"
+                           Class="mx-2">
+                    Изменить профиль
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Password"
+                           OnClick="@(() => NavigationManager.NavigateTo("/account/change-password"))"
+                           Class="mx-2">
+                    Сменить пароль
+                </MudButton>
+            </div>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    private UserDto currentUser;
+    private bool isLoading = true;
+    private string fullName = "";
+    private string userRole = "Пользователь";
+    private int taskCount = 0;
+    private int activeTaskCount = 0;
+    private int productCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserData();
+    }
+
+    private async Task LoadUserData()
+    {
+        isLoading = true;
+
+        try
+        {
+            // Получаем данные текущего пользователя
+            currentUser = await UserService.GetCurrentUserAsync();
+            
+            // Формируем полное имя
+            if (currentUser != null)
+            {
+                var nameParts = new List<string>();
+                
+                if (!string.IsNullOrEmpty(currentUser.FirstName)) 
+                    nameParts.Add(currentUser.FirstName);
+                
+                if (!string.IsNullOrEmpty(currentUser.MiddleName)) 
+                    nameParts.Add(currentUser.MiddleName);
+                
+                if (!string.IsNullOrEmpty(currentUser.LastName)) 
+                    nameParts.Add(currentUser.LastName);
+                
+                fullName = string.Join(" ", nameParts);
+                
+                // Если из каких-то причин имя пустое, используем имя пользователя
+                if (string.IsNullOrEmpty(fullName))
+                    fullName = currentUser.UserName;
+
+                // Определяем должность пользователя
+                if (currentUser.Roles != null && currentUser.Roles.Any())
+                {
+                    if (currentUser.Roles.Contains("Administrator"))
+                        userRole = "Администратор";
+                    else if (currentUser.Roles.Contains("GeneralDirector"))
+                        userRole = "Генеральный директор";
+                    else if (currentUser.Roles.Contains("MetalShopManager"))
+                        userRole = "Начальник цеха металлообработки";
+                    else if (currentUser.Roles.Contains("PaintShopManager"))
+                        userRole = "Начальник цеха металлопокраски";
+                    else if (currentUser.Roles.Contains("Worker"))
+                        userRole = "Рабочий цеха";
+                    else if (currentUser.Roles.Contains("Storekeeper"))
+                        userRole = "Кладовщик";
+                }
+                
+                // Загружаем статистику пользователя
+                await LoadUserStatistics();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки данных пользователя: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadUserStatistics()
+    {
+        try
+        {
+            // В реальном приложении здесь нужно загружать статистику из сервиса
+            // Для примера заполним данными-заглушками
+            
+            // Примерная реализация:
+            // var userStats = await UserService.GetUserStatisticsAsync(currentUser.Id);
+            // taskCount = userStats.CompletedTasksCount;
+            // activeTaskCount = userStats.ActiveTasksCount;
+            // productCount = userStats.ProducedItemsCount;
+            
+            // Временные данные-заглушки
+            var random = new Random();
+            taskCount = random.Next(10, 50);
+            activeTaskCount = random.Next(1, 10);
+            productCount = random.Next(20, 100);
+        }
+        catch
+        {
+            // Игнорируем ошибки статистики, чтобы не блокировать загрузку профиля
+            taskCount = 0;
+            activeTaskCount = 0;
+            productCount = 0;
+        }
+    }
+}

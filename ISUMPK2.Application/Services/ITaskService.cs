@@ -27,5 +27,12 @@ namespace ISUMPK2.Application.Services
         Task DeleteTaskAsync(Guid id);
         Task<TaskCommentDto> AddCommentAsync(Guid userId, TaskCommentCreateDto commentDto);
         Task<IEnumerable<TaskCommentDto>> GetCommentsByTaskIdAsync(Guid taskId);
+        // Добавьте эти методы в интерфейс
+        Task<IEnumerable<TaskMaterialDto>> GetTaskMaterialsAsync(Guid taskId);
+        Task UpdateTaskMaterialsAsync(Guid taskId, List<TaskMaterialCreateDto> materials);
+        Task ReserveMaterialsAsync(Guid taskId, List<TaskMaterialCreateDto> materials);
+        // Добавить в интерфейс ITaskService
+        Task<TaskDependencyInfoDto> GetTaskDependenciesAsync(Guid taskId);
+        Task ForceDeleteTaskAsync(Guid taskId);
     }
 }

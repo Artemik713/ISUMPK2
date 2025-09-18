@@ -5,6 +5,8 @@ namespace ISUMPK2.Web.Services
     public interface IChatHubService
     {
         event Action<ChatMessageModel> OnReceiveMessage;
+        event Action<ChatMessageModel> OnMessageSent;
+        event Action<string> OnMessageError;
         Task ConnectAsync();
         Task DisconnectAsync();
         Task JoinUserGroupAsync(string userId);
@@ -13,5 +15,6 @@ namespace ISUMPK2.Web.Services
         Task LeaveDepartmentGroupAsync(string departmentId);
         Task SendMessageToUserAsync(string userId, string message);
         Task SendMessageToDepartmentAsync(string departmentId, string message);
+        bool IsConnected { get; }
     }
 }

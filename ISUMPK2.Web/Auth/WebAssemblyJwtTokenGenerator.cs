@@ -11,6 +11,7 @@ namespace ISUMPK2.Web.Auth
     {
         public Task<(string token, DateTime expiration)> GenerateTokenAsync(User user, IList<string> roles)
         {
+
             // В WebAssembly нам не нужно генерировать токены, так как это делает сервер
             return Task.FromResult(("dummy-token", DateTime.UtcNow.AddDays(1)));
         }

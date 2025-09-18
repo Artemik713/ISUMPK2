@@ -8,6 +8,7 @@ namespace ISUMPK2.Domain.Repositories
 {
     public interface ITaskRepository : IRepository<WorkTask>
     {
+        Task<WorkTask> GetTaskWithMaterialsAsync(Guid taskId);
         Task<IEnumerable<WorkTask>> GetTasksByStatusAsync(int statusId);
         Task<IEnumerable<WorkTask>> GetTasksByAssigneeAsync(Guid assigneeId);
         Task<IEnumerable<WorkTask>> GetTasksByCreatorAsync(Guid creatorId);

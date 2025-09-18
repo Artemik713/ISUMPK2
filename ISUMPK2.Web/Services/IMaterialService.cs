@@ -1,5 +1,7 @@
 ﻿// ISUMPK2.Web/Services/IMaterialService.cs
 using ISUMPK2.Web.Models;
+using System;
+using System.Threading.Tasks;
 
 namespace ISUMPK2.Web.Services
 {
@@ -11,5 +13,6 @@ namespace ISUMPK2.Web.Services
         Task UpdateMaterialAsync(MaterialModel model);
         Task DeleteMaterialAsync(Guid id);
         Task<IEnumerable<MaterialModel>> GetMaterialsWithLowStockAsync();
+        Task UpdateStockAsync(Guid materialId, decimal quantity, bool isAddition);
     }
 }

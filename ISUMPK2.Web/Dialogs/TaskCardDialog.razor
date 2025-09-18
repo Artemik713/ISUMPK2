@@ -1,0 +1,26 @@
+﻿@using ISUMPK2.Web.Models
+@using ISUMPK2.Web.Pages.Tasks
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Assignment" Class="mr-3" />
+            Информация о задаче
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <TaskCard TaskId="@TaskId" Task="@Task" OnClose="@CloseDialog" />
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? TaskId { get; set; }
+    [Parameter] public TaskModel? Task { get; set; }
+
+    private void CloseDialog()
+    {
+        MudDialog.Close();
+    }
+}

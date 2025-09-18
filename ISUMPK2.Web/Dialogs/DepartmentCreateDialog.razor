@@ -4,20 +4,25 @@
 @inject IDepartmentService DepartmentService
 @inject MudBlazor.ISnackbar Snackbar
 
-
 <MudDialog>
     <DialogContent>
         <MudForm @ref="form">
             <MudTextField @bind-Value="model.Name" Label="Название отдела"
                           Required="true" RequiredError="Название обязательно" />
-            
-            <MudTextField @bind-Value="model.Description" Label="Описание" 
+
+            <MudTextField @bind-Value="model.Description" Label="Описание"
                           Lines="3" Class="mt-3" />
-            
-            <MudSelect @bind-Value="model.HeadId" Label="Руководитель" Class="mt-3">
+
+            <MudSelect T="Guid?" @bind-Value="model.HeadId" Label="Руководитель" Class="mt-3" Clearable="true">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">Не назначен</MudSelectItem>
                 @foreach (var user in Users)
                 {
-                    <MudSelectItem Value="@user.Id">@($"{user.LastName} {user.FirstName}")</MudSelectItem>
+                    var fullName = $"{user.LastName} {user.FirstName} {user.MiddleName}".Trim();
+                    if (string.IsNullOrWhiteSpace(fullName))
+                    {
+                        fullName = user.UserName ?? $"Пользователь {user.Id}";
+                    }
+                    <MudSelectItem T="Guid?" Value="@((Guid?)user.Id)">@fullName</MudSelectItem>
                 }
             </MudSelect>
         </MudForm>
@@ -31,7 +36,7 @@
 @code {
     [CascadingParameter] MudDialogInstance MudDialog { get; set; }
     [Parameter] public IEnumerable<UserDto> Users { get; set; } = new List<UserDto>();
-    
+
     private MudForm form;
     private DepartmentCreateDto model = new DepartmentCreateDto();
 
